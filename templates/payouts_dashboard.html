@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Finance & Assets | Eximp & Cloves</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link
         href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;700&display=swap"
         rel="stylesheet">
@@ -800,9 +800,30 @@
             background: rgba(255, 255, 255, 0.06);
         }
 
+        select.form-input {
+            appearance: none;
+            cursor: pointer;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='%23C47D0A' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 16px center;
+            background-size: 18px;
+            padding-right: 48px;
+        }
+
         select.form-input option {
-            background: var(--dark2);
+            background: #1A1C24;
             color: #fff;
+            padding: 12px;
+        }
+
+        select.form-input optgroup {
+            background: #111317;
+            color: var(--gold);
+            font-weight: 800;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            padding: 10px 0;
         }
 
         /* Toast notifications */
@@ -1510,7 +1531,7 @@
                         <tr>
                             <th>Submission</th>
                             <th>Staff Member</th>
-                            <th>Description</th>
+                            <th>Request / Remarks</th>
                             <th>Category</th>
                             <th>Gross Amount</th>
                             <th>Net Payout</th>
@@ -1930,11 +1951,32 @@
                 </div>
             </div>
 
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-top:40px;">
+            <!-- REJECTION REASON (hidden until REJECT CLAIM is clicked) -->
+            <div id="reject-reason-container" class="hidden"
+                style="margin-top:24px; padding:18px; border:1.5px solid var(--error); border-radius:12px; background:rgba(239,68,68,0.05);">
+                <label class="form-label" style="color:var(--error); margin-bottom:8px; display:block;">
+                    <i class="fas fa-exclamation-triangle" style="margin-right:6px;"></i>
+                    Rejection Reason <span style="font-size:11px;">(Required — sent to claimant)</span>
+                </label>
+                <textarea id="audit-rejection-reason" class="form-input"
+                    style="height:80px; border-color:var(--error); resize:vertical;"
+                    placeholder="e.g. Invoice could not be verified / Duplicate submission / Missing supporting documents…"></textarea>
+                <div style="display:flex; gap:10px; margin-top:12px;">
+                    <button class="btn"
+                        style="flex:1; justify-content:center; border-color:var(--gray); color:var(--gray); font-size:12px;"
+                        onclick="cancelReject()">CANCEL</button>
+                    <button class="btn"
+                        style="flex:2; justify-content:center; background:var(--error); border-color:var(--error); color:#fff; font-size:13px; font-weight:700;"
+                        onclick="confirmReject()">CONFIRM REJECTION</button>
+                </div>
+            </div>
+
+            <div id="audit-action-buttons"
+                style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-top:40px;">
                 <button class="btn btn-gold" style="justify-content:center; padding:18px;"
                     onclick="submitReview('approved')">AUTHORIZE PAYMENT</button>
                 <button class="btn" style="justify-content:center; border-color:var(--error); color:var(--error);"
-                    onclick="submitReview('rejected')">REJECT CLAIM</button>
+                    onclick="showRejectPanel()">REJECT CLAIM</button>
             </div>
 
             <div id="void-action-container"
@@ -2082,8 +2124,8 @@
             <!-- REJECTION REASON (Hidden by default) -->
             <div id="verify-rejection-container" class="hidden" style="margin-bottom:24px;">
                 <label class="form-label" style="color:var(--error);">Rejection Reason</label>
-                <textarea id="verify-rejection-reason" class="form-input" 
-                    style="height:80px; border-color:var(--error);" 
+                <textarea id="verify-rejection-reason" class="form-input"
+                    style="height:80px; border-color:var(--error);"
                     placeholder="Provide a clear reason for the claimant..."></textarea>
             </div>
 
@@ -2408,46 +2450,80 @@
             <div class="modal-header">
                 <div>
                     <h2 style="font-size:18px;">Commission & Tax Configuration</h2>
-                    <p style="color:var(--gray); font-size:12px;">Manage global defaults and partner-specific overrides.
-                    </p>
+                    <p style="color:var(--gray); font-size:12px;">Manage global defaults and partner-specific overrides.</p>
                 </div>
                 <button class="close-btn" onclick="closeModal('commissionSettingsModal')">&times;</button>
             </div>
 
-            <div
-                style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:30px; padding:20px; background:rgba(196,125,10,0.05); border-radius:12px; border:1px solid rgba(196,125,10,0.1);">
-                <div>
-                    <label class="form-label">Global Default Commission (%)</label>
-                    <input type="number" id="default-comm-rate" class="form-input" step="0.01" placeholder="e.g. 10.00">
-                </div>
-                <div>
-                    <label class="form-label">Global Default WHT (%)</label>
-                    <input type="number" id="default-wht-rate" class="form-input" step="0.01" placeholder="e.g. 5.00">
-                </div>
-                <div style="grid-column: span 2; display:flex; justify-content:space-between; align-items:center;">
-                    <button class="btn" onclick="triggerTaxSync()"
-                        style="padding:8px 16px; font-size:11px; border-color:var(--gray); color:var(--gray);">
-                        <i class="fas fa-history"></i> SYNC HISTORICAL TAX (9.5% → 10%)
-                    </button>
-                    <button class="btn btn-gold" onclick="updateDefaultRates()"
-                        style="padding:8px 20px; font-size:12px;">UPDATE DEFAULTS</button>
+            <!-- Global Defaults Grid -->
+            <div style="margin-bottom:10px;">
+                <p style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:var(--gray); margin-bottom:12px;">
+                    <i class="fas fa-globe" style="margin-right:6px; color:var(--gold);"></i>Global System Defaults
+                </p>
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:16px; padding:20px; background:rgba(196,125,10,0.05); border-radius:12px; border:1px solid rgba(196,125,10,0.12);">
+                    <div>
+                        <label class="form-label" style="display:flex; align-items:center; gap:6px;">
+                            <i class="fas fa-users" style="color:var(--gold); font-size:10px;"></i>
+                            Staff Commission (%)
+                        </label>
+                        <input type="number" id="default-comm-rate" class="form-input" step="0.01" min="0" max="100" placeholder="e.g. 10.00">
+                        <p style="font-size:10px; color:var(--gray); margin-top:4px;">Applied to internal sales reps</p>
+                    </div>
+                    <div>
+                        <label class="form-label" style="display:flex; align-items:center; gap:6px;">
+                            <i class="fas fa-handshake" style="color:var(--gold); font-size:10px;"></i>
+                            Partner Commission (%)
+                        </label>
+                        <input type="number" id="default-partner-rate" class="form-input" step="0.01" min="0" max="100" placeholder="e.g. 15.00">
+                        <p style="font-size:10px; color:var(--gray); margin-top:4px;">Applied to vendor/external partners</p>
+                    </div>
+                    <div>
+                        <label class="form-label" style="display:flex; align-items:center; gap:6px;">
+                            <i class="fas fa-receipt" style="color:var(--gray); font-size:10px;"></i>
+                            WHT Rate (%)
+                        </label>
+                        <input type="number" id="default-wht-rate" class="form-input" step="0.01" min="0" max="100" placeholder="e.g. 5.00">
+                        <p style="font-size:10px; color:var(--gray); margin-top:4px;">Withholding tax on all commissions</p>
+                    </div>
+                    <div style="grid-column: span 3; display:flex; justify-content:space-between; align-items:center; padding-top:4px;">
+                        <button class="btn" onclick="triggerTaxSync()"
+                            style="padding:8px 16px; font-size:11px; border-color:var(--gray); color:var(--gray);">
+                            <i class="fas fa-history"></i> SYNC HISTORICAL (9.5% → 10%)
+                        </button>
+                        <button class="btn btn-gold" onclick="updateDefaultRates()" style="padding:8px 20px; font-size:12px;">
+                            <i class="fas fa-save" style="margin-right:6px;"></i>SAVE DEFAULTS
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+            <!-- Live preview -->
+            <div id="rate-preview-bar" style="display:none; margin-bottom:20px; padding:10px 16px; background:rgba(16,185,129,0.05); border:1px solid rgba(16,185,129,0.15); border-radius:10px; font-size:11px; color:var(--gray); display:flex; gap:20px; flex-wrap:wrap; align-items:center;">
+                <span><i class="fas fa-check-circle" style="color:#10B981; margin-right:5px;"></i>Rates saved successfully</span>
+                <span>Staff: <strong id="preview-staff" style="color:var(--gold);">—</strong></span>
+                <span>Partner: <strong id="preview-partner" style="color:var(--gold);">—</strong></span>
+                <span>WHT: <strong id="preview-wht" style="color:var(--gray);">—</strong></span>
+            </div>
+
+            <!-- Per-rep overrides table -->
+            <p style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:var(--gray); margin-bottom:10px;">
+                <i class="fas fa-sliders-h" style="margin-right:6px; color:var(--gold);"></i>Individual Overrides
+                <span style="font-weight:400; text-transform:none; letter-spacing:0; font-size:10px;">&nbsp;— override global defaults for specific reps or partners</span>
+            </p>
+            <div class="table-responsive" style="max-height: 340px; overflow-y: auto;">
                 <table class="data-table" style="font-size:13px;">
                     <thead>
                         <tr>
                             <th>Sales Representative / Partner</th>
+                            <th>Type</th>
                             <th>Comm %</th>
-                            <th>Tax (WHT) %</th>
+                            <th>WHT %</th>
                             <th>Action</th>
                         </tr>
                     </thead>
                     <tbody id="repRatesBody">
                         <tr>
-                            <td colspan="4" style="text-align:center; padding:20px; color:var(--gray);">Loading partner
-                                rates...</td>
+                            <td colspan="5" style="text-align:center; padding:20px; color:var(--gray);">Loading rates…</td>
                         </tr>
                     </tbody>
                 </table>
@@ -2575,6 +2651,9 @@
 
                     document.getElementById('adminName').innerText = user.full_name;
                     document.getElementById('adminInitials').innerText = user.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+                    const _roleLabels = { super_admin: '💎 Super Admin', admin: '⭐ Admin', operations: '⚙️ Operations', lawyer: '⚖️ Lawyer' };
+                    const _primaryRole = (user.role || '').split(',')[0].trim();
+                    document.getElementById('adminRole').innerText = _roleLabels[_primaryRole] || _primaryRole || 'Administrator';
                 } else {
                     window.location.href = '/login';
                 }
@@ -2745,6 +2824,7 @@
             const filteredData = data.filter(c => {
                 if (!searchTerm) return true;
                 return (c.sales_reps?.name || "").toLowerCase().includes(searchTerm) ||
+                    (c.vendors?.name || "").toLowerCase().includes(searchTerm) ||
                     (c.clients?.full_name || "").toLowerCase().includes(searchTerm) ||
                     (c.invoices?.invoice_number || "").toLowerCase().includes(searchTerm) ||
                     (c.estate_name || "").toLowerCase().includes(searchTerm);
@@ -2759,14 +2839,17 @@
                 const gross = c.gross_commission || c.commission_amount || (net / 0.95);
                 const wht = c.wht_amount || (gross - net);
                 const rate = c.commission_rate || (gross / (c.payment_amount || 1) * 100);
-                const repName = c.sales_reps?.name || 'Unknown Rep';
+                
+                // Handle both Staff (sales_reps) and Partners (vendors)
+                const repName = c.sales_reps?.name || c.vendors?.name || 'Unknown Rep';
+                const repId = c.sales_rep_id || c.vendor_id || 'UNKNOWN';
 
                 return `
                 <tr>
                     <td>${new Date(c.created_at).toLocaleDateString()}</td>
                     <td>
                         <div style="font-weight:700;">${repName}</div>
-                        <small style="color:var(--gray); text-transform:uppercase; font-size:9px;">${c.sales_rep_id.slice(0, 8)}</small>
+                        <small style="color:var(--gray); text-transform:uppercase; font-size:9px;">${repId.slice(0, 8)}</small>
                     </td>
                     <td>
                         <div style="font-weight:700;">${c.clients?.full_name || 'Legacy Client'}</div>
@@ -2828,22 +2911,44 @@
 
         async function fetchDefaultRates() {
             try {
-                const res = await apiFetch('/api/commission/default-rate');
+                const res  = await apiFetch('/api/commission/default-rate');
                 const data = await res.json();
-                document.getElementById('default-comm-rate').value = data.rate;
-                document.getElementById('default-wht-rate').value = data.wht_rate;
+                document.getElementById('default-comm-rate').value    = data.rate         || '';
+                document.getElementById('default-partner-rate').value = data.partner_rate || '';
+                document.getElementById('default-wht-rate').value     = data.wht_rate     || '';
             } catch (e) { toast("Failed to load defaults", "error"); }
         }
 
         async function updateDefaultRates() {
-            const rate = document.getElementById('default-comm-rate').value;
-            const wht = document.getElementById('default-wht-rate').value;
+            const rate        = document.getElementById('default-comm-rate').value;
+            const partnerRate = document.getElementById('default-partner-rate').value;
+            const wht         = document.getElementById('default-wht-rate').value;
+
+            if (!rate || !wht) { toast("Staff commission and WHT rates are required", "error"); return; }
+
             try {
+                const body = { rate: parseFloat(rate), wht_rate: parseFloat(wht) };
+                if (partnerRate !== '') body.partner_rate = parseFloat(partnerRate);
+
                 const res = await apiFetch('/api/commission/default-rate', {
                     method: 'PATCH',
-                    body: JSON.stringify({ rate, wht_rate: wht })
+                    body: JSON.stringify(body)
                 });
-                if (res.ok) toast("Default rates updated globally", "success");
+                if (res.ok) {
+                    toast("Default rates saved", "success");
+                    // Show inline confirmation bar
+                    const bar = document.getElementById('rate-preview-bar');
+                    if (bar) {
+                        bar.style.display = 'flex';
+                        document.getElementById('preview-staff').innerText   = rate + '%';
+                        document.getElementById('preview-partner').innerText = partnerRate ? partnerRate + '%' : '—';
+                        document.getElementById('preview-wht').innerText     = wht + '%';
+                        setTimeout(() => { bar.style.display = 'none'; }, 5000);
+                    }
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    toast(err.detail || "Update failed", "error");
+                }
             } catch (e) { toast("Update failed", "error"); }
         }
 
@@ -2851,21 +2956,26 @@
             const body = document.getElementById('repRatesBody');
             if (!body) return;
             try {
-                const res = await apiFetch('/api/commission/sales-reps');
+                const res  = await apiFetch('/api/commission/sales-reps');
                 const reps = await res.json();
+                if (!reps.length) {
+                    body.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--gray);">No individual overrides set — global defaults apply to all.</td></tr>';
+                    return;
+                }
                 body.innerHTML = reps.map(r => `
                     <tr>
                         <td><strong>${r.name}</strong></td>
-                        <td>${r.gross_commission_rate || 'Inherited'}%</td>
-                        <td>${r.wht_rate || 'Inherited'}%</td>
+                        <td><span style="font-size:10px; padding:2px 8px; border-radius:8px; background:rgba(196,125,10,0.1); color:var(--gold);">Staff</span></td>
+                        <td>${r.gross_commission_rate != null ? r.gross_commission_rate + '%' : '<span style="color:var(--gray);">Global</span>'}</td>
+                        <td>${r.wht_rate != null ? r.wht_rate + '%' : '<span style="color:var(--gray);">Global</span>'}</td>
                         <td>
-                            <button class="btn" onclick="openEditRepRate('${r.id}', '${r.name}', ${r.gross_commission_rate}, ${r.wht_rate})" style="padding:4px 8px; font-size:11px;">
+                            <button class="btn" onclick="openEditRepRate('${r.id}', '${r.name}', ${r.gross_commission_rate ?? 'null'}, ${r.wht_rate ?? 'null'})" style="padding:4px 10px; font-size:11px;">
                                 EDIT
                             </button>
                         </td>
                     </tr>
                 `).join('');
-            } catch (e) { body.innerHTML = '<tr><td colspan="4" style="color:var(--error)">Error loading rates</td></tr>'; }
+            } catch (e) { body.innerHTML = '<tr><td colspan="5" style="color:var(--error); padding:12px;">Error loading rates</td></tr>'; }
         }
 
         let pendingCommWht = [];
@@ -3130,7 +3240,10 @@
                 <tr>
                     <td>${new Date(req.created_at).toLocaleDateString()}</td>
                     <td><strong>${req.vendors?.name || 'Staff'}</strong></td>
-                    <td>${req.title}</td>
+                    <td>
+                      <div style="font-weight:700;">${req.title}</div>
+                      ${req.remarks ? `<div style="font-size:11px; color:var(--gray); margin-top:3px; line-height:1.4;">${req.remarks}</div>` : ''}
+                    </td>
                     <td><small style="color:var(--gold); font-weight:700; font-size:10px;">${req.category || 'General'}</small></td>
                     <td style="font-weight:700;">₦${req.amount_gross.toLocaleString()}</td>
                     <td style="font-weight:700; color:var(--success);">₦${req.net_payout_amount.toLocaleString()}</td>
@@ -3168,7 +3281,7 @@
                     </td>
                     <td style="color:var(--error)">
                         ${req.wht_amount > 0 ? `- ₦${req.wht_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '—'}
-                        ${req.wht_rate > 0 ? `<div style="font-size:9px; color:var(--gray)">Rate: ${(req.wht_rate * 100).toFixed(0)}%</div>` : ''}
+                        ${req.wht_rate > 0 ? `<div style="font-size:9px; color:var(--gray)">Rate: ${parseFloat(req.wht_rate).toFixed(1)}%</div>` : ''}
                     </td>
                     <td style="color:var(--success); font-weight:700;">₦${req.net_payout_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     <td style="color:var(--success)">₦${(req.amount_paid || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -3194,6 +3307,7 @@
                     <td><span class="status-pill ${(req.status === 'partially_paid' || req.status === 'paid') ? 'approved' : req.status}">${req.status.replace('_', ' ')}</span></td>
                     <td>
                         ${(req.status === 'paid' || req.status === 'partially_paid') ? `<button onclick="triggerManualReceipt('${req.id}')" class="btn" style="padding: 6px 12px; font-size:11px; margin-bottom: 6px; border-color:var(--gold); color:var(--gold);"><i class="fas fa-paper-plane"></i> EMAIL RCT</button> <button onclick="viewDocument('${req.id}', 'receipt')" class="btn" style="padding: 6px 12px; font-size:11px; margin-bottom: 6px; border-color:var(--success); color:var(--success);"><i class="fas fa-eye"></i> PROOF</button><br>` : ''}
+                        ${(req.receipt_url || req.proforma_url) && req.status !== 'paid' && req.status !== 'partially_paid' ? `<button onclick="viewDocument('${req.id}', '${req.receipt_url ? 'receipt' : 'proforma'}')" class="btn" style="padding: 6px 12px; font-size:11px; margin-bottom: 6px; border-color:#818cf8; color:#818cf8;"><i class="fas fa-paperclip"></i> PROOF</button><br>` : ''}
                         ${req.status === 'pending' ? `<button onclick="openReview('${req.id}')" class="btn" style="padding: 6px 12px; font-size:11px;">REVIEW</button> <button onclick="viewDocument('${req.id}', 'proforma')" class="btn" style="padding: 6px 12px; font-size:11px; border-color:var(--gray); color:var(--gray);">PROFORMA</button>` :
                     req.status === 'voided' ? '<i class="fas fa-ban" style="color:var(--error)"></i>' :
                         `<button onclick="openReview('${req.id}')" class="btn" style="padding: 6px 12px; font-size:11px; border-color:var(--gray); color:var(--gray);">INFO</button>`}
@@ -3229,7 +3343,7 @@
             const req = requestsData.find(r => r.id === id);
 
             // Set initial inputs
-            document.getElementById('wht-rate').value = (req.wht_rate * 100).toFixed(1);
+            document.getElementById('wht-rate').value = parseFloat(req.wht_rate).toFixed(1);
             document.getElementById('wht-toggle').checked = req.is_wht_applicable;
             recalculateWHT();
 
@@ -3253,7 +3367,16 @@
 
         // openRequestModal removed — use Bill Verification tab workflow instead
 
-        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+        function closeModal(id) {
+            document.getElementById(id).style.display = 'none';
+            // Reset rejection panel state when audit modal closes
+            if (id === 'reviewModal') {
+                const rp = document.getElementById('reject-reason-container');
+                const ab = document.getElementById('audit-action-buttons');
+                if (rp) rp.classList.add('hidden');
+                if (ab) ab.style.display = 'grid';
+            }
+        }
 
         // --- ACTIONS ---
         function toggleWHT() {
@@ -3377,15 +3500,45 @@
             `;
         }
 
-        async function submitReview(status) {
+        // ── Rejection panel helpers ──────────────────────────────────
+        function showRejectPanel() {
+            document.getElementById('reject-reason-container').classList.remove('hidden');
+            document.getElementById('audit-action-buttons').style.display = 'none';
+            document.getElementById('audit-rejection-reason').value = '';
+            document.getElementById('audit-rejection-reason').focus();
+        }
+
+        function cancelReject() {
+            document.getElementById('reject-reason-container').classList.add('hidden');
+            document.getElementById('audit-action-buttons').style.display = 'grid';
+        }
+
+        function confirmReject() {
+            const reason = document.getElementById('audit-rejection-reason').value.trim();
+            if (!reason) {
+                toast("Please provide a rejection reason before confirming.", "error");
+                document.getElementById('audit-rejection-reason').focus();
+                return;
+            }
+            submitReview('rejected', reason);
+        }
+
+        async function submitReview(status, rejectionReason) {
             const applyWht = document.getElementById('wht-toggle').checked;
             const manualRate = parseFloat(document.getElementById('wht-rate').value) / 100;
             const exemptionReason = document.getElementById('wht-exemption-reason').value.trim();
+            const req = requestsData.find(r => r.id === activeRequestId);
 
-            // Audit Safeguard: If WHT is OFF, we MUST have a reason
-            if (!applyWht && !exemptionReason) {
+            // Audit Safeguard: If WHT is OFF and approving, we MUST have an exemption reason
+            if (!applyWht && !exemptionReason && status === 'approved') {
                 toast("Please provide an Audit Exemption Reason", "error");
                 document.getElementById('wht-exemption-reason').focus();
+                return;
+            }
+
+            // Rejection must always have a reason (passed from confirmReject)
+            if (status === 'rejected' && !rejectionReason) {
+                showRejectPanel();
                 return;
             }
 
@@ -3398,22 +3551,23 @@
                         status: status,
                         apply_wht: applyWht,
                         manual_wht_rate: applyWht ? manualRate : null,
-                        rejection_reason: status === 'rejected' ? exemptionReason : null,
-                        wht_exemption_reason: status === 'approved' ? exemptionReason : req.wht_exemption_reason
+                        rejection_reason: status === 'rejected' ? rejectionReason : null,
+                        wht_exemption_reason: status === 'approved' ? exemptionReason : (req ? req.wht_exemption_reason : null)
                     })
                 });
 
                 if (res.ok) {
-                    toast(`Request ${status.toUpperCase()}`, "success");
+                    toast(`Request ${status === 'approved' ? 'AUTHORIZED' : 'REJECTED'}`, "success");
                     closeModal('reviewModal');
                     fetchRequests();
                 } else {
-                    const err = await res.json();
-                    toast(err.detail || "Audit trace failed", "error");
+                    let errMsg = "Audit action failed";
+                    try { const err = await res.json(); errMsg = err.detail || errMsg; } catch (_) { }
+                    toast(errMsg, "error");
                 }
             } catch (e) {
                 console.error(e);
-                toast("Network error during audit", "error");
+                toast("Network error during audit — please check your connection and retry.", "error");
             }
         }
 
@@ -3490,7 +3644,7 @@
         function openVerifyModal(id) {
             activeRequestId = id;
             const req = requestsData.find(r => r.id === id);
-            
+
             // Bank details snapshot or vendor data
             const bankName = req.bank_name_snapshot || req.vendors?.bank_name || 'N/A';
             const accNum = req.account_number_snapshot || req.vendors?.account_number || 'N/A';
@@ -3596,7 +3750,46 @@
         let whtPendingList = [];
 
         function openWhtRemittanceModal() {
-            whtPendingList = requestsData.filter(r => (r.status === 'paid' || r.status === 'partially_paid') && !r.is_wht_remitted && (r.wht_amount || 0) > 0);
+            // --- Source 1: Payout Portal WHT (expenditure_requests) ---
+            const payoutWht = (requestsData || []).filter(r =>
+                (r.status === 'paid' || r.status === 'partially_paid') &&
+                !r.is_wht_remitted &&
+                (r.wht_amount || 0) > 0
+            ).map(r => ({
+                id: r.id,
+                type: 'payout',
+                date: r.paid_at ? new Date(r.paid_at).toLocaleDateString() : 'N/A',
+                payee: r.vendors?.name || r.admins?.full_name || 'N/A',
+                label: r.title || 'Payout Claim',
+                wht_amount: r.wht_amount
+            }));
+
+            // Track invoice numbers from payouts to avoid duplicates
+            const payoutInvoices = new Set();
+            payoutWht.forEach(p => {
+                const match = p.label.match(/EC-\d+/);
+                if (match) payoutInvoices.add(match[0]);
+            });
+
+            // --- Source 2: Commission Ledger WHT (commission_earnings) ---
+            const commWht = (window.commissionData || []).filter(c =>
+                c.is_paid &&
+                !c.is_wht_remitted &&
+                (c.wht_amount || 0) > 0
+            ).map(c => {
+                const invNum = c.invoices?.invoice_number || 'Direct';
+                return {
+                    id: c.id,
+                    type: 'commission',
+                    date: c.paid_at ? new Date(c.paid_at).toLocaleDateString() : 'N/A',
+                    payee: c.sales_reps?.name || c.vendors?.name || 'Unknown',
+                    label: `Commission: ${invNum}`,
+                    invKey: invNum,
+                    wht_amount: c.wht_amount
+                };
+            }).filter(c => !payoutInvoices.has(c.invKey));
+
+            whtPendingList = [...payoutWht, ...commWht];
 
             const tbody = document.getElementById('wht-checklist-body');
             if (whtPendingList.length === 0) {
@@ -3605,13 +3798,18 @@
             } else {
                 document.getElementById('wht-select-all').disabled = false;
                 document.getElementById('wht-select-all').checked = false;
-                tbody.innerHTML = whtPendingList.map(req => `
+                tbody.innerHTML = whtPendingList.map(item => `
                     <tr>
-                        <td><input type="checkbox" class="wht-checkbox" value="${req.id}" data-amount="${req.wht_amount}" onclick="calcWhtTotal()" style="accent-color:var(--gold);"></td>
-                        <td>${req.paid_at ? new Date(req.paid_at).toLocaleDateString() : 'N/A'}</td>
-                        <td style="font-weight:700;">${req.vendors?.name || 'N/A'}</td>
-                        <td style="font-size:11px; color:var(--gray);">${req.title}</td>
-                        <td style="color:var(--error); font-weight:700;">₦${req.wht_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td><input type="checkbox" class="wht-checkbox" value="${item.id}" data-amount="${item.wht_amount}" data-type="${item.type}" onclick="calcWhtTotal()" style="accent-color:var(--gold);"></td>
+                        <td>${item.date}</td>
+                        <td style="font-weight:700;">${item.payee}</td>
+                        <td style="font-size:11px; color:var(--gray);">
+                            ${item.label}
+                            <span style="font-size:9px; font-weight:700; color:${item.type === 'commission' ? 'var(--gold)' : 'var(--gray)'}; border:1px solid; padding:1px 5px; border-radius:3px; margin-left:4px;">
+                                ${item.type === 'commission' ? 'COMMISSION' : 'PAYOUT'}
+                            </span>
+                        </td>
+                        <td style="color:var(--error); font-weight:700;">₦${parseFloat(item.wht_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                     </tr>
                 `).join('');
             }
@@ -3642,26 +3840,51 @@
             }
 
             const checkboxes = document.querySelectorAll('.wht-checkbox:checked');
-            const ids = Array.from(checkboxes).map(cb => cb.value);
-
-            if (ids.length === 0) {
+            if (checkboxes.length === 0) {
                 toast("Select at least one liability to clear.", "error");
                 return;
             }
 
-            try {
-                const res = await apiFetch(`/api/payouts/requests/remit-wht`, {
-                    method: 'POST',
-                    body: JSON.stringify({ receipt_reference: ref, request_ids: ids })
-                });
-
-                if (res.ok) {
-                    toast(`Successfully cleared ${ids.length} WHT liabilities`, "success");
-                    closeModal('whtRemittanceModal');
-                    fetchRequests();
+            // Split IDs by type
+            const payoutIds = [];
+            const commissionIds = [];
+            checkboxes.forEach(cb => {
+                if (cb.getAttribute('data-type') === 'commission') {
+                    commissionIds.push(cb.value);
                 } else {
-                    const err = await res.json();
-                    toast(err.detail || "Remittance Failed", "error");
+                    payoutIds.push(cb.value);
+                }
+            });
+
+            try {
+                const promises = [];
+
+                // Route payout WHT to payout endpoint
+                if (payoutIds.length > 0) {
+                    promises.push(apiFetch(`/api/payouts/requests/remit-wht`, {
+                        method: 'POST',
+                        body: JSON.stringify({ receipt_reference: ref, request_ids: payoutIds })
+                    }));
+                }
+
+                // Route commission WHT to commission endpoint
+                if (commissionIds.length > 0) {
+                    promises.push(apiFetch(`/api/commission/remit-wht`, {
+                        method: 'POST',
+                        body: JSON.stringify({ receipt_reference: ref, ids: commissionIds })
+                    }));
+                }
+
+                const results = await Promise.all(promises);
+                const allOk = results.every(r => r.ok);
+
+                if (allOk) {
+                    toast(`Successfully cleared ${checkboxes.length} WHT liabilities`, "success");
+                    closeModal('whtRemittanceModal');
+                    await Promise.all([fetchRequests(), fetchCommissions(), fetchStats()]);
+                } else {
+                    const errs = await Promise.all(results.filter(r => !r.ok).map(r => r.json()));
+                    toast(errs[0]?.detail || "Remittance partially failed", "error");
                 }
             } catch (e) {
                 toast("Network Error", "error");
@@ -4346,28 +4569,19 @@
                 const docUrl = `/api/payouts/requests/${requestId}/view-document/${currentDoc.docType}?file_index=${currentDoc.index}`;
                 const isPdf = currentDoc.original.toLowerCase().endsWith('.pdf');
 
-                // Clear previous URL to avoid memory leaks
-                if (activeDocUrl) URL.revokeObjectURL(activeDocUrl);
-
-                // Fetch the file as a blob to include authorization headers
+                // Fetch signed URL from backend (returns JSON {url, path})
                 const fileRes = await apiFetch(docUrl);
                 if (!fileRes.ok) throw new Error("Could not retrieve secure document");
+                const { url: signedUrl } = await fileRes.json();
+                if (!signedUrl) throw new Error("No signed URL returned");
 
-                const blob = await fileRes.blob();
-                activeDocUrl = URL.createObjectURL(blob);
-
+                loader.style.display = 'none';
                 if (isPdf) {
-                    frame.src = activeDocUrl;
-                    frame.onload = () => {
-                        loader.style.display = 'none';
-                        frame.style.display = 'block';
-                    };
+                    frame.src = signedUrl;
+                    frame.style.display = 'block';
                 } else {
-                    img.src = activeDocUrl;
-                    img.onload = () => {
-                        loader.style.display = 'none';
-                        img.style.display = 'block';
-                    };
+                    img.src = signedUrl;
+                    img.style.display = 'block';
                 }
             } catch (e) {
                 console.error(e);
@@ -4380,10 +4594,7 @@
             document.getElementById('docPreviewModal').style.display = 'none';
             document.getElementById('docFrame').src = '';
             document.getElementById('docImg').src = '';
-            if (activeDocUrl) {
-                URL.revokeObjectURL(activeDocUrl);
-                activeDocUrl = null;
-            }
+            activeDocUrl = null;
         }
 
         // --- GLOBAL EXPOSURE & EVENT BINDING ---

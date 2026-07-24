@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS clients (
     nok_address TEXT,
     source_of_income VARCHAR(100),
     referral_source VARCHAR(100),
+    lead_source VARCHAR(100),
 
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -119,12 +120,14 @@ CREATE TABLE IF NOT EXISTS invoices (
     payment_proof_url TEXT,
     passport_photo_url TEXT,
     purchase_purpose VARCHAR(100),
+    purchase_for VARCHAR(50),
     source VARCHAR(50) DEFAULT 'manual', -- manual / google_form
     custom_contract_html TEXT, -- Lawyer-edited contract body HTML (overrides template if set)
     custom_cover_html TEXT, -- Editable cover page wording HTML (overrides default cover if set)
     custom_lawfirm_name VARCHAR(255), -- Editable lawyer firm name
     custom_lawfirm_address TEXT, -- Editable lawyer firm address
     custom_execution_html TEXT, -- Editable execution page HTML
+    contract_closed BOOLEAN DEFAULT FALSE, -- Legal contract closure marker, separate from sales pipeline stage
 
     created_by UUID REFERENCES admins(id),
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -565,6 +568,7 @@ CREATE TABLE IF NOT EXISTS campaign_recipients (
   last_clicked_at TIMESTAMPTZ,
   click_count INTEGER DEFAULT 0,
   bounced_at TIMESTAMPTZ,
+  failed_at TIMESTAMPTZ,
   unsubscribed_at TIMESTAMPTZ,
   spam_reported_at TIMESTAMPTZ,
   UNIQUE(campaign_id, contact_id)

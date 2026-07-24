@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks, UploadFile, File
 from database import get_db, db_execute
-from routers.auth import verify_token, require_roles
+from routers.auth import verify_token, require_roles, has_any_role
 from datetime import datetime, timedelta
 import json
 import csv
@@ -17,10 +17,18 @@ router = APIRouter()
 async def get_all_contacts(current_admin=Depends(verify_token)):
     """Get all clients with their invoice & payment summary (BULK OPTIMIZED)"""
     db = get_db()
-    
-    contacts = (await db_execute(lambda: db.table("clients").select("""
-        id, full_name, email, phone, city, state, occupation, created_at, updated_at
-    """).order("created_at", desc=True).execute())).data or []
+    # Privileged roles that are allowed to view all contacts
+    privileged = ["sales_manager", "operations", "admin", "super_admin"]
+
+    # Non-privileged users should only see contacts assigned to them
+    if has_any_role(current_admin, privileged):
+        contacts = (await db_execute(lambda: db.table("clients").select("""
+            id, full_name, email, phone, city, state, address, occupation, lead_source, client_type, pipeline_stage, assigned_rep_id, last_contacted_at, created_at, updated_at
+        """).order("created_at", desc=True).execute())).data or []
+    else:
+        contacts = (await db_execute(lambda: db.table("clients").select("""
+            id, full_name, email, phone, city, state, address, occupation, lead_source, client_type, pipeline_stage, assigned_rep_id, last_contacted_at, created_at, updated_at
+        """).eq("assigned_rep_id", current_admin.get("sub")).order("created_at", desc=True).execute())).data or []
     
     if not contacts:
         return []
@@ -31,6 +39,7 @@ async def get_all_contacts(current_admin=Depends(verify_token)):
     all_invoices = (await db_execute(lambda: db.table("invoices")\
         .select("id, client_id, amount, amount_paid, status")\
         .in_("client_id", client_ids)\
+        .neq("status", "voided")\
         .execute())).data or []
         
     # Index invoices by client_id in memory
@@ -40,21 +49,23 @@ async def get_all_contacts(current_admin=Depends(verify_token)):
         if cid not in inv_map: inv_map[cid] = []
         inv_map[cid].append(inv)
     
-    # Enrich in-memory (O(N))
+    # Enrich in-memory (O(N)) — include every contact/lead, even those with no invoices yet
+    enriched_contacts = []
     for contact in contacts:
         invoices = inv_map.get(contact["id"], [])
-        
+
         total_value = sum(float(i["amount"]) for i in invoices)
         total_paid = sum(float(i["amount_paid"]) for i in invoices)
         unpaid_count = len([i for i in invoices if i["status"] in ["unpaid", "partial", "overdue"]])
-        
+
         contact["total_value"] = total_value
         contact["amount_paid"] = total_paid
         contact["balance"] = total_value - total_paid
         contact["unpaid_deals"] = unpaid_count
         contact["total_deals"] = len(invoices)
-    
-    return contacts
+        enriched_contacts.append(contact)
+
+    return enriched_contacts
 
 
 @router.get("/contacts/{client_id}")
@@ -114,13 +125,14 @@ async def get_contact_details(client_id: str, current_admin=Depends(verify_token
         sent_at
     """).eq("client_id", client_id).order("sent_at", desc=True).limit(20).execute())).data or []
     
-    # Calculate totals
-    total_value = sum(float(i["amount"]) for i in invoices)
-    total_paid = sum(float(i["amount_paid"]) for i in invoices)
+    # Calculate totals (exclude voided invoices from summaries)
+    non_voided_invoices = [i for i in invoices if i.get("status") != "voided"]
+    total_value = sum(float(i["amount"]) for i in non_voided_invoices)
+    total_paid = sum(float(i["amount_paid"]) for i in non_voided_invoices)
     
     return {
         "client": client,
-        "invoices": invoices,
+        "invoices": invoices, # Return all so they show in timeline
         "payments": payments,
         "activities": activities,
         "emails": emails,
@@ -128,8 +140,8 @@ async def get_contact_details(client_id: str, current_admin=Depends(verify_token
             "total_value": total_value,
             "total_paid": total_paid,
             "balance": total_value - total_paid,
-            "total_deals": len(invoices),
-            "paid_deals": len([i for i in invoices if i["status"] == "paid"]),
+            "total_deals": len(non_voided_invoices),
+            "paid_deals": len([i for i in non_voided_invoices if i["status"] == "paid"]),
             "total_interactions": len(activities) + len(emails)
         }
     }
@@ -149,7 +161,7 @@ async def get_sales_pipeline(current_admin=Depends(verify_token)):
     role = current_admin.get("role", "")
     admin_id = current_admin.get("sub")
     
-    is_privileged = any(r in role.lower() for r in ["admin", "operations", "customer_support"])
+    is_privileged = any(r in role.lower() for r in ["admin", "operations", "customer_support", "sales_manager"])
 
     # 1. Base Query
     query = db.table("clients").select("""
@@ -157,7 +169,13 @@ async def get_sales_pipeline(current_admin=Depends(verify_token)):
         full_name,
         email,
         phone,
+        city,
+        state,
+        address,
+        occupation,
+        lead_source,
         pipeline_stage,
+        client_type,
         estimated_value,
         assigned_rep_id,
         created_at
@@ -184,6 +202,19 @@ async def get_sales_pipeline(current_admin=Depends(verify_token)):
         if cid not in fin_map: fin_map[cid] = {"total_amount": 0, "total_paid": 0}
         fin_map[cid]["total_amount"] += float(inv["amount"] or 0)
         fin_map[cid]["total_paid"] += float(inv["amount_paid"] or 0)
+
+    # Enrich leads with assigned rep names for pipeline cards
+    rep_ids = list({lead.get("assigned_rep_id") for lead in all_leads if lead.get("assigned_rep_id")})
+    rep_name_map = {}
+    if rep_ids:
+        reps = (await db_execute(lambda: db.table("admins")
+            .select("id, full_name")
+            .in_("id", rep_ids)
+            .execute())).data or []
+        rep_name_map = {r["id"]: r["full_name"] for r in reps}
+
+    for lead in all_leads:
+        lead["assigned_rep_name"] = rep_name_map.get(lead.get("assigned_rep_id"), "")
 
     # 4. Group by stage in-memory
     stages = ["lead", "nurturing", "interest", "paid", "closed"]
@@ -243,6 +274,7 @@ async def import_leads_csv(file: UploadFile = File(...), current_admin=Depends(v
         lead_data = {
             "assigned_rep_id": admin_id,
             "pipeline_stage": "lead",
+            "client_type": "lead",
             "created_at": datetime.now().isoformat()
         }
 
@@ -252,6 +284,12 @@ async def import_leads_csv(file: UploadFile = File(...), current_admin=Depends(v
                     lead_data[db_field] = row_lower[possible_name]
                     break
         
+        # Ensure email exists (for system integrity & marketing engine stability)
+        if not lead_data.get("email"):
+            import re
+            clean_id = re.sub(r'[^a-zA-Z0-9]', '', str(lead_data.get("phone") or lead_data.get("full_name") or "unknown"))
+            lead_data["email"] = f"{clean_id.lower()}@temp-eximps.com"
+
         if lead_data.get("full_name"):
             await db_execute(lambda: db.table("clients").insert(lead_data).execute())
             imported_count += 1
@@ -275,9 +313,33 @@ async def create_lead(data: dict, current_admin=Depends(verify_token)):
     data["assigned_rep_id"] = admin_id
     if not data.get("pipeline_stage"):
         data["pipeline_stage"] = "lead"
+    if not data.get("client_type"):
+        data["client_type"] = "lead"
     data["created_at"] = datetime.now().isoformat()
     
-    res = await db_execute(lambda: db.table("clients").insert(data).execute())
+    # Ensure email exists
+    if not data.get("email"):
+        import re
+        clean_id = re.sub(r'[^a-zA-Z0-9]', '', str(data.get("phone") or data.get("full_name") or "unknown"))
+        data["email"] = f"{clean_id.lower()}@temp-eximps.com"
+
+    # Matching Logic (Email or Phone)
+    email = data.get("email")
+    phone = data.get("phone")
+    match_filters = []
+    if email: match_filters.append(f"email.eq.{email}")
+    if phone: match_filters.append(f"phone.eq.{phone}")
+    
+    existing_id = None
+    if match_filters:
+        match_res = await db_execute(lambda: db.table("clients").select("id").or_(",".join(match_filters)).execute())
+        if match_res.data:
+            existing_id = match_res.data[0]["id"]
+
+    if existing_id:
+        res = await db_execute(lambda: db.table("clients").update(data).eq("id", existing_id).execute())
+    else:
+        res = await db_execute(lambda: db.table("clients").insert(data).execute())
     if not res.data:
         raise HTTPException(status_code=500, detail="Failed to create lead")
     lead = res.data[0]
@@ -386,6 +448,11 @@ async def add_client_note(
         "metadata": {"note_type": "manual"}
     }).execute())
     
+    # Section 7b: update last_contacted_at on note log
+    await db_execute(lambda: db.table("clients").update({
+        "last_contacted_at": datetime.utcnow().isoformat()
+    }).eq("id", client_id).execute())
+    
     return {"status": "note_added"}
 
 
@@ -395,22 +462,43 @@ async def log_call(
     request: Request,
     current_admin=Depends(verify_token)
 ):
-    """Log a call with a client"""
+    """Log a call with a client — supports outcome and follow_up_date (Section 5e)"""
     db = get_db()
     body = await request.json()
     
     duration = body.get("duration", 0)  # in minutes
     notes = body.get("notes", "")
+    outcome = body.get("outcome", "initiated")  # initiated | answered | no_answer | callback | not_interested
+    follow_up_date = body.get("follow_up_date", None)
+    
+    description_map = {
+        "initiated": "Call initiated",
+        "answered": f"Call answered — {notes}" if notes else "Call answered",
+        "no_answer": "Call made — no answer",
+        "callback": f"Call made — callback requested. {notes}" if notes else "Call made — callback requested",
+        "not_interested": "Call made — client not interested"
+    }
     
     await db_execute(lambda: db.table("activity_log").insert({
         "event_type": "call",
-        "description": f"Call logged: {notes}",
+        "description": description_map.get(outcome, f"Call logged: {notes}"),
         "client_id": client_id,
         "performed_by": current_admin["sub"],
-        "metadata": {"duration_minutes": duration, "notes": notes}
+        "metadata": {
+            "duration_minutes": duration,
+            "notes": notes,
+            "outcome": outcome,
+            "follow_up_date": follow_up_date
+        }
     }).execute())
     
-    return {"status": "call_logged"}
+    # Update last_contacted_at only when outcome is confirmed (not just "initiated")
+    if outcome != "initiated":
+        await db_execute(lambda: db.table("clients").update({
+            "last_contacted_at": datetime.utcnow().isoformat()
+        }).eq("id", client_id).execute())
+    
+    return {"status": "call_logged", "outcome": outcome}
 
 
 @router.post("/contacts/{client_id}/send-email")
@@ -454,7 +542,7 @@ async def get_pipeline_health(current_admin=Depends(verify_token)):
     role = current_admin.get("role", "")
     admin_id = current_admin["sub"]
     
-    is_privileged = any(r in role.lower() for r in ["admin", "operations", "customer_support"])
+    is_privileged = any(r in role.lower() for r in ["admin", "operations", "customer_support", "sales_manager"])
     
     # 1. Base Query
     query = db.table("invoices").select("""
@@ -504,7 +592,7 @@ async def get_sales_rep_performance(current_admin=Depends(verify_token)):
     role = current_admin.get("role", "")
     admin_id = current_admin["sub"]
     
-    is_privileged = any(r in role.lower() for r in ["admin", "operations", "customer_support"])
+    is_privileged = any(r in role.lower() for r in ["admin", "operations", "customer_support", "sales_manager"])
     
     query = db.table("invoices").select("""
         id, sales_rep_name, amount, amount_paid, status, created_at, clients(assigned_rep_id)
@@ -569,6 +657,7 @@ async def get_client_insights(current_admin=Depends(verify_token)):
     all_invoices = (await db_execute(lambda: db.table("invoices")\
         .select("id, client_id, amount, amount_paid, status")\
         .in_("client_id", client_ids)\
+        .neq("status", "voided")\
         .execute())).data or []
         
     all_activities = (await db_execute(lambda: db.table("activity_log")\
@@ -668,6 +757,7 @@ async def get_crm_dashboard_summary(current_admin=Depends(verify_token)):
         .select("id, invoice_number, due_date, client_id, amount")\
         .gte("due_date", datetime.now().date().isoformat())\
         .lte("due_date", (datetime.now().date() + timedelta(days=7)).isoformat())\
+        .neq("status", "voided")\
         .execute())).data or []
     
     return {

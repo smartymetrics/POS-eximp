@@ -5,7 +5,7 @@ from database import get_db, db_execute, SUPABASE_URL
 from models import (
     CompanySignatureUpload, ExtendSigningLink, WitnessSignatureSubmit, 
     ClientContractSignatureSubmit, WitnessRemovalRequest, CustomContractHTMLUpdate, 
-    ExecuteContractRequest, SendSealedRequest
+    ExecuteContractRequest, SendSealedRequest, SignatureReject
 )
 from routers.auth import verify_token, resolve_admin_token, has_any_role
 from routers.analytics import log_activity
@@ -239,12 +239,37 @@ async def get_contract_status(invoice_id: str, current_admin=Depends(verify_toke
     session = res.data[0]
     
     # Check if client has signed (look at invoice)
-    inv_res = await db_execute(lambda: db.table("invoices").select("contract_signature_url").eq("id", invoice_id).execute())
+    inv_res = await db_execute(lambda: db.table("invoices").select("contract_signature_url, contract_signature_method, contract_signed_at, contract_audit_ip, clients(*)").eq("id", invoice_id).execute())
     client_signed = False
+    client_sig_url = None
+    client_sig_method = None
+    client_sig_at = None
+    client_sig_ip = None
+    client_details = {}
     if inv_res.data:
         inv = inv_res.data[0]
-        client_signed = bool(inv.get("contract_signature_url"))
+        client_sig_url = inv.get("contract_signature_url")
+        client_signed = bool(client_sig_url)
+        client_sig_method = inv.get("contract_signature_method")
+        client_sig_at = inv.get("contract_signed_at")
+        client_sig_ip = inv.get("contract_audit_ip")
+        
+        c_raw = inv.get("clients", {})
+        client_data = c_raw[0] if isinstance(c_raw, list) and c_raw else c_raw
+        if client_data:
+            client_details = {
+                "full_name": client_data.get("full_name"),
+                "email": client_data.get("email"),
+                "phone": client_data.get("phone"),
+                "address": client_data.get("address"),
+                "nin": client_data.get("nin"),
+                "id_number": client_data.get("id_number"),
+                "passport_photo_url": client_data.get("passport_photo_url"),
+                "id_document_url": client_data.get("id_document_url")
+            }
 
+    stage_res = await db_execute(lambda: db.table("invoices").select("pipeline_stage").eq("id", invoice_id).execute())
+    pipeline_stage = stage_res.data[0].get("pipeline_stage") if stage_res.data else None
 
     return {
         "id": session["id"],
@@ -255,7 +280,13 @@ async def get_contract_status(invoice_id: str, current_admin=Depends(verify_toke
         "created_at": session.get("created_at"),
         "witness_signatures": session.get("witness_signatures", []),
         "client_signed": client_signed,
-        "is_executed": session["status"] == "completed"
+        "client_signature_url": client_sig_url,
+        "client_signature_method": client_sig_method,
+        "client_signed_at": client_sig_at,
+        "client_audit_ip": client_sig_ip,
+        "client_details": client_details,
+        "is_executed": session["status"] == "completed",
+        "pipeline_stage": pipeline_stage
     }
 
 @router.post("/{invoice_id}/extend")
@@ -499,7 +530,7 @@ async def upload_sealed_contract(invoice_id: str, file: UploadFile = File(...), 
         
         await db_execute(lambda: db.table("contract_documents").insert({
             "invoice_id": invoice_id,
-            "document_type": "sealed_lawyer_copy",
+            "document_type": "executed",
             "generated_by": current_admin["sub"]
         }).execute())
 
@@ -863,6 +894,154 @@ async def remove_witness_signature(invoice_id: str, witness_id: str, data: Witne
 
     return {"message": "Witness removed", "session_status": new_status}
 
+
+@router.post("/{invoice_id}/reject-client-signature")
+async def reject_client_signature(invoice_id: str, payload: SignatureReject, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
+    if not has_any_role(current_admin, "admin", "lawyer"):
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    
+    db = get_db()
+    
+    # 1. Fetch Invoice & Client details
+    inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute())
+    if not inv_res.data:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    invoice = inv_res.data[0]
+    client_raw = invoice.get("clients", {})
+    client = client_raw[0] if isinstance(client_raw, list) and client_raw else client_raw
+    if not client: client = {}
+    
+    # 2. Get active session to get the token
+    session_res = await db_execute(lambda: db.table("contract_signing_sessions")\
+        .select("id, token, status")\
+        .eq("invoice_id", invoice_id)\
+        .neq("status", "expired")\
+        .order("created_at", desc=True)\
+        .limit(1)\
+        .execute())
+    
+    if not session_res.data:
+        raise HTTPException(status_code=400, detail="No active contract signing session found for this invoice.")
+        
+    session = session_res.data[0]
+    
+    # 3. Clear client signature from invoice
+    await db_execute(lambda: db.table("invoices").update({
+        "contract_signature_url": None,
+        "contract_signature_method": None,
+        "contract_signed_at": None,
+        "contract_audit_ip": None,
+        "contract_audit_agent": None
+    }).eq("id", invoice_id).execute())
+    
+    # 4. Revert session status to pending and extend expires_at by 48 hours
+    new_expires_at = datetime.now(timezone.utc) + timedelta(hours=48)
+    await db_execute(lambda: db.table("contract_signing_sessions").update({
+        "status": "pending",
+        "expires_at": new_expires_at.isoformat()
+    }).eq("id", session["id"]).execute())
+    
+    # 5. Send rejection email to client via background tasks
+    from email_service import send_client_signature_rejected_email
+    background_tasks.add_task(
+        send_client_signature_rejected_email,
+        invoice,
+        client,
+        session["token"],
+        payload.reason
+    )
+    
+    # 6. Log the rejection activity
+    await log_activity(
+        "client_signature_rejected",
+        f"Client signature for invoice {invoice.get('invoice_number', invoice_id)} rejected by lawyer/admin. Reason: {payload.reason}",
+        current_admin["sub"],
+        client_id=invoice.get("client_id"),
+        invoice_id=invoice_id
+    )
+    
+    return {"message": "Client signature rejected successfully"}
+
+
+@router.post("/{invoice_id}/witness/{witness_id}/reject")
+async def reject_witness_signature(invoice_id: str, witness_id: str, payload: SignatureReject, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
+    if not has_any_role(current_admin, "admin", "lawyer"):
+        raise HTTPException(status_code=403, detail="Unauthorized")
+        
+    db = get_db()
+    
+    # 1. Fetch Invoice & Client details
+    inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute())
+    if not inv_res.data:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    invoice = inv_res.data[0]
+    client_raw = invoice.get("clients", {})
+    client = client_raw[0] if isinstance(client_raw, list) and client_raw else client_raw
+    if not client: client = {}
+    
+    # 2. Get active session
+    session_res = await db_execute(lambda: db.table("contract_signing_sessions")\
+        .select("id, token, status")\
+        .eq("invoice_id", invoice_id)\
+        .neq("status", "expired")\
+        .order("created_at", desc=True)\
+        .limit(1)\
+        .execute())
+        
+    if not session_res.data:
+        raise HTTPException(status_code=400, detail="No active signing session found for this invoice.")
+        
+    session = session_res.data[0]
+    
+    # 3. Fetch the witness signature row
+    witness_res = await db_execute(lambda: db.table("witness_signatures")\
+        .select("*")\
+        .eq("id", witness_id)\
+        .eq("session_id", session["id"])\
+        .execute())
+        
+    if not witness_res.data:
+        raise HTTPException(status_code=404, detail="Witness record not found for this signing session.")
+        
+    witness = witness_res.data[0]
+    
+    # 4. Delete witness signature image from storage and row from database
+    _delete_witness_signature_from_storage(db, witness.get("signature_base64", ""))
+    await db_execute(lambda: db.table("witness_signatures").delete().eq("id", witness_id).execute())
+    
+    # 5. Revert session status to pending or partial and extend expires_at by 48 hours
+    remaining_res = await db_execute(lambda: db.table("witness_signatures").select("id").eq("session_id", session["id"]).execute())
+    new_status = "partial" if remaining_res.data else "pending"
+    new_expires_at = datetime.now(timezone.utc) + timedelta(hours=48)
+    await db_execute(lambda: db.table("contract_signing_sessions").update({
+        "status": new_status,
+        "expires_at": new_expires_at.isoformat()
+    }).eq("id", session["id"]).execute())
+    
+    # 6. Send rejection emails to witness and client via background tasks
+    from email_service import send_witness_signature_rejected_email
+    background_tasks.add_task(
+        send_witness_signature_rejected_email,
+        invoice,
+        witness.get("full_name", "Witness"),
+        witness.get("witness_email"),
+        client,
+        session["token"],
+        payload.reason
+    )
+    
+    # 7. Log the rejection activity
+    await log_activity(
+        "witness_signature_rejected",
+        f"Witness signature ({witness.get('full_name')}) for invoice {invoice.get('invoice_number', invoice_id)} rejected by lawyer/admin. Reason: {payload.reason}",
+        current_admin["sub"],
+        client_id=invoice.get("client_id"),
+        invoice_id=invoice_id
+    )
+    
+    return {"message": "Witness signature rejected successfully", "session_status": new_status}
+
+
 @router.get("/signatures")
 async def list_company_signatures(current_admin=Depends(verify_token)):
     if not has_any_role(current_admin, "admin", "lawyer"):
@@ -1091,47 +1270,209 @@ async def get_contract_html(invoice_id: str, current_admin=Depends(verify_token)
         "lawfirm_address": invoice.get("custom_lawfirm_address")
     }
 
-@router.put("/{invoice_id}/custom-html")
-async def update_contract_html(invoice_id: str, payload: CustomContractHTMLUpdate, current_admin=Depends(verify_token)):
-    if not has_any_role(current_admin, "admin", "lawyer"):
+@router.get("/{invoice_id}/reset-html")
+async def get_contract_reset_html(invoice_id: str, current_admin=Depends(verify_token)):
+    if not has_any_role(current_admin, "admin", "lawyer", "legal"):
         raise HTTPException(status_code=403, detail="Unauthorized")
-        
+
     db = get_db()
-    
-    # 1. Check if invoice exists
-    inv_res = await db_execute(lambda: db.table("invoices").select("id").eq("id", invoice_id).execute())
+    inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute())
     if not inv_res.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
-        
-    # 2. Prevent editing if contract is already signed
-    session_res = await db_execute(lambda: db.table("contract_signing_sessions").select("status").eq("invoice_id", invoice_id).neq("status", "expired").execute())
-    if session_res.data and session_res.data[0]["status"] == "completed":
-        raise HTTPException(status_code=400, detail="Cannot edit contract wording after it has been fully executed")
-        
-    # 3. Save the custom HTML to Supabase
-    update_data = {
-        "custom_contract_html": payload.html_content,
-        "updated_at": datetime.now().isoformat()
-    }
-    if payload.cover_html is not None:
-        update_data["custom_cover_html"] = payload.cover_html
-    if payload.execution_html is not None:
-        update_data["custom_execution_html"] = payload.execution_html
-    if payload.lawfirm_name is not None:
-        update_data["custom_lawfirm_name"] = payload.lawfirm_name
-    if payload.lawfirm_address is not None:
-        update_data["custom_lawfirm_address"] = payload.lawfirm_address
 
+    invoice = inv_res.data[0]
+    from pdf_service import get_default_contract_html_fragment, get_default_cover_html_fragment, get_default_execution_html_fragment
+
+    return {
+        "html_content": get_default_contract_html_fragment(invoice, invoice["clients"]),
+        "is_custom": False,
+        "cover_html": get_default_cover_html_fragment(invoice, invoice["clients"]),
+        "is_custom_cover": False,
+        "execution_html": get_default_execution_html_fragment(invoice, invoice["clients"]),
+        "is_custom_execution": False,
+        "lawfirm_name": invoice.get("custom_lawfirm_name"),
+        "lawfirm_address": invoice.get("custom_lawfirm_address"),
+        "generated_from_invoice": True
+    }
+
+@router.post("/{invoice_id}/generate-wording")
+async def generate_contract_wording(invoice_id: str, current_admin=Depends(verify_token)):
+    """
+    AI-powered reset: reads the invoice data, generates proper contract wording
+    (handling both full-payment and part-payment scenarios), then saves it to the
+    database — replacing any previously stored custom HTML for that invoice.
+    """
+    if not has_any_role(current_admin, "admin", "lawyer"):
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    db = get_db()
+
+    # 1. Fetch invoice + client
+    inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute())
+    if not inv_res.data:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    invoice = inv_res.data[0]
+    client_raw = invoice.get("clients", {})
+    client = client_raw[0] if isinstance(client_raw, list) and client_raw else client_raw
+    if not client:
+        client = {}
+
+    # 2. Generate fresh HTML fragments from invoice data (same function the PDF engine uses)
+    from pdf_service import (
+        get_default_contract_html_fragment,
+        get_default_cover_html_fragment,
+        get_default_execution_html_fragment,
+    )
+
+    body_html = get_default_contract_html_fragment(invoice, client)
+    cover_html = get_default_cover_html_fragment(invoice, client)
+    execution_html = get_default_execution_html_fragment(invoice, client)
+
+    # 3. Persist to invoices table (overwrite any existing custom HTML)
+    update_data = {
+        "custom_contract_html": body_html,
+        "custom_cover_html": cover_html,
+        "custom_execution_html": execution_html,
+        "updated_at": datetime.now().isoformat(),
+    }
     await db_execute(lambda: db.table("invoices").update(update_data).eq("id", invoice_id).execute())
-    
+
     await log_activity(
         "contract_wording_updated",
-        f"Contract wordings updated manually for invoice {invoice_id}",
+        f"Contract wording auto-generated from invoice data for {invoice.get('invoice_number', invoice_id)}",
         current_admin["sub"],
-        invoice_id=invoice_id
+        invoice_id=invoice_id,
+        client_id=invoice.get("client_id"),
     )
+
+    return {
+        "message": "Contract wording generated and saved successfully",
+        "html_content": body_html,
+        "cover_html": cover_html,
+        "execution_html": execution_html,
+        "is_custom": True,
+        "is_custom_cover": True,
+        "is_custom_execution": True,
+        "lawfirm_name": invoice.get("custom_lawfirm_name"),
+        "lawfirm_address": invoice.get("custom_lawfirm_address"),
+    }
+
+
+@router.post("/{invoice_id}/mark-closed")
+async def mark_contract_closed(invoice_id: str, current_admin=Depends(verify_token)):
+    if not has_any_role(current_admin, "admin", "lawyer"):
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    db = get_db()
+    inv_res = await db_execute(lambda: db.table("invoices").select("id, client_id, invoice_number, contract_closed").eq("id", invoice_id).execute())
+    if not inv_res.data:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    invoice = inv_res.data[0]
+    if invoice.get("contract_closed"):
+        return {"message": "Contract already marked closed"}
+
+    await db_execute(lambda: db.table("invoices").update({"contract_closed": True, "updated_at": datetime.now().isoformat()}).eq("id", invoice_id).execute())
+
+    await log_activity(
+        "contract_closed",
+        f"Contract of Sale marked closed for invoice {invoice['invoice_number']}",
+        current_admin["sub"],
+        invoice_id=invoice_id,
+        client_id=invoice.get("client_id")
+    )
+
+    return {"message": "Contract marked closed"}
+
+@router.get("/{invoice_id}/status")
+async def get_contract_status(invoice_id: str, current_admin=Depends(verify_token)):
+    db = get_db()
+    res = await db_execute(lambda: db.table("contract_signing_sessions")\
+        .select("*, witness_signatures(*)")\
+        .eq("invoice_id", invoice_id)\
+        .order("created_at", desc=True)\
+        .limit(1)\
+        .execute())
     
-    return {"message": "Custom contract wordings saved successfully"}
+    if not res.data:
+         return {"status": "not_started", "client_signed": False, "contract_closed": False}
+
+    session = res.data[0]
+    
+    # Check if client has signed (look at invoice)
+    inv_res = await db_execute(lambda: db.table("invoices").select("contract_signature_url, contract_closed").eq("id", invoice_id).execute())
+    client_signed = False
+    contract_closed = False
+    if inv_res.data:
+        inv = inv_res.data[0]
+        client_signed = bool(inv.get("contract_signature_url"))
+        contract_closed = bool(inv.get("contract_closed"))
+
+    stage_res = await db_execute(lambda: db.table("invoices").select("pipeline_stage").eq("id", invoice_id).execute())
+    pipeline_stage = stage_res.data[0].get("pipeline_stage") if stage_res.data else None
+
+    return {
+        "id": session["id"],
+        "invoice_id": session["invoice_id"],
+        "token": session["token"],
+        "status": session["status"],
+        "expires_at": session["expires_at"],
+        "created_at": session.get("created_at"),
+        "witness_signatures": session.get("witness_signatures", []),
+        "client_signed": client_signed,
+        "is_executed": session["status"] == "completed",
+        "pipeline_stage": pipeline_stage,
+        "contract_closed": contract_closed
+    }
+
+@router.put("/{invoice_id}/custom-html")
+async def update_contract_html(invoice_id: str, payload: CustomContractHTMLUpdate, current_admin=Depends(verify_token)):
+    try:
+        if not has_any_role(current_admin, "admin", "lawyer"):
+            raise HTTPException(status_code=403, detail="Unauthorized")
+            
+        db = get_db()
+        
+        # 1. Check if invoice exists
+        inv_res = await db_execute(lambda: db.table("invoices").select("id").eq("id", invoice_id).execute())
+        if not inv_res.data:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+            
+        # 2. Prevent editing ONLY if contract has been fully executed (not just if session exists)
+        session_res = await db_execute(lambda: db.table("contract_signing_sessions").select("status").eq("invoice_id", invoice_id).execute())
+        if session_res.data and session_res.data[0]["status"] == "executed":
+            raise HTTPException(status_code=400, detail="Cannot edit contract wording after it has been executed")
+            
+        # 3. Build update data with provided fields
+        update_data = {"updated_at": datetime.now().isoformat()}
+        
+        if payload.html_content is not None:
+            update_data["custom_contract_html"] = payload.html_content
+        if payload.cover_html is not None:
+            update_data["custom_cover_html"] = payload.cover_html
+        if payload.execution_html is not None:
+            update_data["custom_execution_html"] = payload.execution_html
+        if payload.lawfirm_name is not None:
+            update_data["custom_lawfirm_name"] = payload.lawfirm_name
+        if payload.lawfirm_address is not None:
+            update_data["custom_lawfirm_address"] = payload.lawfirm_address
+
+        await db_execute(lambda: db.table("invoices").update(update_data).eq("id", invoice_id).execute())
+        
+        await log_activity(
+            "contract_wording_updated",
+            f"Contract wordings updated manually for invoice {invoice_id}",
+            current_admin["sub"],
+            invoice_id=invoice_id
+        )
+        
+        return {"message": "Custom contract wordings saved successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] update_contract_html failed for {invoice_id}: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Update failed: {str(e)}")
 
 # --- NEW LEGAL DASHBOARD ENDPOINTS ---
 
@@ -1313,7 +1654,7 @@ async def list_all_contracts(include_voided: bool = Query(False), current_admin=
     db = get_db()
     
     query = db.table("invoices")\
-        .select("id, invoice_number, property_name, property_location, amount, created_at, status, contract_signature_url, plot_size_sqm, clients(full_name, email), contract_signing_sessions(*, witness_signatures(*))") \
+        .select("id, invoice_number, property_name, property_location, amount, created_at, status, pipeline_stage, contract_closed, contract_signature_url, plot_size_sqm, clients(full_name, email), contract_signing_sessions(*, witness_signatures(*))") \
         .order("created_at", desc=True)\
         .limit(100)
 
@@ -1537,41 +1878,8 @@ async def get_legal_activity(limit: int = 15, current_admin=Depends(verify_token
         "lawyer_seal_uploaded", "authority_signature_uploaded",
         "client_signed_contract", "manual_client_contract_signed",
         "contract_initiated", "contract_wording_updated", "witness_removed",
-        "signature_updated", "signature_deactivated", "authority_signature_deactivated"
-    ]
-    
-    result = await db_execute(lambda: db.table("activity_log")\
-        .select("*, admins(full_name)")\
-        .in_("event_type", legal_events)\
-        .order("created_at", desc=True)\
-        .limit(limit)\
-        .execute())
-        
-    return result.data
-    await db_execute(lambda: db.table("company_signatures").update({"is_active": False}).eq("id", sig_id).execute())
-    
-    await log_activity(
-        "authority_signature_deactivated",
-        f"Authority signature {sig_id} deactivated",
-        current_admin["sub"]
-    )
-    return {"message": "Signature deactivated"}
-
-@router.get("/activity")
-async def get_legal_activity(limit: int = 15, current_admin=Depends(verify_token)):
-    """Fetch recent contract-related activity logs for the dashboard."""
-    if not has_any_role(current_admin, "admin", "lawyer", "legal"):
-        raise HTTPException(status_code=403, detail="Unauthorized")
-    
-    db = get_db()
-    # Filter for contract-related events
-    legal_events = [
-        "contract_created", "contract_signed", "contract_executed", 
-        "witness_signed", "witness_added", "contract_extended", 
-        "lawyer_seal_uploaded", "authority_signature_uploaded",
-        "client_signed_contract", "manual_client_contract_signed",
-        "contract_initiated", "contract_wording_updated", "witness_removed",
-        "signature_updated", "signature_deactivated", "authority_signature_deactivated"
+        "signature_updated", "signature_deactivated", "authority_signature_deactivated",
+        "contract_closed", "sealed_contract_uploaded", "sealed_contract_sent"
     ]
     
     result = await db_execute(lambda: db.table("activity_log")\

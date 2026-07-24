@@ -1,4 +1,4 @@
-        <div class="section-heading">THIS CONTRACT OF SALE <span style="font-weight: normal; text-transform: none;">is
+<div class="section-heading">THIS CONTRACT OF SALE <span style="font-weight: normal; text-transform: none;">is
                 made on the {{ invoice.invoice_date if invoice.invoice_date else generated_at }}</span></div>
 
         <div class="section-heading">BETWEEN</div>
@@ -29,8 +29,11 @@
         </p>
         {% endif %}
 
-        <div class="section-heading">1. WHEREAS:</div>
-        <ol type="a" style="padding-left: 1.5em; margin-bottom: 20px;">
+        <!-- ═══════════════════════════════════════
+             SECTION A — WHEREAS
+        ═══════════════════════════════════════ -->
+        <div class="section-heading">A. WHEREAS:</div>
+        <ol type="1" style="padding-left: 1.8em; margin-bottom: 20px;">
             <li style="margin-bottom: 12px; padding-left: 8px;">The hereditaments hereinafter described and which is intended to be hereby assigned to the {% if invoice.co_owner_name %}Purchasers{% else %}Purchaser{% endif %} forms an integral part of a large parcel of land which belongs to <strong>{{ company.name | upper }}</strong>.</li>
             <li style="margin-bottom: 12px; padding-left: 8px;">
                 The "Property" subject matter of this Agreement {% if (invoice.quantity or 1) > 1 %}are parcels{% else %}is a parcel{% endif %} of land measuring approximately <strong>{{ invoice.plot_size_sqm or 500 }} square meters {% if (invoice.quantity or 1) > 1 %}each{% endif %}</strong> lying, situate and being at <strong>{{ invoice.property_location or 'Coinfield Estate, Igboye Epe, Lagos State' }}</strong> and belonging to <strong>{{ company.name | upper }}</strong> of {{ company.address or '57B, Isaac John Street, Yaba, Lagos, Nigeria' }}.
@@ -40,35 +43,40 @@
             <li style="margin-bottom: 12px; padding-left: 8px;">The Vendor herein have agreed to transfer and grant to the {% if invoice.co_owner_name %}Purchasers{% else %}Purchaser{% endif %} the absolute assignment of the property and to the transfer of title in the hereinafter described property, subject to the hereinafter stated terms and conditions.</li>
         </ol>
 
-        <div class="section-heading">2. NOW THIS AGREEMENT WITNESSETH as follows;</div>
+        <!-- ═══════════════════════════════════════
+             SECTION B — NOW THIS AGREEMENT WITNESSETH
+        ═══════════════════════════════════════ -->
+        <div class="section-heading">B. NOW THIS AGREEMENT WITNESSETH as follows;</div>
         {% if invoice.balance_due and invoice.balance_due > 0 %}
-        <p>
-            A) The entire "Purchase Price/Consideration" of the property is the sum of
-            <strong>{{ format_naira(invoice.amount) if invoice.amount else 'N 5,000,000' }} ({{ invoice.amount_in_words
-                if invoice.amount_in_words else 'Five Million Naira Only' }})</strong>.
-        </p>
-        <p>
-            B) The {% if invoice.co_owner_name %}Purchasers have{% else %}Purchaser has{% endif %} made a deposit payment of the sum of
-            <strong>{{ format_naira(invoice.amount_paid) if invoice.amount_paid else 'N 4,500,000' }}</strong>
-            on the <strong>{{ invoice.invoice_date if invoice.invoice_date else generated_at }}</strong>, via electronic transfer
-            (the receipt whereof the VENDOR hereby acknowledges).
-        </p>
-        <p>
-            C) The remaining balance of <strong>{{ format_naira(invoice.balance_due) }}</strong> SHALL be paid to the
-            vendor on or before <strong>{{ invoice.payment_terms if invoice.payment_terms else 'a date to be agreed' }}</strong>.
-        </p>
-        <p>
-            D) The VENDOR hereby agrees to sell unto the {% if invoice.co_owner_name %}PURCHASERS{% else %}PURCHASER{% endif %} all that
-            {% if (invoice.quantity or 1) > 1 %}
-            <strong>{{ invoice.quantity }} Plots of Land</strong> measuring approximately {{ invoice.plot_size_sqm or
-            500 }} square meters each
-            {% else %}
-            <strong>{{ invoice.plot_size_sqm or 500 }}</strong> square meters property
-            {% endif %}
-            known and situate at <strong>{{ invoice.property_location or 'Coinfield Estate, Igboye Epe, Lagos State'
-                }}</strong>,
-            subject to the covenants, conditions and stipulations herein.
-        </p>
+        <ol type="1" style="padding-left: 1.8em; margin-bottom: 20px;">
+            <li style="margin-bottom: 12px; padding-left: 8px;">
+                The entire "Purchase Price/Consideration" of the property is the sum of
+                <strong>{{ format_naira(invoice.amount) if invoice.amount else 'N 5,000,000' }} ({{ invoice.amount_in_words
+                    if invoice.amount_in_words else 'Five Million Naira Only' }})</strong>.
+            </li>
+            <li style="margin-bottom: 12px; padding-left: 8px;">
+                The {% if invoice.co_owner_name %}Purchasers have{% else %}Purchaser has{% endif %} made a deposit payment of the sum of
+                <strong>{{ format_naira(invoice.amount_paid) if invoice.amount_paid else 'N 4,500,000' }}</strong>
+                on the <strong>{{ invoice.invoice_date if invoice.invoice_date else generated_at }}</strong>, via electronic transfer
+                (the receipt whereof the VENDOR hereby acknowledges).
+            </li>
+            <li style="margin-bottom: 12px; padding-left: 8px;">
+                The remaining balance of <strong>{{ format_naira(invoice.balance_due) }}</strong> SHALL be paid to the
+                VENDOR on or before <strong>{{ invoice.payment_terms if invoice.payment_terms else 'a date to be agreed' }}</strong>.
+            </li>
+            <li style="margin-bottom: 12px; padding-left: 8px;">
+                The VENDOR hereby agrees to sell unto the {% if invoice.co_owner_name %}PURCHASERS{% else %}PURCHASER{% endif %} all that
+                {% if (invoice.quantity or 1) > 1 %}
+                <strong>{{ invoice.quantity }} Plots of Land</strong> measuring approximately {{ invoice.plot_size_sqm or
+                500 }} square meters each
+                {% else %}
+                <strong>{{ invoice.plot_size_sqm or 500 }}</strong> square meters property
+                {% endif %}
+                known and situate at <strong>{{ invoice.property_location or 'Coinfield Estate, Igboye Epe, Lagos State'
+                    }}</strong>,
+                subject to the covenants, conditions and stipulations herein.
+            </li>
+        </ol>
         {% else %}
         <p>
             In consideration of the sum of
@@ -91,17 +99,33 @@
         </p>
         {% endif %}
 
-        <div class="section-heading">3. THE PARTIES HEREBY COVENANTS as follows:</div>
-        <ol type="A" style="padding-left: 1.5em; margin-bottom: 20px;">
+        <!-- ═══════════════════════════════════════
+             SECTION C — COVENANTS
+        ═══════════════════════════════════════ -->
+        <div class="section-heading">C. THE PARTIES HEREBY COVENANT as follows:</div>
+        <ol type="1" style="padding-left: 1.8em; margin-bottom: 20px;">
             {% if invoice.balance_due and invoice.balance_due > 0 %}
             <li style="margin-bottom: 12px; padding-left: 8px;">The {% if invoice.co_owner_name %}Purchasers covenant{% else %}Purchaser covenants{% endif %} to make full payment of the remaining balance of <strong>{{ format_naira(invoice.balance_due) }}</strong> on or before <strong>{{ invoice.payment_terms if invoice.payment_terms else 'a date to be agreed' }}</strong>.</li>
             {% endif %}
-            <li style="margin-bottom: 12px; padding-left: 8px;">The Parties agree that upon the preparation and execution of the final Deed of Assignment, the {% if invoice.co_owner_name %}Purchasers{% else %}Purchaser{% endif %} shall be led into immediate, actual, and undisturbed possession of the entire Property. The Vendor shall ensure that the Property is properly surveyed and shall, at the Vendor's cost, procure and deliver to the {% if invoice.co_owner_name %}Purchasers{% else %}Purchaser{% endif %} a registered survey plan of the Property. The Vendor further undertakes to provide all reasonable assistance, documentation, and cooperation required by the {% if invoice.co_owner_name %}Purchasers{% else %}Purchaser{% endif %} in the procurement of the Governor's Consent, while the costs and statutory fees for obtaining the said Consent shall be borne by the {% if invoice.co_owner_name %}Purchasers{% else %}Purchaser{% endif %}.</li>
+            <li style="margin-bottom: 12px; padding-left: 8px;">The Parties agree that upon the preparation and execution of the final Deed of Assignment following full payment of all outstanding fees, the {% if invoice.co_owner_name %}Purchasers{% else %}Purchaser{% endif %} shall be led into immediate, actual, and undisturbed possession of the entire Property.</li>
+            <li style="margin-bottom: 12px; padding-left: 8px;">The Vendor shall ensure that the Property is properly surveyed and shall, at the Vendor's cost, procure and deliver to the {% if invoice.co_owner_name %}Purchasers{% else %}Purchaser{% endif %} a registered survey plan of the Property. The Vendor further undertakes to provide all reasonable assistance, documentation, and cooperation required by the {% if invoice.co_owner_name %}Purchasers{% else %}Purchaser{% endif %} in the perfection of the property transaction, while the costs and statutory fees for such perfection shall be borne by the {% if invoice.co_owner_name %}Purchasers{% else %}Purchaser{% endif %}.</li>
+            <li style="margin-bottom: 12px; padding-left: 8px;">Time is of the essence in this Agreement. Every date, deadline, and time stipulation in this Agreement, including but not limited to payment dates and completion, is strict and mandatory without the obligation of notice.</li>
+            <li style="margin-bottom: 12px; padding-left: 8px;">The {% if invoice.co_owner_name %}Purchasers acknowledge{% else %}Purchaser acknowledges{% endif %} that he/she has read, fully understood, and unconditionally agreed to be bound by the Vendor Company's policies, including but not limited to its refund policy, terms of service, privacy policy, and any other applicable terms and conditions as they may be updated from time to time.</li>
+            <li style="margin-bottom: 12px; padding-left: 8px;">The {% if invoice.co_owner_name %}Purchasers acknowledge{% else %}Purchaser acknowledges{% endif %} that he/she has been given a full and fair opportunity to inspect the Property, either physically or virtually (including but not limited to site visits, photographs, videos, virtual tours, drone footage, or other digital representations), and that the {% if invoice.co_owner_name %}Purchasers have{% else %}Purchaser has{% endif %} conducted such inspections to his/her satisfaction prior to entering into this Agreement. The {% if invoice.co_owner_name %}Purchasers{% else %}Purchaser{% endif %} further acknowledge that he/she has made all necessary inquiries regarding the Property, including its condition, boundaries, area, access, services, and any visible or hidden defects, and is relying solely on his/her own perception of the inspection and inquiries made.</li>
+            <li style="margin-bottom: 12px; padding-left: 8px;">The {% if invoice.co_owner_name %}Purchasers accept{% else %}Purchaser accepts{% endif %} the Property in its current condition at the date of this Agreement, and the Vendor shall have no liability for any defects, damage, or issues arising before or after completion, except where such liability cannot be excluded by applicable law.</li>
+            <li style="margin-bottom: 12px; padding-left: 8px;">Where the {% if invoice.co_owner_name %}Purchasers{% else %}Purchaser{% endif %} grossly fail to pay any instalment when due (whether by reason of delay, insufficiency of funds, dishonour, reversal, chargeback, or any other cause), the entire outstanding balance of the Purchase Price shall immediately become due and payable without demand, and the Vendor may automatically terminate this Agreement. The Vendor shall not be obligated to issue any notice, demand, warning, or reminder to the {% if invoice.co_owner_name %}Purchasers{% else %}Purchaser{% endif %} before exercising any right under this clause.</li>
+            <li style="margin-bottom: 12px; padding-left: 8px;">If the {% if invoice.co_owner_name %}Purchasers default{% else %}Purchaser defaults{% endif %} under this Agreement (including but not limited to failure to complete the full Purchase Price, breach of any covenant, or fraudulent payment), the Vendor may, at its sole option: (a) terminate this Agreement by written notice; (b) retain requisite liquidated and general damages; and (c) resell the Property to any third party on such terms as the Vendor deems fit.</li>
             <li style="margin-bottom: 12px; padding-left: 8px;">Any right or remedy to which any party is or may become entitled under this Agreement or in consequence of the other's conduct may be enforced from time to time separately or concurrently with any right or remedy given by this Agreement now or afterwards provided for and arising by operation of law so that such rights and remedies are not exclusive of the other but are cumulative.</li>
+            <li style="margin-bottom: 12px; padding-left: 8px;">Legal title to the Property, together with the right to registration of any Deed of Assignment, conveyance, or transfer, shall remain vested in the Vendor until the Vendor has received and verified the full Purchase Price in immediately available cleared funds. No assignment, conveyance, or transfer of title shall be executed and delivered to the {% if invoice.co_owner_name %}Purchasers{% else %}Purchaser{% endif %}, and no registration of such an instrument shall be effected, until the Vendor is satisfied that the full Purchase Price has been paid and verified. Until such time, the {% if invoice.co_owner_name %}Purchasers{% else %}Purchaser{% endif %} shall have only an equitable interest conditional upon full payment and shall not be treated as the legal owner.</li>
             <li style="margin-bottom: 12px; padding-left: 8px;">No amendment to or modification of this Agreement shall be effective unless it is in writing and signed by all parties to this Agreement.</li>
-            <li style="margin-bottom: 12px; padding-left: 8px;">Without prejudice to any other obligations of the Vendor or {% if invoice.co_owner_name %}Purchasers{% else %}Purchaser{% endif %} under this agreement, the Vendor or {% if invoice.co_owner_name %}Purchasers{% else %}Purchaser{% endif %} and their respective Attorneys (either jointly or independently) shall upon request by either party, take all necessary steps and execute any further documents as may be necessary or desirable to realize the arrangements contemplated by this Agreement and to enable the {% if invoice.co_owner_name %}Purchasers{% else %}Purchaser{% endif %} enjoy all rights, interest, powers and title in the "Property".</li>
-            <li style="margin-bottom: 12px; padding-left: 8px;">This Agreement supersedes any prior agreement or agreements between the parties whether oral or written in respect of the "Property" and any such prior agreements are canceled upon the execution of this agreement.</li>
-            <li style="margin-bottom: 12px; padding-left: 8px;">If any provision of this Agreement is declared by any judicial or other competent authority to be, defective, inchoate, illegal, void or otherwise unenforceable, the Vendors and their Attorney shall take all necessary steps to rectify that provision in order to give effect to the general objective of the agreement. Provided always that the provision in question shall be severed from the rest of this Agreement, and the rest of the Agreement shall continue to have force and effect in law.</li>
-            <li style="margin-bottom: 12px; padding-left: 8px;">In the event of any failure to perfect the title of the Vendors and/or to realize the objective of this agreement, the Vendors undertake and guarantee to indemnify the Purchaser of the full Purchase Price.</li>
-            <li style="margin-bottom: 12px; padding-left: 8px;">Any claim, dispute, failure or controversy arising from or out of this Agreement or any breach thereof shall first be resolved by parties through amicable negotiation failing which such dispute may be referred to the mediation section of the Lagos Multidoor Court House, Lagos, Nigeria. PROVIDED that where settlement is not reached after three (3) sittings of the aforesaid Lagos Multidoor Court House, Lagos, Nigeria, an aggrieved party can approach the court for resolution and claims.</li>
+            <li style="margin-bottom: 12px; padding-left: 8px;">Any honest mistakes, errors, or inaccuracies in this Agreement shall not be deemed a true reflection of this Agreement. Instead, the true position shall be determined by the actual, honest state of facts as they exist, and the Vendor reserves the right to amend this Agreement to correct such honest mistakes and reflect the true and honest position, provided that the Vendor provides written notice to the {% if invoice.co_owner_name %}Purchasers{% else %}Purchaser{% endif %} specifying the nature of the mistake and the proposed amendment. Notwithstanding the foregoing, where a clerical, typographical, or other unintentional error, omission, or inaccuracy is discovered in this Agreement or any document delivered under it, the Vendor may correct that error by issuing a written correction, which shall be effective from the date of issuance and shall not affect the validity or enforceability of the Agreement, provided that the correction accurately reflects the Parties' original intention.</li>
+            <li style="margin-bottom: 12px; padding-left: 8px;">Without prejudice to any other obligations of the parties under this Agreement, the parties (either jointly or independently) shall, upon request by either party, take all necessary steps and execute any further documents as may be necessary or desirable to realize the arrangements contemplated by this Agreement and to enable the {% if invoice.co_owner_name %}Purchasers{% else %}Purchaser{% endif %} enjoy all rights, interests, powers and title in the "Property".</li>
+            <li style="margin-bottom: 12px; padding-left: 8px;">This Agreement supersedes any prior agreement or agreements between the parties whether oral or written in respect of the "Property" and any such prior agreements are cancelled upon the execution of this Agreement.</li>
+            <li style="margin-bottom: 12px; padding-left: 8px;">The {% if invoice.co_owner_name %}Purchasers{% else %}Purchaser{% endif %} shall not assign, transfer, mortgage, charge, or otherwise dispose of any right, interest, or obligation under this Agreement, whether in whole or in part, without the Vendor's prior written consent. Any attempted assignment, transfer, or disposition in breach of this clause shall be null and void and of no legal effect.</li>
+            <li style="margin-bottom: 12px; padding-left: 8px;">If any provision of this Agreement is declared by any judicial or other competent authority to be defective, inchoate, illegal, void, or otherwise unenforceable, the Vendors and their Attorney shall take all necessary steps to rectify that provision in order to give effect to the general objective of the Agreement. Provided always that the provision in question shall be severed from the rest of this Agreement, and the rest of the Agreement shall continue to have force and effect in law.</li>
+            <li style="margin-bottom: 12px; padding-left: 8px;">This Agreement and the transfer of title contemplated herein are conditional upon verification of full and valid payment of the Purchase Price to the Vendor in immediately available cleared funds. If the Vendor reasonably determines that any payment is fraudulent, counterfeit, has been reversed, charged back, blocked, or dishonoured, or otherwise cannot be verified as having been received in full and cleared, the Vendor may declare this Agreement void <em>ab initio</em> by written notice to the {% if invoice.co_owner_name %}Purchasers{% else %}Purchaser{% endif %} and shall be entitled to retain possession of the Property and to pursue any remedies available in law or equity.</li>
+            <li style="margin-bottom: 12px; padding-left: 8px;">Neither party shall be liable for any failure or delay in performing its obligations under this Agreement (other than the {% if invoice.co_owner_name %}Purchasers'{% else %}Purchaser's{% endif %} obligation to pay the Purchase Price) to the extent that such failure or delay is caused by events beyond its reasonable control, including but not limited to acts of God, natural disasters, war, civil unrest, terrorism, government actions, court orders, or utility failures. In such cases, the affected party's performance shall be excused for the duration of the force majeure event, and any time-bound obligations shall be extended accordingly.</li>
+            <li style="margin-bottom: 12px; padding-left: 8px;">No failure, delay, or omission by the parties in exercising any right, power, or remedy under this Agreement or at law shall operate as a waiver of that right, power, or remedy, nor shall any single or partial exercise of any right preclude any further exercise of that right or the exercise of any other right.</li>
+            <li style="margin-bottom: 12px; padding-left: 8px;">In the event of any failure to perfect the title of the Vendor and/or to realize the objective of this Agreement, the Vendor undertakes and guarantees to indemnify the {% if invoice.co_owner_name %}Purchasers{% else %}Purchaser{% endif %} of the full Purchase Price.</li>
+            <li style="margin-bottom: 12px; padding-left: 8px;">Any claim, dispute, failure or controversy arising from or out of this Agreement or any breach thereof shall first be resolved by the parties through amicable negotiation failing which such dispute may be referred to the mediation section of the Lagos Multi-Door Court House, Lagos, Nigeria. PROVIDED that where settlement is not reached after three (3) sittings, an aggrieved party may approach the court for resolution and claims.</li>
         </ol>

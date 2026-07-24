@@ -1,0 +1,3005 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Procurement Portal | Eximp & Cloves</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,700;1,400&display=swap"
+        rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --bg: #080808;
+            --surface: #111113;
+            --card: #161618;
+            --elevated: #1c1c1f;
+            --brand: #C47D0A;
+            --brand-light: #F5A623;
+            --brand-glow: rgba(196, 125, 10, 0.15);
+            --brand-dim: rgba(196, 125, 10, 0.08);
+            --text: #F0EEE9;
+            --muted: #8A8480;
+            --subtle: #3A3835;
+            --border: rgba(255, 255, 255, 0.07);
+            --border-gold: rgba(196, 125, 10, 0.25);
+            --success: #22c55e;
+            --success-bg: rgba(34, 197, 94, 0.1);
+            --error: #ef4444;
+            --error-bg: rgba(239, 68, 68, 0.1);
+            --warning: #f59e0b;
+            --radius: 16px;
+            --radius-sm: 10px;
+        }
+
+        *,
+        *::before,
+        *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            background-image:
+                radial-gradient(ellipse 80% 50% at 20% -10%, rgba(196, 125, 10, 0.07) 0%, transparent 60%),
+                radial-gradient(ellipse 60% 40% at 80% 110%, rgba(196, 125, 10, 0.04) 0%, transparent 60%);
+        }
+
+        /* ── LAYOUT ── */
+        .app-shell {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* ── SIDEBAR ── */
+        .sidebar {
+            width: 72px;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px 0;
+            gap: 8px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            z-index: 100;
+        }
+
+        .sidebar-logo {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--brand), var(--brand-light));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Playfair Display', serif;
+            font-size: 18px;
+            font-weight: 700;
+            color: #000;
+            margin-bottom: 24px;
+        }
+
+        .sidebar-nav {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            width: 100%;
+            padding: 0 10px;
+        }
+
+        .sidebar-btn {
+            width: 100%;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            background: none;
+            color: var(--muted);
+            font-size: 17px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .sidebar-btn:hover {
+            background: var(--brand-dim);
+            color: var(--brand-light);
+        }
+
+        .sidebar-btn.active {
+            background: var(--brand-glow);
+            color: var(--brand);
+        }
+
+        .sidebar-btn .tip {
+            position: absolute;
+            left: calc(100% + 12px);
+            background: var(--elevated);
+            color: var(--text);
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            border: 1px solid var(--border);
+        }
+
+        .sidebar-btn:hover .tip {
+            opacity: 1;
+        }
+
+        .sidebar-spacer {
+            flex: 1;
+        }
+
+        /* ── MAIN ── */
+        .main {
+            margin-left: 72px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ── TOPBAR ── */
+        .topbar {
+            padding: 0 32px;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border);
+            background: rgba(8, 8, 8, 0.8);
+            backdrop-filter: blur(20px);
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+
+        .topbar-left {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .topbar-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 20px;
+            color: var(--text);
+            line-height: 1.2;
+        }
+
+        .topbar-sub {
+            font-size: 11px;
+            color: var(--muted);
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+
+        .topbar-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .topbar-badge {
+            padding: 5px 12px;
+            border-radius: 20px;
+            background: var(--brand-dim);
+            border: 1px solid var(--border-gold);
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--brand);
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        /* ── PAGE CONTENT ── */
+        .page {
+            display: none;
+            padding: 32px;
+            max-width: 1100px;
+        }
+
+        .page.active {
+            display: block;
+            animation: fadeUp 0.4s ease;
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(16px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* ── SECTION HEADER ── */
+        .section-header {
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 26px;
+            margin-bottom: 4px;
+        }
+
+        .section-sub {
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .title-line {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .title-chip {
+            padding: 3px 10px;
+            border-radius: 20px;
+            background: var(--brand-glow);
+            border: 1px solid var(--border-gold);
+            font-size: 10px;
+            font-weight: 800;
+            color: var(--brand);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        /* ── CARDS ── */
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .card-icon {
+            width: 36px;
+            height: 36px;
+            background: var(--brand-glow);
+            border: 1px solid var(--border-gold);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+            color: var(--brand);
+        }
+
+        .card-title {
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .card-sub {
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        /* ── STEPS ── */
+        .steps-bar {
+            display: flex;
+            align-items: center;
+            gap: 0;
+            margin-bottom: 32px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 6px;
+            overflow: hidden;
+        }
+
+        .step-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            padding: 10px 8px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .step-item.done {
+            cursor: pointer;
+        }
+
+        .step-item.active {
+            background: var(--brand-glow);
+        }
+
+        .step-item.active .step-num {
+            background: var(--brand);
+            color: #000;
+        }
+
+        .step-item.active .step-label {
+            color: var(--brand);
+        }
+
+        .step-item.done .step-num {
+            background: var(--success-bg);
+            color: var(--success);
+            border-color: var(--success);
+        }
+
+        .step-num {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            border: 1.5px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 800;
+            color: var(--muted);
+            transition: all 0.3s;
+        }
+
+        .step-label {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            text-align: center;
+            line-height: 1.3;
+        }
+
+        .step-div {
+            width: 1px;
+            height: 32px;
+            background: var(--border);
+        }
+
+        /* ── FORMS ── */
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .form-full {
+            grid-column: 1 / -1;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .form-label {
+            font-size: 10px;
+            font-weight: 800;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .form-label .req {
+            color: var(--brand);
+            margin-left: 2px;
+        }
+
+        .input-wrap {
+            position: relative;
+        }
+
+        .input-icon {
+            position: absolute;
+            left: 13px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--brand);
+            font-size: 14px;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+            background: var(--elevated);
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 11px 14px 11px 38px;
+            color: var(--text);
+            font-family: 'Outfit', sans-serif;
+            font-size: 13px;
+            transition: all 0.2s;
+            outline: none;
+        }
+
+        input.no-icon,
+        select.no-icon {
+            padding-left: 14px;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            border-color: var(--brand);
+            background: rgba(196, 125, 10, 0.04);
+            box-shadow: 0 0 0 3px rgba(196, 125, 10, 0.1);
+        }
+
+        select {
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='%23C47D0A' stroke-width='2.5' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            background-size: 16px;
+        }
+
+        select option,
+        select optgroup {
+            background: #1c1c1f;
+            color: #ffffff;
+        }
+
+
+        textarea {
+            padding-left: 14px;
+            min-height: 90px;
+            resize: vertical;
+        }
+
+        .input-hint {
+            font-size: 11px;
+            color: var(--muted);
+            margin-top: 2px;
+        }
+
+        .input-error {
+            font-size: 11px;
+            color: var(--error);
+            margin-top: 2px;
+            display: none;
+        }
+
+        .form-group.has-error input,
+        .form-group.has-error select {
+            border-color: var(--error);
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+        }
+
+        .form-group.has-error .input-error {
+            display: block;
+        }
+
+        /* ── UPLOAD ZONE ── */
+        .upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: var(--radius);
+            padding: 40px 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: var(--elevated);
+            position: relative;
+        }
+
+        .upload-zone:hover,
+        .upload-zone.drag-over {
+            border-color: var(--brand);
+            background: var(--brand-dim);
+        }
+
+        .upload-zone input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+            width: 100%;
+            height: 100%;
+            padding: 0;
+        }
+
+        .upload-icon {
+            font-size: 36px;
+            color: var(--brand);
+            margin-bottom: 12px;
+        }
+
+        .upload-title {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .upload-sub {
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .upload-formats {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+
+        .format-chip {
+            padding: 3px 10px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--muted);
+        }
+
+        .file-attached {
+            display: none;
+            align-items: center;
+            gap: 12px;
+            background: var(--success-bg);
+            border: 1.5px solid rgba(34, 197, 94, 0.3);
+            border-radius: var(--radius-sm);
+            padding: 12px 16px;
+            margin-top: 12px;
+        }
+
+        .file-attached.show {
+            display: flex;
+        }
+
+        .file-attached i {
+            color: var(--success);
+            font-size: 18px;
+        }
+
+        .file-attached-info {
+            flex: 1;
+        }
+
+        .file-name {
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .file-size {
+            font-size: 11px;
+            color: var(--muted);
+        }
+
+        .file-remove {
+            background: none;
+            border: none;
+            color: var(--muted);
+            cursor: pointer;
+            font-size: 16px;
+            transition: color 0.2s;
+        }
+
+        .file-remove:hover {
+            color: var(--error);
+        }
+
+        .file-remove:hover {
+            color: var(--error);
+        }
+
+        /* ── MODE TOGGLE (Upload vs Manual) ── */
+        .mode-toggle {
+            display: flex;
+            gap: 6px;
+            background: var(--elevated);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 5px;
+            margin-bottom: 24px;
+        }
+
+        .mode-btn {
+            flex: 1;
+            padding: 9px 16px;
+            border-radius: 8px;
+            border: none;
+            background: transparent;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .mode-btn.active {
+            background: rgba(196, 125, 10, 0.12);
+            color: var(--brand);
+            border: 1px solid rgba(196, 125, 10, 0.25);
+        }
+
+        .mode-btn i {
+            margin-right: 6px;
+        }
+
+        .manual-hint {
+            background: rgba(196, 125, 10, 0.06);
+            border: 1px solid rgba(196, 125, 10, 0.2);
+            border-radius: 12px;
+            padding: 14px 18px;
+            font-size: 12px;
+            color: var(--muted);
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
+        .manual-hint i {
+            color: var(--brand);
+            margin-top: 2px;
+            flex-shrink: 0;
+        }
+
+        /* ── EDITABLE TABLE ── */
+        .table-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .table-toolbar-left {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+        }
+
+        .proc-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .proc-table thead th {
+            padding: 10px 12px;
+            background: var(--elevated);
+            border-bottom: 1px solid var(--border);
+            text-align: left;
+            font-size: 10px;
+            font-weight: 800;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+
+        .proc-table tbody tr {
+            border-bottom: 1px solid var(--border);
+            transition: background 0.15s;
+        }
+
+        .proc-table tbody tr:last-child {
+            border-bottom: none;
+        }
+
+        .proc-table tbody tr:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .proc-table td {
+            padding: 6px 8px;
+            vertical-align: middle;
+        }
+
+        .proc-table td input,
+        .proc-table td select {
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            padding: 5px 8px;
+            font-size: 12px;
+            width: 100%;
+            min-width: 80px;
+            color: var(--text);
+            transition: all 0.15s;
+        }
+
+        .proc-table td input:focus,
+        .proc-table td select:focus {
+            background: var(--brand-dim);
+            border-color: var(--brand);
+            box-shadow: none;
+        }
+
+        .proc-table td input.no-icon {
+            padding-left: 8px;
+        }
+
+        .proc-table td select.no-icon {
+            padding-left: 8px;
+        }
+
+        .td-amount {
+            font-weight: 700;
+            color: var(--brand-light);
+            text-align: right;
+        }
+
+        .td-row-num {
+            color: var(--muted);
+            font-size: 11px;
+            text-align: center;
+            min-width: 30px;
+        }
+
+        .td-actions {
+            text-align: center;
+        }
+
+        .row-del-btn {
+            width: 26px;
+            height: 26px;
+            border-radius: 6px;
+            background: var(--error-bg);
+            border: none;
+            color: var(--error);
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .row-del-btn:hover {
+            background: var(--error);
+            color: #fff;
+        }
+
+        .table-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            border-top: 1px solid var(--border);
+            background: var(--elevated);
+        }
+
+        .table-total {
+            font-size: 13px;
+        }
+
+        .table-total span {
+            color: var(--muted);
+        }
+
+        .table-total strong {
+            color: var(--brand-light);
+            font-size: 16px;
+            margin-left: 8px;
+        }
+
+        .empty-table {
+            text-align: center;
+            padding: 40px;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .empty-table i {
+            font-size: 28px;
+            display: block;
+            margin-bottom: 8px;
+            opacity: 0.5;
+        }
+
+        /* ── BUTTONS ── */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 9px 18px;
+            border-radius: var(--radius-sm);
+            font-family: 'Outfit', sans-serif;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn-primary {
+            background: var(--brand);
+            color: #000;
+        }
+
+        .btn-primary:hover {
+            background: var(--brand-light);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(196, 125, 10, 0.25);
+        }
+
+        .btn-outline {
+            background: transparent;
+            color: var(--text);
+            border: 1.5px solid var(--border);
+        }
+
+        .btn-outline:hover {
+            border-color: var(--brand);
+            color: var(--brand);
+            background: var(--brand-dim);
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--muted);
+        }
+
+        .btn-ghost:hover {
+            color: var(--text);
+            background: var(--elevated);
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: #000;
+        }
+
+        .btn-success:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+        }
+
+        .btn-danger {
+            background: var(--error-bg);
+            color: var(--error);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        /* ── NAV ACTIONS ── */
+        .page-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border);
+        }
+
+        .page-actions-right {
+            margin-left: auto;
+            display: flex;
+            gap: 10px;
+        }
+
+        /* ── SUMMARY CARD ── */
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .summary-item {
+            background: var(--elevated);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 16px 20px;
+        }
+
+        .summary-label {
+            font-size: 10px;
+            font-weight: 800;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+        }
+
+        .summary-value {
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .summary-value.gold {
+            color: var(--brand-light);
+        }
+
+        .summary-value.green {
+            color: var(--success);
+        }
+
+        /* ── REVIEW TABLE ── */
+        .review-section {
+            margin-bottom: 20px;
+        }
+
+        .review-label {
+            font-size: 10px;
+            font-weight: 800;
+            color: var(--brand);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 4px;
+        }
+
+        .review-value {
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .review-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .review-pair {
+            background: var(--elevated);
+            border-radius: var(--radius-sm);
+            padding: 12px 14px;
+        }
+
+        /* ── SUCCESS STATE ── */
+        .success-screen {
+            display: none;
+            text-align: center;
+            padding: 60px 32px;
+        }
+
+        .success-screen.show {
+            display: block;
+            animation: fadeUp 0.5s ease;
+        }
+
+        .success-icon {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: var(--success-bg);
+            border: 2px solid var(--success);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            color: var(--success);
+            margin: 0 auto 24px;
+            animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes popIn {
+            from {
+                transform: scale(0.5);
+                opacity: 0;
+            }
+
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .success-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .success-ref {
+            display: inline-block;
+            background: var(--brand-glow);
+            border: 1px solid var(--border-gold);
+            border-radius: 8px;
+            padding: 8px 20px;
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--brand);
+            margin: 16px 0;
+            letter-spacing: 1px;
+        }
+
+        /* ── TOAST ── */
+        #toast {
+            position: fixed;
+            bottom: 28px;
+            right: 28px;
+            background: var(--elevated);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 14px 20px;
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 9999;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+            transform: translateY(80px);
+            opacity: 0;
+            transition: all 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+            max-width: 360px;
+        }
+
+        #toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        #toast.success {
+            border-color: rgba(34, 197, 94, 0.4);
+        }
+
+        #toast.error {
+            border-color: rgba(239, 68, 68, 0.4);
+        }
+
+        #toast.success i {
+            color: var(--success);
+        }
+
+        #toast.error i {
+            color: var(--error);
+        }
+
+        /* ── PROFILE PAGE ── */
+        .profile-header {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 24px;
+            background: var(--elevated);
+            border-radius: var(--radius);
+            margin-bottom: 20px;
+            border: 1px solid var(--border);
+        }
+
+        .profile-avatar {
+            width: 64px;
+            height: 64px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, var(--brand), #7C4F00);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: 800;
+            color: #000;
+            flex-shrink: 0;
+        }
+
+        .profile-name {
+            font-family: 'Playfair Display', serif;
+            font-size: 20px;
+        }
+
+        .profile-role {
+            font-size: 12px;
+            color: var(--brand);
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .profile-status {
+            margin-left: auto;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .profile-status.verified {
+            background: var(--success-bg);
+            color: var(--success);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .profile-status.unverified {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        /* ── SUBMISSIONS LIST ── */
+        .submission-card {
+            background: var(--elevated);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 16px 20px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            transition: border-color 0.2s;
+            cursor: pointer;
+        }
+
+        .submission-card:hover {
+            border-color: var(--brand);
+        }
+
+        .sub-status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .sub-status-dot.pending {
+            background: var(--warning);
+        }
+
+        .sub-status-dot.approved {
+            background: var(--success);
+        }
+
+        .sub-status-dot.rejected {
+            background: var(--error);
+        }
+
+        .sub-info {
+            flex: 1;
+        }
+
+        .sub-ref {
+            font-size: 12px;
+            font-weight: 800;
+            color: var(--brand);
+            margin-bottom: 2px;
+        }
+
+        .sub-title {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .sub-meta {
+            font-size: 11px;
+            color: var(--muted);
+            margin-top: 2px;
+        }
+
+        .sub-amount {
+            text-align: right;
+        }
+
+        .sub-amount-val {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--brand-light);
+        }
+
+        .sub-status-badge {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 4px;
+            display: inline-block;
+        }
+
+        .badge-pending {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning);
+        }
+
+        .badge-approved {
+            background: var(--success-bg);
+            color: var(--success);
+        }
+
+        .badge-rejected {
+            background: var(--error-bg);
+            color: var(--error);
+        }
+
+        /* ── SECTION NAV (inside page) ── */
+        .section-tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 24px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 4px;
+        }
+
+        .section-tab {
+            flex: 1;
+            padding: 9px 12px;
+            text-align: center;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--muted);
+            border-radius: 7px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+            background: none;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        .section-tab.active {
+            background: var(--card);
+            color: var(--brand);
+            border: 1px solid var(--border-gold);
+        }
+
+        /* ── SCROLLBAR ── */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--subtle);
+            border-radius: 3px;
+        }
+
+        @media (max-width: 768px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .summary-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .review-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .page {
+                padding: 20px 16px;
+            }
+
+            .topbar {
+                padding: 0 16px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="app-shell">
+        <!-- SIDEBAR -->
+        <nav class="sidebar">
+            <img src="/static/img/logo.png" alt="Eximp & Cloves"
+                style="width: 36px; height: auto; margin-bottom: 24px; object-fit: contain; filter: brightness(0) invert(1);">
+            <div class="sidebar-nav">
+                <button class="sidebar-btn active" onclick="showPage('new-submission')" id="nav-new">
+                    <i class="fa-solid fa-file-invoice"></i>
+                    <span class="tip">New Submission</span>
+                </button>
+                <button class="sidebar-btn" onclick="showPage('my-submissions')" id="nav-list">
+                    <i class="fa-solid fa-list-check"></i>
+                    <span class="tip">My Submissions</span>
+                </button>
+                <button class="sidebar-btn" onclick="showPage('profile')" id="nav-profile">
+                    <i class="fa-solid fa-building-columns"></i>
+                    <span class="tip">Vendor Profile</span>
+                </button>
+            </div>
+            <div class="sidebar-spacer"></div>
+            <div class="sidebar-nav">
+                <button class="sidebar-btn" title="Help">
+                    <i class="fa-solid fa-circle-question"></i>
+                    <span class="tip">Help</span>
+                </button>
+            </div>
+        </nav>
+
+        <!-- MAIN -->
+        <div class="main">
+            <!-- TOPBAR -->
+            <header class="topbar">
+                <div class="topbar-left">
+                    <div class="topbar-title">Procurement Portal</div>
+                    <div class="topbar-sub">Eximp & Cloves Infrastructure Limited</div>
+                </div>
+                <div class="topbar-right">
+                    <span class="topbar-badge" id="topbar-vendor-name">Vendor</span>
+                </div>
+            </header>
+
+            <!-- PAGE: NEW SUBMISSION (multi-step) -->
+            <div class="page active" id="page-new-submission">
+                <div class="section-header">
+                    <div class="title-line">
+                        <span class="section-title">New Procurement Submission</span>
+                        <span class="title-chip">STEP <span id="step-badge">1</span> OF 4</span>
+                    </div>
+                    <p class="section-sub">Upload your quotation and submit for approval. All submissions are reviewed
+                        by the finance team.</p>
+                </div>
+
+                <!-- Steps Bar -->
+                <div class="steps-bar">
+                    <div class="step-item active" id="step-1" onclick="goToStep(1)">
+                        <div class="step-num" id="sn-1">1</div>
+                        <div class="step-label">Profile</div>
+                    </div>
+                    <div class="step-div"></div>
+                    <div class="step-item" id="step-2" onclick="goToStep(2)">
+                        <div class="step-num" id="sn-2">2</div>
+                        <div class="step-label">Upload File</div>
+                    </div>
+                    <div class="step-div"></div>
+                    <div class="step-item" id="step-3" onclick="goToStep(3)">
+                        <div class="step-num" id="sn-3">3</div>
+                        <div class="step-label">Review & Edit</div>
+                    </div>
+                    <div class="step-div"></div>
+                    <div class="step-item" id="step-4" onclick="goToStep(4)">
+                        <div class="step-num" id="sn-4">4</div>
+                        <div class="step-label">Confirm</div>
+                    </div>
+                </div>
+
+                <!-- STEP 1: Vendor Identity -->
+                <div id="panel-1">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-icon"><i class="fa-solid fa-building"></i></div>
+                            <div>
+                                <div class="card-title">Vendor Information</div>
+                                <div class="card-sub">Your company details and contact information</div>
+                            </div>
+                        </div>
+                        <div class="form-grid">
+                            <div class="form-group form-full" id="fg-company">
+                                <label class="form-label">Company / Business Name <span class="req">*</span></label>
+                                <div class="input-wrap">
+                                    <i class="input-icon fa-solid fa-building"></i>
+                                    <input type="text" id="v-company" placeholder="e.g. BuildRight Construction Ltd">
+                                </div>
+                                <div class="input-error">Company name is required</div>
+                            </div>
+                            <div class="form-group" id="fg-contact">
+                                <label class="form-label">Contact Person <span class="req">*</span></label>
+                                <div class="input-wrap">
+                                    <i class="input-icon fa-solid fa-user"></i>
+                                    <input type="text" id="v-contact" placeholder="Full name">
+                                </div>
+                                <div class="input-error">Contact name is required</div>
+                            </div>
+                            <div class="form-group" id="fg-phone">
+                                <label class="form-label">Phone Number <span class="req">*</span></label>
+                                <div class="input-wrap">
+                                    <i class="input-icon fa-solid fa-phone"></i>
+                                    <input type="tel" id="v-phone" placeholder="+234 xxx xxxx xxxx">
+                                </div>
+                                <div class="input-error">Phone number is required</div>
+                            </div>
+                            <div class="form-group" id="fg-email">
+                                <label class="form-label">Email Address <span class="req">*</span></label>
+                                <div style="display:flex;gap:8px">
+                                    <div class="input-wrap" style="flex:1">
+                                        <i class="input-icon fa-solid fa-envelope"></i>
+                                        <input type="email" id="v-email" placeholder="vendor@company.com">
+                                    </div>
+                                    <button class="btn btn-primary btn-sm" onclick="identifyVendor()" id="btn-identify"
+                                        style="height:44px">
+                                        <i class="fa-solid fa-magnifying-glass"></i> Identify
+                                    </button>
+                                </div>
+                                <div class="input-error">Valid email is required</div>
+                                <div class="input-hint" id="identify-hint">Enter email to auto-fill your profile</div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">RC / Business Reg Number</label>
+                                <div class="input-wrap">
+                                    <i class="input-icon fa-solid fa-id-card"></i>
+                                    <input type="text" id="v-rc" placeholder="e.g. RC123456">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">TIN (Tax Identification Number)</label>
+                                <div class="input-wrap">
+                                    <i class="input-icon fa-solid fa-receipt"></i>
+                                    <input type="text" id="v-tin" placeholder="e.g. 12345678-0001">
+                                </div>
+                            </div>
+                            <div class="form-group" id="fg-vtype">
+                                <label class="form-label">Vendor Category <span class="req">*</span></label>
+                                <div class="input-wrap">
+                                    <i class="input-icon fa-solid fa-tags"></i>
+                                    <select id="v-type">
+                                        <option value="">Select category…</option>
+                                        <option value="construction">Construction & Civil Works</option>
+                                        <option value="materials">Building Materials & Supply</option>
+                                        <option value="electrical">Electrical & Mechanical</option>
+                                        <option value="fencing">Fencing & Security</option>
+                                        <option value="landscaping">Landscaping & Site Works</option>
+                                        <option value="professional">Professional Services</option>
+                                        <option value="equipment">Equipment & Plant Hire</option>
+                                        <option value="logistics">Logistics & Transport</option>
+                                        <option value="other">Other</option>
+                                    </select>
+                                </div>
+                                <div class="input-error">Select a category</div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Address / Location</label>
+                                <div class="input-wrap">
+                                    <i class="input-icon fa-solid fa-location-dot"></i>
+                                    <input type="text" id="v-address" placeholder="City, State">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-icon"><i class="fa-solid fa-building-columns"></i></div>
+                            <div>
+                                <div class="card-title">Bank Account Details</div>
+                                <div class="card-sub">For payment processing — required for approved submissions</div>
+                            </div>
+                        </div>
+                        <div class="form-grid">
+                            <div class="form-group" id="fg-bank">
+                                <label class="form-label">Bank Name <span class="req">*</span></label>
+                                <div class="input-wrap">
+                                    <i class="input-icon fa-solid fa-landmark"></i>
+                                    <select id="v-bank">
+                                        <option value="">Select bank…</option>
+                                        <optgroup label="Commercial Banks">
+                                            <option value="Access Bank">Access Bank</option>
+                                            <option value="Citibank Nigeria">Citibank Nigeria</option>
+                                            <option value="Ecobank Nigeria">Ecobank Nigeria</option>
+                                            <option value="Fidelity Bank">Fidelity Bank</option>
+                                            <option value="First Bank of Nigeria">First Bank of Nigeria</option>
+                                            <option value="First City Monument Bank (FCMB)">First City Monument Bank
+                                                (FCMB)</option>
+                                            <option value="Globus Bank">Globus Bank</option>
+                                            <option value="Guaranty Trust Bank (GTBank)">Guaranty Trust Bank (GTBank)
+                                            </option>
+                                            <option value="Heritage Bank">Heritage Bank</option>
+                                            <option value="Keystone Bank">Keystone Bank</option>
+                                            <option value="Nova Bank">Nova Bank</option>
+                                            <option value="Optimus Bank">Optimus Bank</option>
+                                            <option value="Parallex Bank">Parallex Bank</option>
+                                            <option value="Polaris Bank">Polaris Bank</option>
+                                            <option value="PremiumTrust Bank">PremiumTrust Bank</option>
+                                            <option value="Providus Bank">Providus Bank</option>
+                                            <option value="Signature Bank">Signature Bank</option>
+                                            <option value="Stanbic IBTC Bank">Stanbic IBTC Bank</option>
+                                            <option value="Standard Chartered Bank">Standard Chartered Bank</option>
+                                            <option value="Sterling Bank">Sterling Bank</option>
+                                            <option value="SunTrust Bank">SunTrust Bank</option>
+                                            <option value="Titan Trust Bank">Titan Trust Bank</option>
+                                            <option value="Union Bank of Nigeria">Union Bank of Nigeria</option>
+                                            <option value="United Bank for Africa (UBA)">United Bank for Africa (UBA)
+                                            </option>
+                                            <option value="Unity Bank">Unity Bank</option>
+                                            <option value="Wema Bank">Wema Bank</option>
+                                            <option value="Zenith Bank">Zenith Bank</option>
+                                        </optgroup>
+                                        <optgroup label="Non-Interest Banks">
+                                            <option value="Jaiz Bank">Jaiz Bank</option>
+                                            <option value="Lotus Bank">Lotus Bank</option>
+                                            <option value="Taj Bank">Taj Bank</option>
+                                        </optgroup>
+                                        <optgroup label="Merchant Banks">
+                                            <option value="Coronation Merchant Bank">Coronation Merchant Bank</option>
+                                            <option value="FBNQuest Merchant Bank">FBNQuest Merchant Bank</option>
+                                            <option value="Rand Merchant Bank">Rand Merchant Bank</option>
+                                        </optgroup>
+                                        <optgroup label="Fintechs & Payment Platforms">
+                                            <option value="9PSB">9PSB</option>
+                                            <option value="Branch">Branch</option>
+                                            <option value="Carbon (OneFi)">Carbon (OneFi)</option>
+                                            <option value="Eyowo">Eyowo</option>
+                                            <option value="FairMoney Microfinance Bank">FairMoney Microfinance Bank
+                                            </option>
+                                            <option value="Gomoney">Gomoney</option>
+                                            <option value="Kuda Bank">Kuda Bank</option>
+                                            <option value="Mint Digital Bank">Mint Digital Bank</option>
+                                            <option value="MoMo PSB (MTN)">MoMo PSB (MTN)</option>
+                                            <option value="Moneyie">Moneyie</option>
+                                            <option value="Moniepoint (TeamApt)">Moniepoint (TeamApt)</option>
+                                            <option value="Opay">Opay</option>
+                                            <option value="Paga">Paga</option>
+                                            <option value="Palmpay">Palmpay</option>
+                                            <option value="Raven Bank">Raven Bank</option>
+                                            <option value="Renmoney">Renmoney</option>
+                                            <option value="Rubies Bank">Rubies Bank</option>
+                                            <option value="Safe Haven Microfinance Bank">Safe Haven Microfinance Bank
+                                            </option>
+                                            <option value="Smartcash PSB (Airtel)">Smartcash PSB (Airtel)</option>
+                                            <option value="Sparkle Microfinance Bank">Sparkle Microfinance Bank</option>
+                                            <option value="VFD Microfinance Bank (VBank)">VFD Microfinance Bank (VBank)
+                                            </option>
+                                        </optgroup>
+                                        <optgroup label="Major Microfinance Banks">
+                                            <option value="Accion Microfinance Bank">Accion Microfinance Bank</option>
+                                            <option value="Hasal Microfinance Bank">Hasal Microfinance Bank</option>
+                                            <option value="LAPO Microfinance Bank">LAPO Microfinance Bank</option>
+                                            <option value="Mainstreet Microfinance Bank">Mainstreet Microfinance Bank
+                                            </option>
+                                            <option value="Mutual Trust Microfinance Bank">Mutual Trust Microfinance
+                                                Bank</option>
+                                            <option value="NPF Microfinance Bank">NPF Microfinance Bank</option>
+                                        </optgroup>
+                                    </select>
+                                </div>
+                                <div class="input-error">Select your bank</div>
+                            </div>
+                            <div class="form-group" id="fg-accnum">
+                                <label class="form-label">Account Number <span class="req">*</span></label>
+                                <div class="input-wrap">
+                                    <i class="input-icon fa-solid fa-hashtag"></i>
+                                    <input type="text" id="v-accnum" placeholder="10-digit account number"
+                                        maxlength="10" pattern="[0-9]{10}">
+                                </div>
+                                <div class="input-error">Enter a valid 10-digit account number</div>
+                            </div>
+                            <div class="form-group form-full" id="fg-accname">
+                                <label class="form-label">Account Name <span class="req">*</span></label>
+                                <div class="input-wrap">
+                                    <i class="input-icon fa-solid fa-user-check"></i>
+                                    <input type="text" id="v-accname" placeholder="As shown on your bank account">
+                                </div>
+                                <div class="input-error">Account name is required</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="page-actions">
+                        <div class="page-actions-right">
+                            <button class="btn btn-primary" onclick="validateStep1()">
+                                Continue <i class="fa-solid fa-arrow-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STEP 2: Upload or Manual -->
+                <div id="panel-2" style="display:none">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-icon"><i class="fa-solid fa-file-invoice"></i></div>
+                            <div>
+                                <div class="card-title">Quotation Details</div>
+                                <div class="card-sub">Upload your quotation file or enter items manually</div>
+                            </div>
+                        </div>
+
+                        <!-- Mode Toggle -->
+                        <div class="mode-toggle">
+                            <button class="mode-btn active" id="mode-btn-upload" onclick="setPortalMode('upload')">
+                                <i class="fa-solid fa-file-excel"></i> Upload File
+                            </button>
+                            <button class="mode-btn" id="mode-btn-manual" onclick="setPortalMode('manual')">
+                                <i class="fa-solid fa-keyboard"></i> Manual Entry
+                            </button>
+                        </div>
+
+                        <div class="form-grid" style="margin-bottom:20px">
+                            <div class="form-group" id="fg-proj">
+                                <label class="form-label">Project / Estate Name <span class="req">*</span></label>
+                                <div class="input-wrap">
+                                    <i class="input-icon fa-solid fa-city"></i>
+                                    <select id="v-project">
+                                        <option value="">Select project…</option>
+                                        <option value="green-hills">Green Hills Estate Phase 1</option>
+                                        <option value="green-hills-2">Green Hills Estate Phase 2</option>
+                                        <option value="royale-park">Royale Park Residence</option>
+                                        <option value="sunset-court">Sunset Court Development</option>
+                                        <option value="pinnacle">Pinnacle Heights</option>
+                                        <option value="headquarters">Head Office / Admin</option>
+                                        <option value="other">Other</option>
+                                    </select>
+                                </div>
+                                <div class="input-error">Select a project</div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Quotation Date</label>
+                                <div class="input-wrap">
+                                    <i class="input-icon fa-solid fa-calendar"></i>
+                                    <input type="date" id="v-qdate">
+                                </div>
+                            </div>
+                            <div class="form-group form-full">
+                                <label class="form-label">Quotation Reference / Title</label>
+                                <div class="input-wrap">
+                                    <i class="input-icon fa-solid fa-file-signature"></i>
+                                    <input type="text" id="v-qtitle"
+                                        placeholder="e.g. Supply of Sand and Granite - Phase 1">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Upload Mode UI -->
+                        <div id="upload-mode-ui">
+                            <div class="upload-zone" id="upload-zone" ondragover="handleDrag(event,true)"
+                                ondragleave="handleDrag(event,false)" ondrop="handleDrop(event)">
+                                <input type="file" id="file-input" accept=".xlsx,.xls,.csv"
+                                    onchange="handleFileSelect(event)">
+                                <div class="upload-icon"><i class="fa-solid fa-file-excel"></i></div>
+                                <div class="upload-title">Drop your quotation file (Excel/CSV)</div>
+                                <div class="upload-sub">or click to browse</div>
+                            </div>
+
+                            <div class="file-attached" id="file-attached">
+                                <i class="fa-solid fa-file-circle-check"></i>
+                                <div class="file-attached-info">
+                                    <div class="file-name" id="file-name-display">—</div>
+                                    <div class="file-size" id="file-size-display">—</div>
+                                </div>
+                                <button class="file-remove" onclick="removeFile()"><i
+                                        class="fa-solid fa-xmark"></i></button>
+                            </div>
+
+                            <div style="margin-top:24px">
+                                <label class="form-label" style="display:block;margin-bottom:8px">Supporting Documents
+                                    (Tax, RC, Specs)</label>
+                                <div class="upload-zone"
+                                    style="padding:20px; min-height:100px; background:rgba(255,255,255,0.02)">
+                                    <input type="file" id="attachment-input" multiple
+                                        onchange="handleAttachmentSelect(event)">
+                                    <div class="upload-icon" style="font-size:24px"><i
+                                            class="fa-solid fa-paperclip"></i></div>
+                                    <div class="upload-title" style="font-size:13px">Attach multiple files</div>
+                                    <div class="upload-sub" style="font-size:11px">PDF, Images, or Word docs</div>
+                                </div>
+                                <div id="attachments-list"
+                                    style="margin-top:12px; display:flex; flex-direction:column; gap:8px"></div>
+                            </div>
+
+                            <div
+                                style="margin-top:16px; padding:12px 16px; background:var(--elevated); border-radius:var(--radius-sm); font-size:12px; color:var(--muted); border:1px solid var(--border);">
+                                <i class="fa-solid fa-circle-info" style="color:var(--brand);margin-right:6px"></i>
+                                Your file should have columns for: <strong style="color:var(--text)">Description,
+                                    Quantity,
+                                    Unit, Unit Price, Amount</strong>. We'll auto-detect and let you fix anything before
+                                submitting.
+                            </div>
+                        </div>
+
+                        <!-- Manual Mode UI -->
+                        <div id="manual-mode-ui" style="display:none">
+                            <div class="manual-hint">
+                                <i class="fa-solid fa-circle-info"></i>
+                                <div>You don't need a quotation file. Click <strong style="color:var(--brand)">Continue
+                                        to Items</strong> below and you'll be able to add each line item manually —
+                                    description, quantity, unit price, and amount.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="page-actions">
+                        <button class="btn btn-ghost" onclick="goToStep(1)"><i class="fa-solid fa-arrow-left"></i>
+                            Back</button>
+                        <div class="page-actions-right">
+                            <button class="btn btn-primary" id="btn-parse" onclick="parseAndGoToStep3()" disabled>
+                                Parse & Review <i class="fa-solid fa-arrow-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STEP 3: Review & Edit Table -->
+                <div id="panel-3" style="display:none">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-icon"><i class="fa-solid fa-table"></i></div>
+                            <div>
+                                <div class="card-title">Review & Edit Line Items</div>
+                                <div class="card-sub">Verify quantities, prices, and descriptions. Click any cell to
+                                    edit.</div>
+                            </div>
+                        </div>
+
+                        <div class="table-toolbar">
+                            <div class="table-toolbar-left">
+                                <button class="btn btn-outline btn-sm" onclick="addRow()">
+                                    <i class="fa-solid fa-plus"></i> Add Row
+                                </button>
+                                <button class="btn btn-ghost btn-sm" onclick="recalcAll()">
+                                    <i class="fa-solid fa-calculator"></i> Recalculate
+                                </button>
+                            </div>
+                            <div style="font-size:12px;color:var(--muted);" id="row-count-label">0 items</div>
+                        </div>
+
+                        <div class="table-wrap">
+                            <table class="proc-table" id="items-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width:32px">#</th>
+                                        <th style="min-width:220px">Item Description</th>
+                                        <th style="width:80px">Category</th>
+                                        <th style="width:70px">Qty</th>
+                                        <th style="width:60px">Unit</th>
+                                        <th style="width:110px">Unit Price (₦)</th>
+                                        <th style="width:110px">Amount (₦)</th>
+                                        <th style="width:40px"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="items-tbody">
+                                    <tr>
+                                        <td colspan="8">
+                                            <div class="empty-table"><i class="fa-solid fa-inbox"></i>No items yet —
+                                                upload a file or add rows manually</div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div class="table-footer">
+                                <span style="font-size:12px;color:var(--muted);">All amounts in Nigerian Naira
+                                    (₦)</span>
+                                <div class="table-total"><span>Total Quotation Value:</span> <strong
+                                        id="grand-total">₦0.00</strong></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-icon"><i class="fa-solid fa-comment-dots"></i></div>
+                            <div>
+                                <div class="card-title">Additional Notes</div>
+                                <div class="card-sub">Payment terms, delivery timelines, special conditions</div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <textarea id="v-notes" class="no-icon"
+                                placeholder="e.g. Delivery within 14 days of LPO. 50% advance payment required. Prices valid for 30 days…"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="page-actions">
+                        <button class="btn btn-ghost" onclick="goToStep(2)"><i class="fa-solid fa-arrow-left"></i>
+                            Back</button>
+                        <div class="page-actions-right">
+                            <button class="btn btn-primary" onclick="validateStep3()">
+                                Review Submission <i class="fa-solid fa-arrow-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STEP 4: Confirm -->
+                <div id="panel-4" style="display:none">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-icon"><i class="fa-solid fa-clipboard-check"></i></div>
+                            <div>
+                                <div class="card-title">Submission Summary</div>
+                                <div class="card-sub">Review all details before final submission</div>
+                            </div>
+                        </div>
+
+                        <div class="summary-grid">
+                            <div class="summary-item">
+                                <div class="summary-label">Total Items</div>
+                                <div class="summary-value" id="rev-item-count">0</div>
+                            </div>
+                            <div class="summary-item">
+                                <div class="summary-label">Total Value</div>
+                                <div class="summary-value gold" id="rev-total">₦0.00</div>
+                            </div>
+                            <div class="summary-item">
+                                <div class="summary-label">VAT (7.5%)</div>
+                                <div class="summary-value" id="rev-vat">₦0.00</div>
+                            </div>
+                        </div>
+
+                        <div class="review-grid">
+                            <div class="review-pair">
+                                <div class="review-label">Vendor</div>
+                                <div class="review-value" id="rev-vendor">—</div>
+                            </div>
+                            <div class="review-pair">
+                                <div class="review-label">Project</div>
+                                <div class="review-value" id="rev-project">—</div>
+                            </div>
+                            <div class="review-pair">
+                                <div class="review-label">Bank Account</div>
+                                <div class="review-value" id="rev-bank">—</div>
+                            </div>
+                            <div class="review-pair">
+                                <div class="review-label">Quotation Reference</div>
+                                <div class="review-value" id="rev-ref">—</div>
+                            </div>
+                        </div>
+
+                        <div
+                            style="margin-top:20px; padding:14px 16px; background:rgba(196,125,10,0.06); border:1px solid var(--border-gold); border-radius:var(--radius-sm); font-size:12px; color:var(--muted); line-height:1.6;">
+                            <i class="fa-solid fa-shield-halved" style="color:var(--brand);margin-right:6px"></i>
+                            By submitting, you confirm that the information provided is accurate and that your company
+                            is authorised to offer the quoted services/goods. This submission will be reviewed by the
+                            Finance & Procurement team. You will be notified by email upon approval or rejection.
+                        </div>
+                    </div>
+
+                    <div class="page-actions">
+                        <button class="btn btn-ghost" onclick="goToStep(3)"><i class="fa-solid fa-arrow-left"></i>
+                            Back</button>
+                        <div class="page-actions-right">
+                            <button class="btn btn-success" id="btn-submit" onclick="submitProcurement()">
+                                <i class="fa-solid fa-paper-plane"></i> Submit for Approval
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SUCCESS -->
+                <div class="success-screen" id="success-screen">
+                    <div class="success-icon"><i class="fa-solid fa-check"></i></div>
+                    <div class="success-title">Submission Received!</div>
+                    <p style="color:var(--muted);font-size:14px;max-width:420px;margin:0 auto">Your procurement
+                        quotation has been submitted successfully. The Finance team will review it within 2–3 business
+                        days.</p>
+                    <div class="success-ref" id="success-ref">REF: —</div>
+                    <div style="display:flex;gap:12px;justify-content:center;margin-top:8px">
+                        <button class="btn btn-outline" onclick="showPage('my-submissions')">View My
+                            Submissions</button>
+                        <button class="btn btn-primary" onclick="resetForm()">New Submission</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PAGE: MY SUBMISSIONS -->
+            <div class="page" id="page-my-submissions">
+                <div class="section-header">
+                    <div class="title-line">
+                        <span class="section-title">My Submissions</span>
+                    </div>
+                    <p class="section-sub">Track the status of your submitted procurement quotations</p>
+                </div>
+                <div id="submissions-list">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+
+            <!-- PAGE: PROFILE -->
+            <div class="page" id="page-profile">
+                <div class="section-header">
+                    <div class="title-line">
+                        <span class="section-title">Vendor Profile</span>
+                    </div>
+                    <p class="section-sub">Manage your company profile and banking details</p>
+                </div>
+
+                <div class="profile-header" id="profile-display">
+                    <div class="profile-avatar" id="prof-avatar">?</div>
+                    <div>
+                        <div class="profile-name" id="prof-company-name">—</div>
+                        <div class="profile-role" id="prof-category">—</div>
+                    </div>
+                    <span class="profile-status unverified" id="prof-status">Unverified</span>
+                </div>
+
+                <div class="section-tabs">
+                    <button class="section-tab active" onclick="switchProfileTab('company',this)">Company Info</button>
+                    <button class="section-tab" onclick="switchProfileTab('bank',this)">Bank Details</button>
+                </div>
+
+                <div id="ptab-company">
+                    <div class="card">
+                        <div class="form-grid">
+                            <div class="form-group form-full">
+                                <label class="form-label">Company Name</label>
+                                <div class="input-wrap"><i class="input-icon fa-solid fa-building"></i><input
+                                        type="text" id="p-company" placeholder="—"></div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Contact Person</label>
+                                <div class="input-wrap"><i class="input-icon fa-solid fa-user"></i><input type="text"
+                                        id="p-contact" placeholder="—"></div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Phone</label>
+                                <div class="input-wrap"><i class="input-icon fa-solid fa-phone"></i><input type="tel"
+                                        id="p-phone" placeholder="—"></div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Email</label>
+                                <div class="input-wrap"><i class="input-icon fa-solid fa-envelope"></i><input
+                                        type="email" id="p-email" placeholder="—"></div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">RC / Reg Number</label>
+                                <div class="input-wrap"><i class="input-icon fa-solid fa-id-card"></i><input type="text"
+                                        id="p-rc" placeholder="—"></div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">TIN</label>
+                                <div class="input-wrap"><i class="input-icon fa-solid fa-receipt"></i><input type="text"
+                                        id="p-tin" placeholder="—"></div>
+                            </div>
+                        </div>
+                        <div class="page-actions" style="margin-top:0;padding-top:16px">
+                            <div class="page-actions-right">
+                                <button class="btn btn-primary btn-sm" onclick="saveProfile()"><i
+                                        class="fa-solid fa-floppy-disk"></i> Save Changes</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="ptab-bank" style="display:none">
+                    <div class="card">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label class="form-label">Bank Name</label>
+                                <div class="input-wrap">
+                                    <i class="input-icon fa-solid fa-landmark"></i>
+                                    <select id="p-bank">
+                                        <option value="">Select bank…</option>
+                                        <optgroup label="Commercial Banks">
+                                            <option value="Access Bank">Access Bank</option>
+                                            <option value="Citibank Nigeria">Citibank Nigeria</option>
+                                            <option value="Ecobank Nigeria">Ecobank Nigeria</option>
+                                            <option value="Fidelity Bank">Fidelity Bank</option>
+                                            <option value="First Bank of Nigeria">First Bank of Nigeria</option>
+                                            <option value="First City Monument Bank (FCMB)">First City Monument Bank
+                                                (FCMB)</option>
+                                            <option value="Globus Bank">Globus Bank</option>
+                                            <option value="Guaranty Trust Bank (GTBank)">Guaranty Trust Bank (GTBank)
+                                            </option>
+                                            <option value="Heritage Bank">Heritage Bank</option>
+                                            <option value="Keystone Bank">Keystone Bank</option>
+                                            <option value="Nova Bank">Nova Bank</option>
+                                            <option value="Optimus Bank">Optimus Bank</option>
+                                            <option value="Parallex Bank">Parallex Bank</option>
+                                            <option value="Polaris Bank">Polaris Bank</option>
+                                            <option value="PremiumTrust Bank">PremiumTrust Bank</option>
+                                            <option value="Providus Bank">Providus Bank</option>
+                                            <option value="Signature Bank">Signature Bank</option>
+                                            <option value="Stanbic IBTC Bank">Stanbic IBTC Bank</option>
+                                            <option value="Standard Chartered Bank">Standard Chartered Bank</option>
+                                            <option value="Sterling Bank">Sterling Bank</option>
+                                            <option value="SunTrust Bank">SunTrust Bank</option>
+                                            <option value="Titan Trust Bank">Titan Trust Bank</option>
+                                            <option value="Union Bank of Nigeria">Union Bank of Nigeria</option>
+                                            <option value="United Bank for Africa (UBA)">United Bank for Africa (UBA)
+                                            </option>
+                                            <option value="Unity Bank">Unity Bank</option>
+                                            <option value="Wema Bank">Wema Bank</option>
+                                            <option value="Zenith Bank">Zenith Bank</option>
+                                        </optgroup>
+                                        <optgroup label="Non-Interest Banks">
+                                            <option value="Jaiz Bank">Jaiz Bank</option>
+                                            <option value="Lotus Bank">Lotus Bank</option>
+                                            <option value="Taj Bank">Taj Bank</option>
+                                        </optgroup>
+                                        <optgroup label="Merchant Banks">
+                                            <option value="Coronation Merchant Bank">Coronation Merchant Bank</option>
+                                            <option value="FBNQuest Merchant Bank">FBNQuest Merchant Bank</option>
+                                            <option value="Rand Merchant Bank">Rand Merchant Bank</option>
+                                        </optgroup>
+                                        <optgroup label="Fintechs & Payment Platforms">
+                                            <option value="9PSB">9PSB</option>
+                                            <option value="Branch">Branch</option>
+                                            <option value="Carbon (OneFi)">Carbon (OneFi)</option>
+                                            <option value="Eyowo">Eyowo</option>
+                                            <option value="FairMoney Microfinance Bank">FairMoney Microfinance Bank
+                                            </option>
+                                            <option value="Gomoney">Gomoney</option>
+                                            <option value="Kuda Bank">Kuda Bank</option>
+                                            <option value="Mint Digital Bank">Mint Digital Bank</option>
+                                            <option value="MoMo PSB (MTN)">MoMo PSB (MTN)</option>
+                                            <option value="Moneyie">Moneyie</option>
+                                            <option value="Moniepoint (TeamApt)">Moniepoint (TeamApt)</option>
+                                            <option value="Opay">Opay</option>
+                                            <option value="Paga">Paga</option>
+                                            <option value="Palmpay">Palmpay</option>
+                                            <option value="Raven Bank">Raven Bank</option>
+                                            <option value="Renmoney">Renmoney</option>
+                                            <option value="Rubies Bank">Rubies Bank</option>
+                                            <option value="Safe Haven Microfinance Bank">Safe Haven Microfinance Bank
+                                            </option>
+                                            <option value="Smartcash PSB (Airtel)">Smartcash PSB (Airtel)</option>
+                                            <option value="Sparkle Microfinance Bank">Sparkle Microfinance Bank</option>
+                                            <option value="VFD Microfinance Bank (VBank)">VFD Microfinance Bank (VBank)
+                                            </option>
+                                        </optgroup>
+                                        <optgroup label="Major Microfinance Banks">
+                                            <option value="Accion Microfinance Bank">Accion Microfinance Bank</option>
+                                            <option value="Hasal Microfinance Bank">Hasal Microfinance Bank</option>
+                                            <option value="LAPO Microfinance Bank">LAPO Microfinance Bank</option>
+                                            <option value="Mainstreet Microfinance Bank">Mainstreet Microfinance Bank
+                                            </option>
+                                            <option value="Mutual Trust Microfinance Bank">Mutual Trust Microfinance
+                                                Bank</option>
+                                            <option value="NPF Microfinance Bank">NPF Microfinance Bank</option>
+                                        </optgroup>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Account Number</label>
+                                <div class="input-wrap"><i class="input-icon fa-solid fa-hashtag"></i><input type="text"
+                                        id="p-accnum" maxlength="10" placeholder="10 digits"></div>
+                            </div>
+                            <div class="form-group form-full">
+                                <label class="form-label">Account Name</label>
+                                <div class="input-wrap"><i class="input-icon fa-solid fa-user-check"></i><input
+                                        type="text" id="p-accname" placeholder="—"></div>
+                            </div>
+                        </div>
+                        <div class="page-actions" style="margin-top:0;padding-top:16px">
+                            <div class="page-actions-right">
+                                <button class="btn btn-primary btn-sm" onclick="saveProfile()"><i
+                                        class="fa-solid fa-floppy-disk"></i> Save Changes</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST -->
+    <div id="toast"><i id="toast-icon" class="fa-solid fa-check-circle"></i><span id="toast-msg">—</span></div>
+
+    <script>
+        // ── STATE ──────────────────────────────────────────────────────
+        const state = {
+            step: 1,
+            file: null,
+            items: [],
+            attachments: [],
+            profile: JSON.parse(localStorage.getItem('ec_proc_profile') || 'null'),
+            submissions: JSON.parse(localStorage.getItem('ec_proc_submissions') || '[]')
+        };
+
+        // ── INIT ───────────────────────────────────────────────────────
+        window.addEventListener('DOMContentLoaded', () => {
+            // Set today's date
+            document.getElementById('v-qdate').valueAsDate = new Date();
+
+            // Check for invitation token in URL — e.g. /procurement/portal?token=uuid
+            const urlToken = new URLSearchParams(window.location.search).get('token');
+            if (urlToken) {
+                checkProcurementInvitation(urlToken);
+            } else if (state.profile) {
+                prefillFromProfile();
+                updateTopbarName();
+            }
+            renderSubmissions();
+            renderProfilePage();
+            loadProjects();
+            syncSubmissionsWithServer();
+        });
+
+        // ── INVITATION TOKEN CHECK ──────────────────────────────────────
+        async function checkProcurementInvitation(token) {
+            // Show loading on step 1
+            const btn = document.querySelector('.btn-primary');
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading…'; }
+
+            try {
+                const res = await fetch(`/api/payouts/procurement-portal/invite/${token}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    // Pre-fill email (locked) and vendor data if already registered
+                    const emailEl = document.getElementById('v-email');
+                    if (emailEl) {
+                        emailEl.value = data.email || '';
+                        emailEl.readOnly = true;
+                        emailEl.style.opacity = '0.7';
+                    }
+                    // Set project if specified in invite
+                    if (data.project) {
+                        const projEl = document.getElementById('v-project');
+                        if (projEl) projEl.value = data.project;
+                    }
+                    // If vendor is already in system, auto-fill their details
+                    if (data.vendor) {
+                        const v = data.vendor;
+                        const set = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
+                        set('v-company', v.name);
+                        set('v-contact', v.contact);
+                        set('v-phone', v.phone);
+                        set('v-rc', v.rc_number);
+                        set('v-tin', v.tin);
+                        set('v-bank', v.bank_name);
+                        set('v-accnum', v.account_number);
+                        set('v-accname', v.account_name);
+                        updateTopbarName();
+                        // Update profile in state
+                        state.profile = {
+                            company: v.name,
+                            contact: v.contact,
+                            phone: v.phone,
+                            email: data.email,
+                            rc: v.rc_number,
+                            tin: v.tin,
+                            bank: v.bank_name,
+                            accnum: v.account_number,
+                            accname: v.account_name
+                        };
+                        toast('success', `Welcome back, ${v.name.split(' ')[0]}! Your details have been pre-filled.`);
+                    } else {
+                        toast('success', 'Invitation verified. Please fill in your company details.');
+                    }
+                } else {
+                    toast('error', 'This invitation link is invalid or has expired.');
+                }
+            } catch (e) {
+                // Offline/dev — just continue normally
+                if (state.profile) prefillFromProfile();
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = 'Continue <i class="fa-solid fa-arrow-right"></i>'; }
+            }
+        }
+
+        // ── EMAIL LOOKUP (fetch vendor by email like payout portal) ─────
+        async function lookupVendorByEmail() {
+            const email = document.getElementById('v-email').value.trim();
+            if (!email || !email.includes('@')) return;
+            const btn = document.getElementById('btn-lookup-email');
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
+            try {
+                const res = await fetch(`/api/payouts/portal/fetch-vendor?email=${encodeURIComponent(email)}`);
+                if (res.ok) {
+                    const result = await res.json();
+                    if (result.status === 'success') {
+                        const v = result.data;
+                        const set = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
+                        set('v-company', v.name);
+                        set('v-contact', v.contact);
+                        set('v-phone', v.phone);
+                        set('v-rc', v.rc_number);
+                        set('v-tin', v.tin);
+                        set('v-bank', v.bank_name);
+                        set('v-accnum', v.account_number);
+                        set('v-accname', v.account_name);
+                        if (btn) { btn.innerHTML = '<i class="fas fa-check"></i> Found'; btn.style.background = 'var(--success)'; btn.style.color = '#000'; }
+                        toast('success', 'Your details have been auto-filled.');
+                    } else {
+                        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-user-plus"></i> New'; }
+                    }
+                } else {
+                    if (btn) { btn.disabled = false; btn.innerHTML = 'Lookup'; }
+                }
+            } catch (e) {
+                if (btn) { btn.disabled = false; btn.innerHTML = 'Lookup'; }
+            }
+        }
+
+        function updateTopbarName() {
+            const p = state.profile;
+            if (p && p.company) {
+                document.getElementById('topbar-vendor-name').textContent = p.company.split(' ').slice(0, 2).join(' ');
+            }
+        }
+
+        async function checkProcurementInvitation(token) {
+            try {
+                const res = await fetch(`/api/payouts/procurement-portal/invite/${token}`);
+                const data = await res.json();
+                if (data.status === 'success') {
+                    toast('success', 'Invitation validated. Profile pre-filled.');
+                    const emailInput = document.getElementById('v-email');
+                    emailInput.value = data.email;
+                    emailInput.readOnly = true;
+                    document.getElementById('btn-identify').style.display = 'none';
+                    document.getElementById('identify-hint').textContent = 'Invitation linked to this email';
+
+                    if (data.vendor) {
+                        const v = data.vendor;
+                        const set = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
+                        set('v-company', v.name);
+                        set('v-phone', v.phone);
+                        set('v-rc', v.rc_number);
+                        set('v-tin', v.tin);
+                        set('v-bank', v.bank_name);
+                        set('v-accnum', v.account_number);
+                        set('v-accname', v.account_name);
+                    }
+                    if (data.project) {
+                        document.getElementById('v-project').value = data.project;
+                    }
+                } else {
+                    toast('error', data.detail || 'Invitation is invalid or expired');
+                }
+            } catch (err) {
+                console.error('Invite check failed:', err);
+            }
+        }
+
+        async function identifyVendor() {
+            const email = document.getElementById('v-email').value;
+            if (!email || !email.includes('@')) {
+                toast('error', 'Please enter a valid email address first');
+                return;
+            }
+
+            const btn = document.getElementById('btn-identify');
+            const originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+
+            try {
+                const res = await fetch(`/api/payouts/portal/fetch-vendor?email=${encodeURIComponent(email)}`);
+                const result = await res.json();
+
+                if (result.status === 'success') {
+                    const v = result.data;
+                    const set = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
+                    set('v-company', v.name);
+                    set('v-phone', v.phone);
+                    set('v-rc', v.rc_number);
+                    set('v-tin', v.tin);
+                    set('v-bank', v.bank_name);
+                    set('v-accnum', v.account_number);
+                    set('v-accname', v.account_name);
+                    toast('success', `Welcome back, ${v.name}! Profile pre-filled.`);
+                } else {
+                    toast('info', 'No existing profile found. Please fill in your details.');
+                }
+            } catch (err) {
+                console.error('Identify failed:', err);
+                toast('error', 'Search failed. Please enter details manually.');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        }
+
+        // ── NAVIGATION ─────────────────────────────────────────────────
+        function showPage(page) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.sidebar-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('page-' + page).classList.add('active');
+            document.getElementById('nav-' + (page === 'new-submission' ? 'new' : page === 'my-submissions' ? 'list' : 'profile')).classList.add('active');
+            if (page === 'my-submissions') renderSubmissions();
+            if (page === 'profile') renderProfilePage();
+        }
+
+        function switchProfileTab(tab, el) {
+            document.querySelectorAll('.section-tab').forEach(t => t.classList.remove('active'));
+            el.classList.add('active');
+            document.getElementById('ptab-company').style.display = tab === 'company' ? '' : 'none';
+            document.getElementById('ptab-bank').style.display = tab === 'bank' ? '' : 'none';
+        }
+
+        // ── STEPS ──────────────────────────────────────────────────────
+        function goToStep(n) {
+            if (n > state.step) return; // only go back to completed steps
+            setStep(n);
+        }
+
+        function setStep(n) {
+            state.step = n;
+            document.getElementById('step-badge').textContent = n;
+
+            for (let i = 1; i <= 4; i++) {
+                const s = document.getElementById('step-' + i);
+                const sn = document.getElementById('sn-' + i);
+                s.classList.remove('active', 'done');
+                if (i < n) { s.classList.add('done'); sn.innerHTML = '<i class="fa-solid fa-check" style="font-size:10px"></i>'; }
+                else if (i === n) { s.classList.add('active'); sn.textContent = i; }
+                else { sn.textContent = i; }
+            }
+
+            for (let i = 1; i <= 4; i++) {
+                document.getElementById('panel-' + i).style.display = i === n ? '' : 'none';
+            }
+            document.getElementById('success-screen').classList.remove('show');
+        }
+
+        // ── STEP 1 VALIDATION ─────────────────────────────────────────
+        function validateStep1() {
+            const fields = [
+                { id: 'v-company', group: 'fg-company', check: v => v.trim().length > 1 },
+                { id: 'v-contact', group: 'fg-contact', check: v => v.trim().length > 1 },
+                { id: 'v-phone', group: 'fg-phone', check: v => v.trim().length >= 7 },
+                { id: 'v-email', group: 'fg-email', check: v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) },
+                { id: 'v-type', group: 'fg-vtype', check: v => v !== '' },
+                { id: 'v-bank', group: 'fg-bank', check: v => v !== '' },
+                { id: 'v-accnum', group: 'fg-accnum', check: v => /^\d{10}$/.test(v) },
+                { id: 'v-accname', group: 'fg-accname', check: v => v.trim().length > 1 },
+            ];
+            let ok = true;
+            fields.forEach(f => {
+                const v = document.getElementById(f.id).value;
+                const g = document.getElementById(f.group);
+                if (!f.check(v)) { g.classList.add('has-error'); ok = false; }
+                else g.classList.remove('has-error');
+            });
+            if (!ok) { toast('error', 'Please fill in all required fields'); return; }
+
+            // Save profile snapshot
+            state.profile = {
+                company: document.getElementById('v-company').value,
+                contact: document.getElementById('v-contact').value,
+                phone: document.getElementById('v-phone').value,
+                email: document.getElementById('v-email').value,
+                rc: document.getElementById('v-rc').value,
+                tin: document.getElementById('v-tin').value,
+                type: document.getElementById('v-type').value,
+                address: document.getElementById('v-address').value,
+                bank: document.getElementById('v-bank').value,
+                accnum: document.getElementById('v-accnum').value,
+                accname: document.getElementById('v-accname').value,
+            };
+            localStorage.setItem('ec_proc_profile', JSON.stringify(state.profile));
+            updateTopbarName();
+            setStep(2);
+        }
+
+        // ── FILE UPLOAD ────────────────────────────────────────────────
+        function handleDrag(e, over) {
+            e.preventDefault();
+            document.getElementById('upload-zone').classList.toggle('drag-over', over);
+        }
+        function handleDrop(e) {
+            e.preventDefault();
+            document.getElementById('upload-zone').classList.remove('drag-over');
+            const file = e.dataTransfer.files[0];
+            if (file) processFile(file);
+        }
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (file) processFile(file);
+        }
+        function processFile(file) {
+            const allowed = ['xlsx', 'xls', 'csv'];
+            const ext = file.name.split('.').pop().toLowerCase();
+            if (!allowed.includes(ext)) { toast('error', 'Please upload an XLSX, XLS or CSV file'); return; }
+            state.file = file;
+            document.getElementById('file-name-display').textContent = file.name;
+            document.getElementById('file-size-display').textContent = (file.size / 1024).toFixed(1) + ' KB';
+            document.getElementById('file-attached').classList.add('show');
+            document.getElementById('btn-parse').disabled = false;
+            toast('success', 'File attached — click "Parse & Review" to continue');
+        }
+        function removeFile() {
+            state.file = null;
+            document.getElementById('file-attached').classList.remove('show');
+            document.getElementById('btn-parse').disabled = true;
+            document.getElementById('file-input').value = '';
+        }
+
+        async function handleAttachmentSelect(e) {
+            const files = Array.from(e.target.files);
+            for (const file of files) {
+                await uploadAttachment(file);
+            }
+        }
+
+        async function uploadAttachment(file) {
+            const id = Math.random().toString(36).substr(2, 9);
+            const list = document.getElementById('attachments-list');
+
+            const item = document.createElement('div');
+            item.className = 'file-attached show';
+            item.id = `att-${id}`;
+            item.innerHTML = `
+                <i class="fa-solid fa-circle-notch fa-spin"></i>
+                <div class="file-attached-info">
+                    <div class="file-name">${file.name}</div>
+                    <div class="file-size">Uploading...</div>
+                </div>
+            `;
+            list.appendChild(item);
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch('/api/payouts/procurement-portal/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    item.innerHTML = `
+                        <i class="fa-solid fa-file-circle-check" style="color:var(--success)"></i>
+                        <div class="file-attached-info">
+                            <div class="file-name">${file.name}</div>
+                            <div class="file-size">${(file.size / 1024).toFixed(1)} KB</div>
+                        </div>
+                        <button class="file-remove" onclick="removeAttachment('${id}', '${data.path}')"><i class="fa-solid fa-trash"></i></button>
+                    `;
+                    state.attachments.push(data.path);
+                } else {
+                    item.innerHTML = `<i class="fa-solid fa-circle-xmark" style="color:var(--error)"></i> <div class="file-attached-info"><div class="file-name">${file.name}</div><div class="file-size" style="color:var(--error)">Upload failed</div></div>`;
+                }
+            } catch (err) {
+                item.innerHTML = `<i class="fa-solid fa-circle-xmark" style="color:var(--error)"></i> <div class="file-attached-info"><div class="file-name">${file.name}</div><div class="file-size" style="color:var(--error)">Network error</div></div>`;
+            }
+        }
+
+        function removeAttachment(id, path) {
+            document.getElementById(`att-${id}`).remove();
+            state.attachments = state.attachments.filter(p => p !== path);
+        }
+
+        // ── UPLOAD MODE TOGGLE ────────────────────────────────────────
+        let portalMode = 'upload'; // 'upload' | 'manual'
+
+        function setPortalMode(mode) {
+            portalMode = mode;
+            document.getElementById('mode-btn-upload').classList.toggle('active', mode === 'upload');
+            document.getElementById('mode-btn-manual').classList.toggle('active', mode === 'manual');
+            document.getElementById('upload-mode-ui').style.display = mode === 'upload' ? '' : 'none';
+            document.getElementById('manual-mode-ui').style.display = mode === 'manual' ? '' : 'none';
+            const btn = document.getElementById('btn-parse');
+            if (mode === 'manual') {
+                btn.disabled = false;
+                btn.innerHTML = 'Continue to Items <i class="fa-solid fa-arrow-right"></i>';
+            } else {
+                btn.disabled = !state.file;
+                btn.innerHTML = 'Parse & Review <i class="fa-solid fa-arrow-right"></i>';
+            }
+        }
+
+        function validateStep2() {
+            const proj = document.getElementById('v-project');
+            const fg = document.getElementById('fg-proj');
+            if (!proj.value) { fg.classList.add('has-error'); toast('error', 'Please select a project'); return false; }
+            fg.classList.remove('has-error');
+            return true;
+        }
+
+        // ── PARSE FILE ────────────────────────────────────────────────
+        function parseAndGoToStep3() {
+            if (!validateStep2()) return;
+
+            // Manual mode — skip parsing, go straight to editable table
+            if (portalMode === 'manual') {
+                if (state.items.length === 0) {
+                    state.items = [makeItem('', 1, 'Pcs', 0, 0)];
+                }
+                renderTable();
+                setStep(3);
+                setTimeout(() => {
+                    const first = document.querySelector('#items-tbody td input[type="text"]');
+                    if (first) first.focus();
+                }, 100);
+                return;
+            }
+
+            // Upload mode — must have a file
+            if (!state.file) { toast('error', 'No file selected'); return; }
+
+            const btn = document.getElementById('btn-parse');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Parsing…';
+
+            const ext = state.file.name.split('.').pop().toLowerCase();
+            const reader = new FileReader();
+
+            reader.onload = function (e) {
+                try {
+                    let rows = [];
+                    if (ext === 'csv') {
+                        rows = parseCSV(e.target.result);
+                    } else {
+                        const data = new Uint8Array(e.target.result);
+                        const wb = XLSX.read(data, { type: 'array' });
+                        const ws = wb.Sheets[wb.SheetNames[0]];
+                        rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+                    }
+                    const parsed = detectAndParse(rows);
+                    if (parsed.length === 0) {
+                        toast('warning', 'No items auto-detected. Add them manually in the table below.');
+                        state.items = [makeItem('', 1, 'Pcs', 0, 0)];
+                    } else {
+                        state.items = parsed;
+                        toast('success', `Parsed ${parsed.length} item${parsed.length !== 1 ? 's' : ''} — review and confirm`);
+                    }
+                    renderTable();
+                    setStep(3);
+                } catch (err) {
+                    toast('error', 'Could not parse file: ' + err.message);
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = 'Parse & Review <i class="fa-solid fa-arrow-right"></i>';
+                }
+            };
+
+            reader.onerror = function () {
+                toast('error', 'Failed to read file. Please try again.');
+                btn.disabled = false;
+                btn.innerHTML = 'Parse & Review <i class="fa-solid fa-arrow-right"></i>';
+            };
+
+            if (ext === 'csv') reader.readAsText(state.file);
+            else reader.readAsArrayBuffer(state.file);
+        }
+
+        function parseCSV(text) {
+            const lines = text.trim().split(/\r?\n/);
+            return lines.map(line => {
+                const cells = [];
+                let cur = '', inQ = false;
+                for (let i = 0; i < line.length; i++) {
+                    if (line[i] === '"') { inQ = !inQ; continue; }
+                    if (line[i] === ',' && !inQ) { cells.push(cur.trim()); cur = ''; }
+                    else cur += line[i];
+                }
+                cells.push(cur.trim());
+                return cells;
+            });
+        }
+
+        function detectAndParse(rows) {
+            // Find header row — search up to row 25, need ≥2 keyword hits
+            const headerKw = ['description', 'item', 'material', 'name', 'work', 'service', 'particulars',
+                'qty', 'quantity', 'unit', 'uom', 'price', 'rate', 'amount', 'total', 'sum', 'value'];
+            let headerIdx = -1;
+            for (let i = 0; i < Math.min(rows.length, 25); i++) {
+                const row = rows[i].map(c => String(c).toLowerCase().trim());
+                const matches = headerKw.filter(k => row.some(c => c.includes(k)));
+                if (matches.length >= 2) { headerIdx = i; break; }
+            }
+
+            const items = [];
+            if (headerIdx < 0) {
+                // No header detected — treat non-empty rows with ≥2 cells as data
+                for (let i = 0; i < rows.length; i++) {
+                    const r = rows[i];
+                    if (!r || r.every(c => !String(c).trim())) continue;
+                    const nonEmpty = r.filter(c => String(c).trim());
+                    if (nonEmpty.length < 2) continue;
+                    const item = makeItem(r[0], r[1], r[2], r[3], r[4]);
+                    if (item.description) items.push(item);
+                }
+            } else {
+                // Map columns by keyword matching
+                const header = rows[headerIdx].map(c => String(c).toLowerCase().trim());
+                const col = (kws) => header.findIndex(h => kws.some(k => h.includes(k)));
+                const cDesc = col(['description', 'item', 'material', 'name', 'work', 'service', 'particulars', 'goods', 'supply']);
+                const cQty = col(['qty', 'quantity', 'no.', 'nos', 'units']);
+                const cUnit = col(['unit', 'uom', 'measure', 'm2', 'm3']);
+                const cUp = col(['unit price', 'unit cost', 'rate', 'price/unit', 'uprice', 'u/price', 'unit_price']);
+                const cAmt = col(['amount', 'total', 'sum', 'value', 'subtotal', 'sub-total', 'sub total']);
+
+                for (let i = headerIdx + 1; i < rows.length; i++) {
+                    const r = rows[i];
+                    if (!r || r.every(c => !String(c).trim())) continue;
+                    const desc = String(cDesc >= 0 ? r[cDesc] : r[0] || '').trim();
+                    if (!desc) continue;
+                    // Skip footer/summary rows
+                    if (/^(total|subtotal|grand total|vat|tax|note|remark|prepared by|approved|signature)/i.test(desc)) continue;
+                    const qty = cQty >= 0 ? r[cQty] : '';
+                    const unit = cUnit >= 0 ? r[cUnit] : '';
+                    const up = cUp >= 0 ? r[cUp] : '';
+                    const amt = cAmt >= 0 ? r[cAmt] : '';
+                    items.push(makeItem(desc, qty, unit, up, amt));
+                }
+            }
+            return items.filter(it => it.description.trim());
+        }
+
+        function makeItem(desc = '', qty = '', unit = '', uprice = '', amount = '', extra = '') {
+            const q = parseNum(qty) || 1;
+            const u = parseNum(uprice) || parseNum(amount) / q || 0;
+            const a = parseNum(amount) || (q * u);
+            return {
+                description: String(desc).trim(),
+                category: guessCategory(String(desc)),
+                qty: q,
+                unit: String(unit).trim() || 'Pcs',
+                unitPrice: u,
+                amount: a || q * u,
+            };
+        }
+
+        function parseNum(v) {
+            if (v === null || v === undefined || v === '') return 0;
+            const s = String(v).replace(/[₦,\s]/g, '');
+            const n = parseFloat(s);
+            return isNaN(n) ? 0 : n;
+        }
+
+        const catMap = {
+            'Fencing': ['fence', 'chain link', 'barbed', 'iron rod', 'railing', 'gate', 'wire'],
+            'Site Clearing': ['clearing', 'excavat', 'demolish', 'bush', 'grading', 'cut', 'fill', 'earthwork'],
+            'Concrete Works': ['concrete', 'cement', 'sand', 'gravel', 'granite', 'block', 'mortar', 'rendering', 'plaster', 'screed'],
+            'Labour': ['labour', 'labor', 'worker', 'mason', 'carpenter', 'painter', 'plumber', 'artisan', 'supervisor'],
+            'Materials': ['material', 'supply', 'timber', 'board', 'ply', 'steel', 'pipe', 'fitting', 'roofing', 'sheet', 'zinc'],
+            'Electrical': ['electrical', 'wire', 'cable', 'conduit', 'bulb', 'switch', 'socket', 'panel', 'breaker', 'generator'],
+            'Plumbing': ['plumbing', 'water', 'tank', 'pump', 'drain', 'sewage', 'pipe', 'valve', 'toilet', 'bathroom'],
+            'Equipment': ['equipment', 'machine', 'crane', 'excavator', 'mixer', 'generator', 'hire', 'rent', 'plant'],
+            'Finishing': ['finish', 'paint', 'tile', 'floor', 'ceiling', 'door', 'window', 'glass', 'aluminium', 'frame'],
+            'Professional': ['survey', 'design', 'consult', 'architect', 'engineer', 'inspect', 'service', 'fee'],
+        };
+
+        function guessCategory(desc) {
+            const d = desc.toLowerCase();
+            for (const [cat, kws] of Object.entries(catMap)) {
+                if (kws.some(k => d.includes(k))) return cat;
+            }
+            return 'General';
+        }
+
+        // ── TABLE RENDERING ────────────────────────────────────────────
+        const CATEGORIES = ['Fencing', 'Site Clearing', 'Concrete Works', 'Labour', 'Materials', 'Electrical', 'Plumbing', 'Equipment', 'Finishing', 'Professional', 'General'];
+
+        function renderTable() {
+            const tbody = document.getElementById('items-tbody');
+            if (!state.items.length) {
+                tbody.innerHTML = '<tr><td colspan="8"><div class="empty-table"><i class="fa-solid fa-inbox"></i>No items yet</div></td></tr>';
+                updateTotal();
+                return;
+            }
+            tbody.innerHTML = state.items.map((item, i) => `
+    <tr data-idx="${i}">
+      <td class="td-row-num">${i + 1}</td>
+      <td><input type="text" class="no-icon" value="${esc(item.description)}" onchange="updateItem(${i},'description',this.value)" placeholder="Item description…"></td>
+      <td>
+        <select class="no-icon" onchange="updateItem(${i},'category',this.value)">
+          ${CATEGORIES.map(c => `<option ${c === item.category ? 'selected' : ''}>${c}</option>`).join('')}
+        </select>
+      </td>
+      <td><input type="number" class="no-icon" value="${item.qty}" min="0" step="any" onchange="updateItem(${i},'qty',this.value)"></td>
+      <td><input type="text" class="no-icon" value="${esc(item.unit)}" onchange="updateItem(${i},'unit',this.value)" placeholder="Pcs"></td>
+      <td><input type="number" class="no-icon" value="${item.unitPrice}" min="0" step="any" onchange="updateItem(${i},'unitPrice',this.value)"></td>
+      <td class="td-amount">${fmt(item.amount)}</td>
+      <td class="td-actions"><button class="row-del-btn" onclick="deleteRow(${i})"><i class="fa-solid fa-trash"></i></button></td>
+    </tr>
+  `).join('');
+            updateTotal();
+            document.getElementById('row-count-label').textContent = `${state.items.length} item${state.items.length !== 1 ? 's' : ''}`;
+        }
+
+        function updateItem(idx, field, val) {
+            state.items[idx][field] = field === 'qty' || field === 'unitPrice' ? parseFloat(val) || 0 : val;
+            if (field === 'qty' || field === 'unitPrice') {
+                state.items[idx].amount = state.items[idx].qty * state.items[idx].unitPrice;
+                // update amount cell
+                const rows = document.getElementById('items-tbody').querySelectorAll('tr');
+                rows[idx].querySelector('.td-amount').textContent = fmt(state.items[idx].amount);
+            }
+            if (field === 'description') state.items[idx].category = guessCategory(val);
+            updateTotal();
+        }
+
+        function deleteRow(idx) {
+            state.items.splice(idx, 1);
+            renderTable();
+        }
+
+        function addRow() {
+            state.items.push({ description: '', category: 'General', qty: 1, unit: 'Pcs', unitPrice: 0, amount: 0 });
+            renderTable();
+            // focus last description
+            const rows = document.getElementById('items-tbody').querySelectorAll('tr');
+            if (rows.length) rows[rows.length - 1].querySelector('input').focus();
+        }
+
+        function recalcAll() {
+            state.items.forEach(it => { it.amount = it.qty * it.unitPrice; });
+            renderTable();
+            toast('success', 'All amounts recalculated');
+        }
+
+        function updateTotal() {
+            const total = state.items.reduce((s, it) => s + (it.amount || 0), 0);
+            document.getElementById('grand-total').textContent = fmt(total);
+        }
+
+        function validateStep3() {
+            if (!state.items.length) { toast('error', 'Add at least one item before continuing'); return; }
+            const empty = state.items.filter(it => !it.description.trim());
+            if (empty.length) { toast('error', 'Some items have empty descriptions'); return; }
+            buildReviewPanel();
+            setStep(4);
+        }
+
+        function buildReviewPanel() {
+            const total = state.items.reduce((s, it) => s + (it.amount || 0), 0);
+            const vat = total * 0.075;
+            const p = state.profile;
+            const proj = document.getElementById('v-project').options[document.getElementById('v-project').selectedIndex].text;
+            const ref = document.getElementById('v-qtitle').value || 'Quotation ' + new Date().toLocaleDateString();
+
+            document.getElementById('rev-item-count').textContent = state.items.length;
+            document.getElementById('rev-total').textContent = fmt(total);
+            document.getElementById('rev-vat').textContent = fmt(vat);
+            document.getElementById('rev-vendor').textContent = `${p.company} — ${p.contact}`;
+            document.getElementById('rev-project').textContent = proj;
+            document.getElementById('rev-bank').textContent = `${p.bank} · ${p.accnum} · ${p.accname}`;
+            document.getElementById('rev-ref').textContent = ref;
+        }
+
+        // ── SUBMIT ────────────────────────────────────────────────────
+        async function submitProcurement() {
+            const btn = document.getElementById('btn-submit');
+            btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Submitting…';
+
+            const ref = 'PCQ-' + Date.now().toString(36).toUpperCase();
+            const total = state.items.reduce((s, it) => s + (it.amount || 0), 0);
+            const p = state.profile;
+            const projEl = document.getElementById('v-project');
+
+            const payload = {
+                ref,
+                title: document.getElementById('v-qtitle').value || 'Procurement Quotation',
+                project: projEl.value,
+                projectName: projEl.options[projEl.selectedIndex].text,
+                vendor_name: p.company,
+                contact_name: p.contact,
+                phone: p.phone,
+                email: p.email,
+                rc_number: p.rc,
+                tin: p.tin,
+                bank_name: p.bank,
+                account_number: p.accnum,
+                account_name: p.accname,
+                total_amount: total,
+                notes: document.getElementById('v-notes').value,
+                line_items: state.items.map(it => ({
+                    description: it.description,
+                    category: it.category,
+                    qty: it.qty,
+                    unit: it.unit,
+                    unitPrice: it.unitPrice,
+                    amount: it.amount,
+                })),
+                attachments: state.attachments
+            };
+
+            // ── Local snapshot (always — for offline / dev fallback) ──────────
+            const localSnap = {
+                id: ref, ref,
+                title: payload.title,
+                project: payload.project,
+                projectName: payload.projectName,
+                vendor: p.company, vendor_name: p.company,
+                contact: p.contact, contact_name: p.contact,
+                phone: p.phone, email: p.email,
+                bank: p.bank, bank_name: p.bank,
+                accnum: p.accnum, account_number: p.accnum,
+                accname: p.accname, account_name: p.accname,
+                tin: p.tin, rc: p.rc, rc_number: p.rc,
+                items: JSON.parse(JSON.stringify(state.items)),
+                line_items: payload.line_items,
+                total, total_amount: total,
+                notes: payload.notes,
+                status: 'pending',
+                date: new Date().toISOString(),
+                submitted_at: new Date().toISOString(),
+            };
+            state.submissions.unshift(localSnap);
+            localStorage.setItem('ec_proc_submissions', JSON.stringify(state.submissions));
+
+            // ── API call (best-effort — success screen shows regardless) ──────
+            try {
+                const res = await fetch('/api/payouts/procurement-submissions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    console.warn('Submission API error:', err.detail || res.status);
+                    // Still show success — data is persisted locally
+                }
+            } catch (err) {
+                console.warn('Submission API unreachable, saved locally:', err.message);
+            }
+
+            // ── Show success ───────────────────────────────────────────────────
+            for (let i = 1; i <= 4; i++) document.getElementById('panel-' + i).style.display = 'none';
+            document.getElementById('success-ref').textContent = 'REF: ' + ref;
+            document.getElementById('success-screen').classList.add('show');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit for Approval';
+        }
+
+        function resetForm() {
+            state.items = [];
+            state.file = null;
+            state.step = 1;
+            setPortalMode('upload');
+            document.getElementById('success-screen').classList.remove('show');
+            // clear form fields
+            ['v-company', 'v-contact', 'v-phone', 'v-email', 'v-rc', 'v-tin', 'v-address',
+                'v-accnum', 'v-accname', 'v-qtitle', 'v-notes'].forEach(id => document.getElementById(id).value = '');
+            ['v-type', 'v-bank', 'v-project'].forEach(id => document.getElementById(id).value = '');
+            document.getElementById('file-attached').classList.remove('show');
+            document.getElementById('btn-parse').disabled = true;
+            // Pre-fill saved profile
+            if (state.profile) prefillFromProfile();
+            setStep(1);
+        }
+
+        function prefillFromProfile() {
+            const p = state.profile;
+            const set = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
+            set('v-company', p.company); set('v-contact', p.contact);
+            set('v-phone', p.phone); set('v-email', p.email);
+            set('v-rc', p.rc); set('v-tin', p.tin);
+            set('v-type', p.type); set('v-address', p.address);
+            set('v-bank', p.bank); set('v-accnum', p.accnum); set('v-accname', p.accname);
+        }
+
+        // ── SYNC WITH SERVER ──────────────────────────────────────────
+        async function syncSubmissionsWithServer() {
+            const emailInput = document.getElementById('v-email');
+            const email = (emailInput ? emailInput.value : '') || (state.profile ? state.profile.email : '');
+            if (!email) return;
+
+            try {
+                const res = await fetch(`/api/payouts/procurement-portal/submissions?email=${encodeURIComponent(email)}`);
+                if (res.ok) {
+                    const serverSubs = await res.json();
+                    if (serverSubs && Array.isArray(serverSubs)) {
+                        // Merge or replace local state
+                        // We'll replace for now to ensure status accuracy
+                        state.submissions = serverSubs;
+                        localStorage.setItem('ec_proc_submissions', JSON.stringify(state.submissions));
+                        renderSubmissions();
+                    }
+                }
+            } catch (err) {
+                console.warn('Failed to sync submissions with server:', err);
+            }
+        }
+
+        // ── SUBMISSIONS LIST ──────────────────────────────────────────
+        function renderSubmissions() {
+            const container = document.getElementById('submissions-list');
+            if (!state.submissions.length) {
+                container.innerHTML = `<div style="text-align:center;padding:60px;color:var(--muted)"><i class="fa-solid fa-inbox" style="font-size:32px;display:block;margin-bottom:12px;opacity:0.4"></i>No submissions yet</div>`;
+                return;
+            }
+            container.innerHTML = state.submissions.map(s => `
+    <div class="submission-card">
+      <div class="sub-status-dot ${s.status}"></div>
+      <div class="sub-info">
+        <div class="sub-ref">${s.ref}</div>
+        <div class="sub-title">${s.title}</div>
+        <div class="sub-meta">${s.projectName || 'Procurement Project'} · ${new Date(s.submitted_at || s.date).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+      </div>
+      <div class="sub-amount">
+        <div class="sub-amount-val">${fmt(s.total_amount || s.total || 0)}</div>
+        <span class="sub-status-badge badge-${s.status}">${s.status}</span>
+      </div>
+    </div>
+  `).join('');
+        }
+
+        // ── PROFILE PAGE ──────────────────────────────────────────────
+        function renderProfilePage() {
+            const p = state.profile;
+            if (!p) return;
+            document.getElementById('prof-company-name').textContent = p.company || '—';
+            document.getElementById('prof-category').textContent = p.type || '—';
+            document.getElementById('prof-avatar').textContent = (p.company || '?')[0].toUpperCase();
+            const isVerified = p.rc || p.tin;
+            document.getElementById('prof-status').textContent = isVerified ? 'Verified' : 'Unverified';
+            document.getElementById('prof-status').className = 'profile-status ' + (isVerified ? 'verified' : 'unverified');
+
+            const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+            set('p-company', p.company); set('p-contact', p.contact);
+            set('p-phone', p.phone); set('p-email', p.email);
+            set('p-rc', p.rc); set('p-tin', p.tin);
+            set('p-bank', p.bank); set('p-accnum', p.accnum); set('p-accname', p.accname);
+        }
+
+        function saveProfile() {
+            const updated = {
+                ...state.profile,
+                company: document.getElementById('p-company').value,
+                contact: document.getElementById('p-contact').value,
+                phone: document.getElementById('p-phone').value,
+                email: document.getElementById('p-email').value,
+                rc: document.getElementById('p-rc').value,
+                tin: document.getElementById('p-tin').value,
+                bank: document.getElementById('p-bank').value,
+                accnum: document.getElementById('p-accnum').value,
+                accname: document.getElementById('p-accname').value,
+            };
+            state.profile = updated;
+            localStorage.setItem('ec_proc_profile', JSON.stringify(updated));
+            renderProfilePage();
+            updateTopbarName();
+            toast('success', 'Profile updated successfully');
+        }
+
+        // ── UTILITIES ─────────────────────────────────────────────────
+        function fmt(n) {
+            return '₦' + (n || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+        function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+
+        let toastTimer;
+        function toast(type, msg) {
+            const el = document.getElementById('toast');
+            document.getElementById('toast-icon').className = type === 'success' ? 'fa-solid fa-check-circle' : 'fa-solid fa-circle-exclamation';
+            document.getElementById('toast-msg').textContent = msg;
+            el.className = 'show ' + type;
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => el.classList.remove('show'), 3800);
+        }
+        async function loadProjects() {
+            try {
+                const res = await fetch('/api/payouts/procurement-portal/projects');
+                const data = await res.json();
+                if (data.status === 'success') {
+                    const select = document.getElementById('v-project');
+                    if (select) {
+                        // Preserve the first option ("Select project...")
+                        select.innerHTML = '<option value="">Select project…</option>';
+                        data.data.forEach(p => {
+                            const opt = document.createElement('option');
+                            opt.value = p.id;
+                            opt.textContent = p.name;
+                            select.appendChild(opt);
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to load projects:', err);
+            }
+        }
+    </script>
+</body>
+
+</html>

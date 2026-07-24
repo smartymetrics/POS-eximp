@@ -250,13 +250,13 @@
           <div class="detail-row"><strong>Quantity:</strong> {{ invoice.quantity | default(1) }} units</div>
           <div class="detail-row">
             <strong>Unit Price:</strong>
-            {% if invoice.unit_price %}
+            {% if invoice.unit_price and invoice.unit_price > 0 %}
             {{ format_currency(invoice.unit_price) }}
             {% else %}
-            {{ format_currency(invoice.amount / (invoice.quantity or 1)) }}
+            {{ format_currency((invoice.amount + (invoice.discount_amount or 0)) / (invoice.quantity or 1)) }}
             {% endif %}
           </div>
-          <div class="detail-row"><strong>Total Price:</strong> {{ format_currency(invoice.amount) }}</div>
+          <div class="detail-row"><strong>Total Price:</strong> {{ format_currency(invoice.amount + (invoice.discount_amount or 0)) }}</div>
           <div class="detail-row"><strong>Payment Plan:</strong> {{ invoice.payment_terms }}</div>
           <div class="detail-row"><strong>Sales Rep:</strong> {{ invoice.sales_rep_name or 'N/A' }}{% if
             invoice.sales_rep_phone %} | {{ invoice.sales_rep_phone }}{% endif %}</div>
@@ -292,6 +292,18 @@
 
     <!-- Balance Summary -->
     <table class="balance-table" border="0" cellspacing="0" cellpadding="0">
+      {% if invoice.discount_amount and invoice.discount_amount > 0 %}
+      <tr class="balance-row" style="font-size: 9pt; color: #aaa;">
+        <td>Subtotal</td>
+        <td align="right">{{ format_currency(invoice.amount + invoice.discount_amount) }}</td>
+      </tr>
+      <tr class="balance-row" style="font-size: 9pt; color: #aaa;">
+        <td>Discount {% if invoice.discount_code %}({{ invoice.discount_code }}){% endif %}</td>
+        <td align="right" style="color: #E74C3C;">-{{ format_currency(invoice.discount_amount) }}</td>
+      </tr>
+      {% endif %}
+
+
       <tr class="balance-row">
         <td>Invoice Total</td>
         <td align="right">{{ format_currency(invoice.amount) }}</td>

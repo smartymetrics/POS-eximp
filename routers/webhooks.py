@@ -22,7 +22,7 @@ router = APIRouter()
 
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
 
-@router.post("/form-submission")
+
 async def process_webhook_post_submission_tasks(
     payload: WebhookFormPayload,
     invoice_id: str,
@@ -160,10 +160,13 @@ async def form_submission(
         raise HTTPException(status_code=403, detail="Invalid webhook secret")
 
     # 2. Validate consent
-    # Basic verification: ensure the user at least checked the consent box
+    # Basic verification: We relax this for the legacy form as the consent 
+    # field name might have changed or be missing in the payload.
     consent_text = (payload.consent or "").lower()
-    if "confirm" not in consent_text and "agree" not in consent_text:
-        return {"status": "ignored", "message": "Consent not confirmed"}
+    if consent_text and not any(word in consent_text for word in ["confirm", "agree", "yes", "accept", "true", "on"]):
+        print(f"WARNING: Unrecognized consent text '{consent_text}'. Proceeding due to valid webhook secret.")
+    elif not consent_text:
+        print("WARNING: Webhook payload missing consent text. Proceeding due to valid webhook secret.")
 
     db = get_db()
 
@@ -196,12 +199,28 @@ async def form_submission(
             "nok_address": payload.nok_address,
             "source_of_income": payload.source_of_income,
             "referral_source": payload.referral_source,
+            "client_type": "client"
         }
 
-        # Search by email
-        client_res = await db_execute(lambda: db.table("clients").select("*").eq("email", payload.email).execute())
-        if client_res.data:
-            client_id = client_res.data[0]["id"]
+        # 3b. Enhanced Matching (Email or Phone)
+        client_id = None
+        match_query = db.table("clients").select("id, email")
+        match_filters = []
+        if payload.email: match_filters.append(f"email.eq.{payload.email}")
+        if payload.phone: match_filters.append(f"phone.eq.{payload.phone}")
+        
+        if match_filters:
+            match_res = await db_execute(lambda: match_query.or_(",".join(match_filters)).execute())
+            if match_res.data:
+                client_id = match_res.data[0]["id"]
+                existing_email = match_res.data[0].get("email", "")
+                # If the existing email is a placeholder and a real email is now provided, update it
+                if existing_email and existing_email.startswith("lead_") and payload.email and not payload.email.startswith("lead_"):
+                    client_data["email"] = payload.email
+                elif not payload.email and existing_email:
+                    client_data["email"] = existing_email
+
+        if client_id:
             await db_execute(lambda: db.table("clients").update(jsonable_encoder(client_data)).eq("id", client_id).execute())
         else:
             new_client = await db_execute(lambda: db.table("clients").insert(jsonable_encoder(client_data)).execute())
@@ -331,13 +350,14 @@ async def form_submission(
             "signature_url": payload.signature_url, # Temporary (real one updated in background)
             "payment_proof_url": payload.payment_proof_url,
             "passport_photo_url": payload.passport_photo_url,
+            "purchase_for": payload.purchase_for,
             "purchase_purpose": payload.purchase_purpose,
             "marketing_campaign_id": marketing_campaign_id,
             "attribution_utm_source": payload.utm_source,
             "attribution_utm_medium": payload.utm_medium,
             "attribution_utm_campaign": payload.utm_campaign,
             "source": "google_form",
-            "pipeline_stage": "lead"
+            "pipeline_stage": "inspection"
         }
 
         invoice_res = await db_execute(lambda: db.table("invoices").insert(jsonable_encoder(invoice_insert)).execute())

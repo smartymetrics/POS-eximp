@@ -1,0 +1,221 @@
+{
+  "timestamp": "2026-05-04T14:58:06.582645",
+  "metadata": {
+    "company": "EXIMPS&CLOVES INFRASTRUCTURE LIMITED",
+    "location": "AGBOWA IKORODU",
+    "quotation_date": "2026-04-22",
+    "quotation_number": ""
+  },
+  "metrics": {
+    "total_budget": 18810000.0,
+    "total_items": 12,
+    "total_sections": 2,
+    "avg_item_cost": 1567500.0,
+    "cost_per_section": {
+      "Fencing  Agbowa": 15430000.0,
+      "Site Clearing Works": 3380000.0
+    }
+  },
+  "cost_distribution": {
+    "by_section": {
+      "Fencing  Agbowa": 82.03083466241361,
+      "Site Clearing Works": 17.96916533758639
+    },
+    "by_category": {
+      "Materials & Supplies": 81.79160021265285,
+      "Equipment & Machinery": 17.729930887825624,
+      "Other Services": 0.3189792663476874,
+      "Labour & Services": 0.1594896331738437
+    },
+    "largest_section": "Fencing  Agbowa",
+    "largest_category": "Materials & Supplies"
+  },
+  "top_items": [
+    {
+      "rank": 1,
+      "description": "Blocks",
+      "quantity": 15000.0,
+      "quantity_unit": "units",
+      "unit_price": 600.0,
+      "amount": 9000000.0,
+      "percentage_of_total": 47.84688995215311,
+      "category": "Materials & Supplies",
+      "section": "Fencing Quotation For Agbowa"
+    },
+    {
+      "rank": 2,
+      "description": "Cement",
+      "quantity": 300.0,
+      "quantity_unit": "units",
+      "unit_price": 13000.0,
+      "amount": 3900000.0,
+      "percentage_of_total": 20.73365231259968,
+      "category": "Materials & Supplies",
+      "section": "Fencing Quotation For Agbowa"
+    },
+    {
+      "rank": 3,
+      "description": "Excavator",
+      "quantity": 3.0,
+      "quantity_unit": "days",
+      "unit_price": 450000.0,
+      "amount": 1350000.0,
+      "percentage_of_total": 7.177033492822966,
+      "category": "Equipment & Machinery",
+      "section": "Quotation For Site Clearing Works"
+    },
+    {
+      "rank": 4,
+      "description": "Pay loader",
+      "quantity": 3.0,
+      "quantity_unit": "days",
+      "unit_price": 380000.0,
+      "amount": 1140000.0,
+      "percentage_of_total": 6.0606060606060606,
+      "category": "Equipment & Machinery",
+      "section": "Quotation For Site Clearing Works"
+    },
+    {
+      "rank": 5,
+      "description": "Gravel",
+      "quantity": 3.0,
+      "quantity_unit": "tons",
+      "unit_price": 350000.0,
+      "amount": 1050000.0,
+      "percentage_of_total": 5.582137161084529,
+      "category": "Materials & Supplies",
+      "section": "Fencing Quotation For Agbowa"
+    },
+    {
+      "rank": 6,
+      "description": "Sharp Sand",
+      "quantity": 3.0,
+      "quantity_unit": "tons",
+      "unit_price": 3000000.0,
+      "amount": 900000.0,
+      "percentage_of_total": 4.784688995215311,
+      "category": "Materials & Supplies",
+      "section": "Fencing Quotation For Agbowa"
+    },
+    {
+      "rank": 7,
+      "description": "Lowbed Truck",
+      "quantity": 2.0,
+      "quantity_unit": "days",
+      "unit_price": 400000.0,
+      "amount": 800000.0,
+      "percentage_of_total": 4.253056884635832,
+      "category": "Equipment & Machinery",
+      "section": "Quotation For Site Clearing Works"
+    },
+    {
+      "rank": 8,
+      "description": "Iron Rods (12mm)",
+      "quantity": 50.0,
+      "quantity_unit": "units",
+      "unit_price": 10000.0,
+      "amount": 500000.0,
+      "percentage_of_total": 2.658160552897395,
+      "category": "Materials & Supplies",
+      "section": "Fencing Quotation For Agbowa"
+    },
+    {
+      "rank": 9,
+      "description": "Hotel Accomodation",
+      "quantity": 3.0,
+      "quantity_unit": "days",
+      "unit_price": 20000.0,
+      "amount": 60000.0,
+      "percentage_of_total": 0.3189792663476874,
+      "category": "Other Services",
+      "section": "Quotation For Site Clearing Works"
+    },
+    {
+      "rank": 10,
+      "description": "Water Container Truck",
+      "quantity": 3.0,
+      "quantity_unit": "units",
+      "unit_price": 15000.0,
+      "amount": 45000.0,
+      "percentage_of_total": 0.23923444976076555,
+      "category": "Equipment & Machinery",
+      "section": "Fencing Quotation For Agbowa"
+    }
+  ],
+  "risks": [
+    {
+      "type": "HIGH-VALUE CONCENTRATION",
+      "severity": "MEDIUM",
+      "description": "2 items represent >10% of budget each",
+      "items": [
+        {
+          "description": "Cement",
+          "amount": 3900000.0,
+          "percentage": 20.73365231259968
+        },
+        {
+          "description": "Blocks",
+          "amount": 9000000.0,
+          "percentage": 47.84688995215311
+        }
+      ],
+      "recommendation": "Request multiple quotes for high-value items"
+    },
+    {
+      "type": "EQUIPMENT RENTAL DEPENDENCY",
+      "severity": "LOW",
+      "description": "Equipment rental represents 17.7% of budget",
+      "amount": 3335000.0,
+      "recommendation": "Negotiate long-term rates or consider purchase"
+    }
+  ],
+  "opportunities": [
+    {
+      "type": "TRANSPORT CONSOLIDATION",
+      "description": "Schedule transportation efficiently",
+      "current_cost": 845000.0,
+      "estimated_savings_10_percent": 84500.0,
+      "recommendation": "Schedule transportation efficiently to minimize trips"
+    }
+  ],
+  "pareto_analysis": {
+    "pareto_items": [
+      {
+        "description": "Blocks",
+        "amount": 9000000.0,
+        "cumulative_percentage": 47.84688995215311
+      },
+      {
+        "description": "Cement",
+        "amount": 3900000.0,
+        "cumulative_percentage": 68.58054226475278
+      },
+      {
+        "description": "Excavator",
+        "amount": 1350000.0,
+        "cumulative_percentage": 75.75757575757575
+      },
+      {
+        "description": "Pay loader",
+        "amount": 1140000.0,
+        "cumulative_percentage": 81.81818181818183
+      }
+    ],
+    "items_for_80_percent": 4,
+    "total_items": 12,
+    "item_concentration_percent": 33.33333333333333,
+    "insight": "33.3% of items drive 80% of costs"
+  },
+  "insights": [
+    "\u26a0 Fencing  Agbowa accounts for 82.0% of total project cost (\u20a615,430,000)",
+    "\ud83d\udcca Top 10 items represent 99.7% of budget (\u20a618,745,000) - high spending concentration",
+    "\ud83d\udcb0 Identified \u20a684,500 in cost optimization opportunities (0.4% of budget)"
+  ],
+  "recommendations": [
+    "ADDRESS IDENTIFIED RISKS: 2 risk areas identified requiring management attention",
+    "PURSUE COST SAVINGS: 1 optimization opportunities identified",
+    "REQUEST MULTIPLE QUOTES for high-value items to ensure competitive pricing",
+    "ESTABLISH VENDOR MANAGEMENT POLICY to ensure ongoing cost control",
+    "IMPLEMENT CONTINGENCY RESERVE: Current budget should include 10-15% contingency"
+  ]
+}

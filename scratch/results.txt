@@ -1,0 +1,1 @@
+Line 3017:           <img src="${url}" style="width:48px;height:36px;object-fit:cover;border-radius:4px;border:1px solid #333;">

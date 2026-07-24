@@ -519,8 +519,15 @@
                 <div class="nav-link active" onclick="switchView('leads')">
                     <i class="fas fa-fire"></i> Hot Leads
                 </div>
+                <div class="nav-link" onclick="switchView('my-tasks')">
+                    <i class="fas fa-tasks"></i> My Tasks
+                    <span id="tasksBadge" style="display:none; background:#ef4444; color:#fff; border-radius:10px; font-size:10px; font-weight:700; padding:1px 7px; margin-left:auto;"></span>
+                </div>
                 <div class="nav-link" onclick="switchView('pipeline')">
                     <i class="fas fa-grip-vertical"></i> Sales Pipeline
+                </div>
+                <div class="nav-link" onclick="switchView('contacts-list')">
+                    <i class="fas fa-address-book"></i> Contacts
                 </div>
                 <div class="nav-link" onclick="switchView('lead-scoring')">
                     <i class="fas fa-chart-pie"></i> Lead Scoring
@@ -559,13 +566,80 @@
                 <div class="nav-link" onclick="openPortalLinkModal()">
                     <i class="fas fa-users"></i> Client Portal
                 </div>
+                <div class="nav-link" onclick="openKycLinkModal()">
+                    <i class="fas fa-id-card"></i> My KYC Link
+                </div>
             </div>
+    <!-- MODAL: KYC LINK -->
+    <div id="kycLinkModal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center;">
+        <div class="modal-content" style="background: #1A1A1A; width: 450px; border-radius: 16px; border: 1px solid #333; overflow: hidden;">
+            <div style="padding: 24px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="font-size: 18px; font-weight: 800; color: var(--gold);">Your Unique KYC Link</h2>
+                <button onclick="document.getElementById('kycLinkModal').style.display='none'" style="color: #666;"><i class="fas fa-times"></i></button>
+            </div>
+            <div style="padding: 24px;">
+                <p style="font-size: 13px; color: #aaa; margin-bottom: 16px;">Share this link with prospects. All KYC leads submitted here will be attributed to you.</p>
+                <div style="background: #000; border: 1px solid #333; padding: 16px; border-radius: 8px; margin-bottom: 24px;">
+                    <code id="sales-rep-kyc-url" style="color: var(--gold); word-break: break-all; font-size: 12px;">Loading...</code>
+                </div>
+                <button onclick="copyKycLink(event)" class="btn btn-primary" style="width: 100%; padding: 14px;">
+                    <i class="fas fa-copy"></i> Copy KYC Link
+                </button>
+            </div>
+        </div>
+    </div>
+    <script>
+        // --- KYC LINK GENERATION ---
+        function openKycLinkModal() {
+            document.getElementById('kycLinkModal').style.display = 'flex';
+            const codeEl = document.getElementById('sales-rep-kyc-url');
+            codeEl.textContent = 'Loading...';
+            fetch('/api/kyc-links/my', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            .then(r => r.json())
+            .then(j => {
+                if (j.status === 'success' && j.url) {
+                    codeEl.textContent = window.location.origin + j.url;
+                } else {
+                    // If no link, auto-generate
+                    fetch('/api/kyc-links/generate', {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ label: 'Default' })
+                    })
+                    .then(r2 => r2.json())
+                    .then(j2 => {
+                        if (j2.status === 'success' && j2.url) {
+                            codeEl.textContent = window.location.origin + j2.url;
+                        } else {
+                            codeEl.textContent = 'Error generating link';
+                        }
+                    });
+                }
+            })
+            .catch(() => { codeEl.textContent = 'Error loading link'; });
+        }
+
+        function copyKycLink(e) {
+            const codeEl = document.getElementById('sales-rep-kyc-url');
+            if (!codeEl) return;
+            const text = codeEl.textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                e.target.textContent = 'Copied!';
+                setTimeout(() => { e.target.innerHTML = '<i class="fas fa-copy"></i> Copy KYC Link'; }, 1200);
+            });
+        }
+    </script>
 
             <!-- Service Hub (NEW) -->
             <div class="nav-section" id="section-servicehub">
                 <div class="nav-title">Service Hub</div>
                 <div class="nav-link" onclick="switchView('support-desk')">
                     <i class="fas fa-headset"></i> Support Desk
+                </div>
+                <div class="nav-link" onclick="switchView('feedback')">
+                    <i class="fas fa-comments"></i> Client Feedback
                 </div>
             </div>
 
@@ -577,6 +651,10 @@
                 </div>
                 <div class="nav-link" onclick="switchView('team')">
                     <i class="fas fa-medal"></i> Team Leaderboard
+                </div>
+                <div class="nav-link" id="nav-manager-feed" onclick="switchView('manager-feed')" style="display:none;">
+                    <i class="fas fa-stream"></i> Activity Feed
+                    <span id="manager-feed-badge" style="display:none; background:#ef4444; color:#fff; border-radius:10px; font-size:10px; padding:1px 6px; margin-left:auto;"></span>
                 </div>
                 <div class="nav-link" onclick="switchView('reports')">
                     <i class="fas fa-file-pdf"></i> Reports
@@ -697,6 +775,17 @@
                     </table>
                 </div>
             </div>
+        </div>
+
+        <!-- MY TASKS VIEW -->
+        <div id="my-tasks" class="view-section">
+            <div class="header-section">
+                <div>
+                    <h1 class="page-title">My Tasks</h1>
+                    <p style="color: #888; margin-top: 8px;">Pending CRM work assigned to you.</p>
+                </div>
+            </div>
+            <div id="myTasksContainer"></div>
         </div>
 
         <!-- LEAD SCORING DETAILS -->
@@ -850,7 +939,15 @@
                      <h1 class="page-title" style="color: #fff;">Sales Pipeline</h1>
                      <p style="color: #888; font-size: 14px; margin-top: 4px;">Track and manage your leads and their daily activities.</p>
                  </div>
-                 <div style="display: flex; gap: 12px;">
+                 <div style="display: flex; gap: 12px; align-items: center;">
+                     <div style="display: flex; align-items: center; gap: 10px;">
+                         <span style="font-size: 12px; color: #888;">Drag &amp; Drop</span>
+                         <button id="pipelineLockToggle" onclick="togglePipelineLock()" 
+                             style="width: 44px; height: 24px; border-radius: 12px; border: none; cursor: pointer; position: relative; transition: background 0.2s;">
+                             <span id="pipelineLockThumb" style="position: absolute; top: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: left 0.2s;"></span>
+                         </button>
+                         <span id="pipelineLockLabel" style="font-size: 12px; color: #888;">Locked</span>
+                     </div>
                      <button class="btn btn-secondary" onclick="openImportModal()" style="background: rgba(255,255,255,0.05); color: #fff; border: 1px solid #333;">
                          <i class="fas fa-file-import mr-2"></i> Import CSV
                      </button>
@@ -951,7 +1048,7 @@
                 <div style="overflow-x: auto;">
                     <table style="width: 100%; font-size: 13px;">
                         <thead>
-                            <tr style="border-bottom: 2px solid #e5e7eb; background: #f9fafb;">
+                                <tr style="border-bottom: 2px solid #e5e7eb; background: #f9fafb; color: #111;">
                                 <th style="text-align: left; padding: 12px; font-weight: 600;">🏆 Sales Rep</th>
                                 <th style="text-align: right; padding: 12px; font-weight: 600;">Deals</th>
                                 <th style="text-align: right; padding: 12px; font-weight: 600;">Revenue</th>
@@ -962,6 +1059,129 @@
                         </thead>
                         <tbody id="teamLeaderboard"></tbody>
                     </table>
+                </div>
+            </div>
+
+            <!-- Section 2c: Manage Roles — only visible to admin/operations -->
+            <div id="roleManagerSection" style="display:none; margin-top:24px;">
+                <div class="card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                        <h3 style="font-weight:800; font-size:15px; color:#fff;">Manage Team Roles</h3>
+                        <button onclick="loadRoleManager()" style="font-size:11px; color:#888; background:none; border:none; cursor:pointer;">Refresh</button>
+                    </div>
+                    <div id="roleManagerBody">
+                        <div style="text-align:center; padding:30px; color:#444;">Loading team members...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CONTACTS LIST VIEW (Section 6b) -->
+        <div id="contacts-list" class="view-section">
+            <div class="header-section">
+                <div>
+                    <h1 class="page-title">Contacts</h1>
+                    <p style="color:#888; margin-top:4px;">All assigned clients — call, WhatsApp, log activity</p>
+                </div>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <input type="text" id="contactsSearch" placeholder="Search by name or phone..." 
+                        onkeyup="filterContactsList()"
+                        style="background:#111; border:1px solid #333; border-radius:8px; padding:10px 14px; color:#fff; outline:none; font-size:13px; width:220px;">
+                    <select id="contactsStageFilter" onchange="filterContactsList()" style="background:#111; border:1px solid #333; border-radius:8px; padding:10px; color:#fff; outline:none; font-size:13px;">
+                        <option value="">All Stages</option>
+                        <option value="lead">Lead</option>
+                        <option value="nurturing">Nurturing</option>
+                        <option value="interest">Interest</option>
+                        <option value="paid">Paid</option>
+                        <option value="closed">Closed</option>
+                    </select>
+                </div>
+            </div>
+            <div class="card" style="overflow-x:auto;">
+                <table style="width:100%; font-size:13px; border-collapse:collapse;">
+                    <thead>
+                        <tr style="border-bottom:2px solid #333;">
+                            <th style="text-align:left; padding:12px; color:#888; font-size:11px; text-transform:uppercase; font-weight:700;">Client</th>
+                            <th style="text-align:left; padding:12px; color:#888; font-size:11px; text-transform:uppercase; font-weight:700;">Phone</th>
+                            <th style="text-align:left; padding:12px; color:#888; font-size:11px; text-transform:uppercase; font-weight:700;">Stage</th>
+                            <th style="text-align:right; padding:12px; color:#888; font-size:11px; text-transform:uppercase; font-weight:700;">Outstanding</th>
+                            <th style="text-align:left; padding:12px; color:#888; font-size:11px; text-transform:uppercase; font-weight:700;">Last Contacted</th>
+                            <th style="text-align:center; padding:12px; color:#888; font-size:11px; text-transform:uppercase; font-weight:700;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="contactsListBody">
+                        <tr><td colspan="6" style="text-align:center; padding:40px; color:#444;">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- MANAGER ACTIVITY FEED (Section 9b) -->
+        <div id="manager-feed" class="view-section">
+            <div class="header-section">
+                <div>
+                    <h1 class="page-title">Activity Feed</h1>
+                    <p style="color:#888; margin-top:4px;">All rep activity — calls, notes, stage moves, in real time</p>
+                </div>
+                <button onclick="openAssignTaskModal('', '')" class="btn btn-primary" style="height:38px; align-self:center;">
+                    <i class="fas fa-plus mr-2"></i> Assign Task
+                </button>
+            </div>
+            
+            <!-- Filters -->
+            <div class="card" style="margin-bottom:20px; padding:16px;">
+                <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+                    <select id="feedRepFilter" onchange="loadManagerFeed()" style="background:#111; border:1px solid #333; border-radius:8px; padding:10px; color:#fff; outline:none; font-size:13px;">
+                        <option value="">All Reps</option>
+                    </select>
+                    <select id="feedDateFilter" onchange="loadManagerFeed()" style="background:#111; border:1px solid #333; border-radius:8px; padding:10px; color:#fff; outline:none; font-size:13px;">
+                        <option value="today">Today</option>
+                        <option value="week">This Week</option>
+                        <option value="month">This Month</option>
+                        <option value="">All Time</option>
+                    </select>
+                    <select id="feedTypeFilter" onchange="loadManagerFeed()" style="background:#111; border:1px solid #333; border-radius:8px; padding:10px; color:#fff; outline:none; font-size:13px;">
+                        <option value="">All Activity</option>
+                        <option value="call">Calls Only</option>
+                        <option value="manual_note">Notes Only</option>
+                        <option value="pipeline_move">Stage Moves Only</option>
+                        <option value="lead_assigned">Assignments Only</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Outstanding Payments Summary -->
+            <div id="outstandingPanel" class="card" style="margin-bottom:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                    <h3 style="font-weight:700; font-size:15px; color:#fff;">Outstanding Payments</h3>
+                    <button onclick="loadOutstandingPanel()" style="font-size:11px; color:#888; background:none; border:none; cursor:pointer;">Refresh</button>
+                </div>
+                <div style="overflow-x:auto;">
+                    <table style="width:100%; font-size:13px; border-collapse:collapse;">
+                        <thead>
+                            <tr style="border-bottom:1px solid #333;">
+                                <th style="text-align:left; padding:10px; color:#888; font-size:11px; text-transform:uppercase;">Client</th>
+                                <th style="text-align:left; padding:10px; color:#888; font-size:11px; text-transform:uppercase;">Assigned Rep</th>
+                                <th style="text-align:right; padding:10px; color:#888; font-size:11px; text-transform:uppercase;">Outstanding</th>
+                                <th style="text-align:left; padding:10px; color:#888; font-size:11px; text-transform:uppercase;">Last Contacted</th>
+                                <th style="text-align:left; padding:10px; color:#888; font-size:11px; text-transform:uppercase;">Stage</th>
+                                <th style="text-align:left; padding:10px; color:#888; font-size:11px; text-transform:uppercase;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="outstandingTableBody">
+                            <tr><td colspan="5" style="text-align:center; padding:30px; color:#444;">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Activity Log Feed -->
+            <div class="card">
+                <div id="managerFeedList" style="min-height:200px;">
+                    <div style="text-align:center; padding:40px; color:#444;">Loading feed...</div>
+                </div>
+                <div style="text-align:center; margin-top:16px; display:none;" id="loadMoreFeedBtn">
+                    <button onclick="loadManagerFeed(true)" style="background:#222; border:1px solid #333; border-radius:8px; padding:10px 24px; color:#fff; cursor:pointer;">Load More</button>
                 </div>
             </div>
         </div>
@@ -980,6 +1200,14 @@
                     <div id="adminRepFilterContainer" style="flex: 1; min-width: 200px; display: none;">
                         <select id="logRepFilter" style="width: 100%; background: #111; border: 1px solid #333; color: #fff; border-radius: 8px; padding: 10px; font-size: 13px; outline: none;" onchange="loadActivityLogs()">
                             <option value="">Loading Sales Reps...</option>
+                        </select>
+                    </div>
+                    <div>
+                        <select id="logDateFilter" onchange="loadActivityLogs()" style="background:#111; border:1px solid #333; color:#fff; border-radius:8px; padding:10px; font-size:13px; outline:none;">
+                            <option value="today">Today</option>
+                            <option value="week">This Week</option>
+                            <option value="month">This Month</option>
+                            <option value="">All Time</option>
                         </select>
                     </div>
                     <div>
@@ -1073,8 +1301,8 @@
                  </div>
                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
                      <div>
-                         <label style="display: block; font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; margin-bottom: 8px;">Email</label>
-                         <input type="email" id="lead-email" required style="width: 100%; background: #222; border: 1px solid #333; border-radius: 8px; padding: 12px; color: #fff; outline: none;">
+                         <label style="display: block; font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; margin-bottom: 8px;">Email (Optional)</label>
+                         <input type="email" id="lead-email" style="width: 100%; background: #222; border: 1px solid #333; border-radius: 8px; padding: 12px; color: #fff; outline: none;">
                      </div>
                      <div>
                          <label style="display: block; font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; margin-bottom: 8px;">Phone</label>
@@ -1100,7 +1328,7 @@
              <div style="padding: 24px;">
                  <div style="background: rgba(196, 125, 10, 0.05); border: 1px solid rgba(196, 125, 10, 0.2); border-radius: 8px; padding: 16px; margin-bottom: 24px;">
                      <h4 style="font-size: 12px; font-weight: 800; color: var(--gold); text-transform: uppercase; margin-bottom: 8px;">CSV Preparation Guide</h4>
-                     <p style="font-size: 11px; color: #888; line-height: 1.6;">Your CSV should have at least one column for the <strong>Name</strong>. Our system will automatically guess other columns like <strong>Email</strong>, <strong>Phone</strong>, and <strong>Value</strong>.</p>
+                     <p style="font-size: 11px; color: #888; line-height: 1.6;">Your CSV should have at least one column for the <strong>Name</strong>. Our system will automatically guess other columns like <strong>Email</strong>, <strong>Phone</strong>, and <strong>Value</strong>. <em>Note: Email is optional.</em></p>
                  </div>
  
                  <div style="border: 2px dashed #333; border-radius: 12px; padding: 40px; text-align: center; cursor: pointer;" onclick="document.getElementById('csvFile').click()">
@@ -1137,10 +1365,11 @@
                      <div style="margin-bottom: 24px;">
                          <label style="font-size: 10px; font-weight: 800; color: #555; text-transform: uppercase; margin-bottom: 4px; display: block;">Pipeline Stage (Mobile quick-move)</label>
                          <select id="detail-lead-stage" onchange="saveLeadStage()" style="width: 100%; background: #1A1A1A; border: 1px solid #333; color: #fff; border-radius: 8px; padding: 10px; font-size: 13px; outline: none;">
-                             <option value="lead">Lead</option>
-                             <option value="offer">Offer</option>
-                             <option value="contract">Contract</option>
-                             <option value="closed">Closed (Won)</option>
+                             <option value="lead">1. Lead</option>
+                             <option value="nurturing">2. Nurturing</option>
+                             <option value="interest">3. Interest</option>
+                             <option value="paid">4. Paid</option>
+                             <option value="closed">5. Closed</option>
                          </select>
                      </div>
 
@@ -1156,8 +1385,31 @@
                          </div>
                      </div>
  
+                     <div style="background: rgba(255,255,255,0.03); border: 1px solid #222; border-radius: 12px; padding: 16px; margin-top: 16px;">
+                         <h4 style="font-size: 11px; font-weight: 800; color: #888; margin-bottom: 16px;">KYC DETAILS</h4>
+                         <div style="margin-bottom: 12px;">
+                             <label style="font-size: 10px; color: #555;">OCCUPATION</label>
+                             <div id="detail-lead-occupation" style="font-size: 13px; color: #fff; margin-top: 2px;">-</div>
+                         </div>
+                         <div style="margin-bottom: 12px;">
+                             <label style="font-size: 10px; color: #555;">ADDRESS</label>
+                             <div id="detail-lead-address" style="font-size: 13px; color: #fff; margin-top: 2px;">-</div>
+                         </div>
+                         <div style="margin-bottom: 12px;">
+                             <label style="font-size: 10px; color: #555;">CITY, STATE</label>
+                             <div id="detail-lead-location" style="font-size: 13px; color: #fff; margin-top: 2px;">-</div>
+                         </div>
+                         <div style="margin-bottom: 12px;">
+                             <label style="font-size: 10px; color: #555;">SOURCE</label>
+                             <div id="detail-lead-source" style="font-size: 13px; color: #fff; margin-top: 2px;">-</div>
+                         </div>
+                     </div>
+
                      <button class="btn btn-secondary" style="width: 100%; margin-top: 20px; border-color: #333; color: #fff;" onclick="openEditLeadForm()">
                          Edit Details
+                     </button>
+                     <button id="detail-delete-btn" class="btn text-red-500 hover:bg-red-500/10 border border-red-500/20" style="width: 100%; margin-top: 10px; display: none;" onclick="deleteLead()">
+                         <i class="fas fa-trash mr-1"></i> Delete Contact
                      </button>
                  </div>
  
@@ -1366,6 +1618,121 @@
                 </div>
             </div>
         </div>
+        
+        <!-- CLIENT FEEDBACK VIEW -->
+        <div id="feedback" class="view-section">
+            <div class="header-section">
+                <div>
+                    <h1 class="page-title" style="color: white !important;">Client & Lead Feedback</h1>
+                    <p style="color: #888; margin-top: 8px;">Review Net Promoter Scores (NPS) and customer satisfaction ratings</p>
+                </div>
+                <div class="flex gap-2">
+                    <button class="btn btn-secondary" onclick="copyFeedbackLink(event)">
+                        <i class="fas fa-link"></i> Copy Form Link
+                    </button>
+                    <button class="btn btn-secondary" onclick="loadFeedback()">
+                        <i class="fas fa-sync"></i> Refresh
+                    </button>
+                </div>
+            </div>
+
+            <!-- Stats grid -->
+            <div class="grid-4 mb-8">
+                <div class="stat-card">
+                    <div style="font-size: 14px; color: #888;"><i class="fas fa-heart text-red-500"></i> Net Promoter Score</div>
+                    <div class="stat-value" id="feedback-nps-val">-</div>
+                    <div class="stat-label" id="feedback-nps-label">Promoters - Detractors</div>
+                </div>
+                <div class="stat-card">
+                    <div style="font-size: 14px; color: #888;"><i class="fas fa-star text-amber-500"></i> Overall Experience</div>
+                    <div class="stat-value" id="feedback-experience-val">-</div>
+                    <div class="stat-label">Out of 5.0 stars</div>
+                </div>
+                <div class="stat-card">
+                    <div style="font-size: 14px; color: #888;"><i class="fas fa-comments text-blue-500"></i> Communication</div>
+                    <div class="stat-value" id="feedback-communication-val">-</div>
+                    <div class="stat-label">Out of 5.0 stars</div>
+                </div>
+                <div class="stat-card">
+                    <div style="font-size: 14px; color: #888;"><i class="fas fa-file-alt"></i> Total Feedback</div>
+                    <div class="stat-value" id="feedback-total-val">-</div>
+                    <div class="stat-label">Submissions count</div>
+                </div>
+            </div>
+
+            <!-- Filters -->
+            <div class="card mb-6" style="padding: 16px;">
+                <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 150px;">
+                        <label style="font-size:11px; color:#888; display:block; margin-bottom:4px;">User Type</label>
+                        <select id="filter-feedback-usertype" class="w-full bg-[#111] border border-[#333] text-white rounded-lg p-2 text-sm outline-none" onchange="loadFeedback()">
+                            <option value="">All Types</option>
+                            <option value="client">Client</option>
+                            <option value="lead">Lead</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div style="flex: 1; min-width: 150px;">
+                        <label style="font-size:11px; color:#888; display:block; margin-bottom:4px;">Feedback Type</label>
+                        <select id="filter-feedback-type" class="w-full bg-[#111] border border-[#333] text-white rounded-lg p-2 text-sm outline-none" onchange="loadFeedback()">
+                            <option value="">All Categories</option>
+                            <option value="satisfaction">Satisfaction</option>
+                            <option value="complaint">Complaint</option>
+                            <option value="suggestion">Suggestion</option>
+                            <option value="inquiry">Inquiry</option>
+                            <option value="general">General</option>
+                            <option value="inspection">Site Inspection</option>
+                            <option value="allocation">Land Allocation</option>
+                        </select>
+                    </div>
+                    <div style="flex: 1; min-width: 150px;">
+                        <label style="font-size:11px; color:#888; display:block; margin-bottom:4px;">Status</label>
+                        <select id="filter-feedback-status" class="w-full bg-[#111] border border-[#333] text-white rounded-lg p-2 text-sm outline-none" onchange="loadFeedback()">
+                            <option value="">All Statuses</option>
+                            <option value="new">New</option>
+                            <option value="reviewed">Reviewed</option>
+                            <option value="contacted">Contacted</option>
+                            <option value="resolved">Resolved</option>
+                        </select>
+                    </div>
+                    <div style="flex: 1; min-width: 150px;">
+                        <label style="font-size:11px; color:#888; display:block; margin-bottom:4px;">NPS Score</label>
+                        <select id="filter-feedback-nps" class="w-full bg-[#111] border border-[#333] text-white rounded-lg p-2 text-sm outline-none" onchange="loadFeedback()">
+                            <option value="">All Scores</option>
+                            <option value="promoter">Promoters (9-10)</option>
+                            <option value="passive">Passives (7-8)</option>
+                            <option value="detractor">Detractors (0-6)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- List Card -->
+            <div class="card p-0 overflow-hidden" style="background: rgba(0,0,0,0.2); border: 1px solid #333;">
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                        <thead style="background: rgba(255,255,255,0.03); border-bottom: 2px solid #333;">
+                            <tr>
+                                <th style="text-align: left; padding: 16px; font-weight: 700; color: #aaa; text-transform: uppercase; font-size: 10px; letter-spacing: 1px;">Date</th>
+                                <th style="text-align: left; padding: 16px; font-weight: 700; color: #aaa; text-transform: uppercase; font-size: 10px; letter-spacing: 1px;">Submitter</th>
+                                <th style="text-align: left; padding: 16px; font-weight: 700; color: #aaa; text-transform: uppercase; font-size: 10px; letter-spacing: 1px;">Category</th>
+                                <th style="text-align: center; padding: 16px; font-weight: 700; color: #aaa; text-transform: uppercase; font-size: 10px; letter-spacing: 1px;">Ratings</th>
+                                <th style="text-align: left; padding: 16px; font-weight: 700; color: #aaa; text-transform: uppercase; font-size: 10px; letter-spacing: 1px;">Comments</th>
+                                <th style="text-align: center; padding: 16px; font-weight: 700; color: #aaa; text-transform: uppercase; font-size: 10px; letter-spacing: 1px;">Status</th>
+                                <th style="text-align: right; padding: 16px; font-weight: 700; color: #aaa; text-transform: uppercase; font-size: 10px; letter-spacing: 1px;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="crmFeedbackTable">
+                            <tr>
+                                <td colspan="7" style="padding: 40px; text-align: center; color: #666;">
+                                    No feedback submissions loaded.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- MODAL: VERIFY CONFIRM -->
@@ -1467,7 +1834,7 @@
             const roleStr = (admin.role || 'staff').toLowerCase();
             const roles = roleStr.split(',').map(r => r.trim());
             
-            const isPrivileged = roles.some(r => ['admin', 'operations', 'super_admin', 'customer_support'].includes(r));
+            const isPrivileged = roles.some(r => ['admin', 'operations', 'super_admin', 'customer_support', 'sales_manager'].includes(r));
             const isRestricted = roles.some(r => ['sales', 'staff'].includes(r)) && !isPrivileged;
             
             // Sales Reps & Staff are restricted
@@ -1549,6 +1916,7 @@
             
             // Load specific data
             if (viewName === "leads") loadLeads();
+            else if (viewName === "my-tasks") loadMyTasks();
             else if (viewName === "team") loadTeamPerformance();
             else if (viewName === "support-desk") loadSupportTickets();
             else if (viewName === "revenue-intel") loadRevenueIntelligence();
@@ -1805,15 +2173,33 @@
                     headers: { "Authorization": `Bearer ${token}` }
                 });
                 const data = await res.json();
+                if (!res.ok) {
+                    document.getElementById("hotLeadsTable").innerHTML = `<tr><td colspan="6" style="padding: 40px; text-align: center; color: #EF4444;">${data.detail || 'Failed to load leads'}</td></tr>`;
+                    hidePageLoader();
+                    return;
+                }
                 
-                document.getElementById("hot-leads").textContent = data.hot_leads;
-                document.getElementById("warm-leads").textContent = data.warm_leads;
-                document.getElementById("cold-leads").textContent = data.total_leads - data.hot_leads - data.warm_leads;
+                if (!Array.isArray(data.prioritized_leads) || !data.prioritized_leads.length) {
+                    document.getElementById("hotLeadsTable").innerHTML = `
+                        <tr><td colspan="6" style="text-align:center; padding:40px; color:#666;">
+                            No leads assigned to you yet.
+                        </td></tr>`;
+                    document.getElementById("hot-leads").textContent = data.hot_leads || 0;
+                    document.getElementById("warm-leads").textContent = data.warm_leads || 0;
+                    document.getElementById("cold-leads").textContent = (data.total_leads || 0) - (data.hot_leads || 0) - (data.warm_leads || 0);
+                    hidePageLoader();
+                    return;
+                }
                 
-                const totalPipeline = data.prioritized_leads.reduce((sum, lead) => sum + (lead.total_deals * 500000), 0);
+                document.getElementById("hot-leads").textContent = data.hot_leads || 0;
+                document.getElementById("warm-leads").textContent = data.warm_leads || 0;
+                document.getElementById("cold-leads").textContent = (data.total_leads || 0) - (data.hot_leads || 0) - (data.warm_leads || 0);
+                
+                const prioritized = data.prioritized_leads || [];
+                const totalPipeline = prioritized.reduce((sum, lead) => sum + (lead.total_deals * 500000), 0);
                 document.getElementById("total-pipeline").textContent = `₦${(totalPipeline / 1000000).toFixed(1)}M`;
                 
-                const html = data.prioritized_leads.map((lead, index) => `
+                const html = prioritized.map((lead, index) => `
                     <tr class="animate-fade-in stagger-${(index % 5) + 1}">
                         <td style="padding: 12px; font-weight: 600;">${lead.client_name}</td>
                         <td style="text-align: right; padding: 12px; font-size: 18px; font-weight: 700; color: var(--gold);">${lead.score}</td>
@@ -1850,17 +2236,39 @@
                     headers: { "Authorization": `Bearer ${token}` }
                 });
                 const data = await res.json();
-                
-                const html = data.team_leaderboard.map((rep, idx) => `
+                if (!res.ok) {
+                    console.error("Team performance request failed:", data);
+                    document.getElementById("teamLeaderboard").innerHTML = `<tr><td colspan="6" style="text-align:center; padding:24px; color:#ef4444;">Unable to load team leaderboard.</td></tr>`;
+                    return;
+                }
+
+                const leaderboard = Array.isArray(data)
+                    ? data
+                    : Array.isArray(data?.team_leaderboard)
+                        ? data.team_leaderboard
+                        : [];
+
+                if (!leaderboard.length) {
+                    document.getElementById("teamLeaderboard").innerHTML = `<tr><td colspan="6" style="text-align:center; padding:24px; color:#aaa;">No team leaderboard data available.</td></tr>`;
+                    return;
+                }
+
+                const html = leaderboard.map((rep, idx) => {
+                    const assigned = rep.assigned_leads || 0;
+                    const closed = rep.closed_deals || 0;
+                    const winRate = assigned ? ((closed / assigned) * 100) : (rep.conversion_rate || 0);
+                    const winRateDisplay = isFinite(winRate) ? winRate.toFixed(1) + '%' : '0%';
+
+                    return `
                     <tr class="animate-fade-in stagger-${(idx % 5) + 1}">
                         <td style="padding: 12px;"><strong>${idx + 1}. ${rep.sales_rep}</strong></td>
                         <td style="text-align: right; padding: 12px;">${rep.total_deals}</td>
                         <td style="text-align: right; padding: 12px; color: var(--gold); font-weight: 600;">₦${(rep.total_revenue / 1000000).toFixed(1)}M</td>
                         <td style="text-align: right; padding: 12px;">${rep.closed_deals}</td>
-                        <td style="text-align: right; padding: 12px; font-weight: 600;">${rep.conversion_rate}%</td>
-                        <td style="text-align: right; padding: 12px;">₦${(rep.estimated_commission / 1000000).toFixed(1)}M</td>
+                        <td style="text-align: right; padding: 12px; font-weight: 600;">${winRateDisplay}</td>
+                        <td style="text-align: right; padding: 12px;">₦${((rep.actual_commissions_earned || rep.estimated_commission || 0) / 1000000).toFixed(1)}M</td>
                     </tr>
-                `).join("");
+                `}).join("");
                 
                 document.getElementById("teamLeaderboard").innerHTML = html;
             } catch (err) {
@@ -2005,6 +2413,21 @@
                         const weightedVal = (parseFloat(lead.estimated_value || 0) * (probability / 100)).toLocaleString();
                         const isProtected = ['paid', 'closed'].includes(stage);
 
+                        // Section 8: outstanding balance
+                        const outstanding = (parseFloat(lead.actual_amount || 0) - parseFloat(lead.actual_paid || 0));
+                        const outstandingHtml = outstanding > 0
+                            ? `<div style="font-size:10px; color:#ef4444; margin-top:2px;">Owes: ₦${outstanding.toLocaleString()}</div>`
+                            : '';
+
+                        // Section 7c: last contacted
+                        const lastContacted = lead.last_contacted_at 
+                            ? `<div style="font-size:9px; color:#666; margin-top:4px;">Last contact: ${formatTimeAgo(lead.last_contacted_at)}</div>`
+                            : `<div style="font-size:9px; color:#555; margin-top:4px;">Never contacted</div>`;
+
+                        // Section 4: phone sanitized for WhatsApp
+                        const waPhone = sanitizePhoneForWhatsApp(lead.phone);
+                        const safeName = (lead.full_name || '').replace(/'/g, "\\'");
+
                         return `
                         <div class="deal-card ${isProtected ? 'protected-col' : ''} animate-fade-in stagger-${(index % 5) + 1}" 
                              draggable="${!isProtected}" 
@@ -2012,11 +2435,13 @@
                              onclick="openLeadDetails('${lead.id}')" 
                              data-id="${lead.id}">
                             <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
-                                <div style="font-size: 10px; color: #666; font-weight: 700;">PROSPECT</div>
+                                <div style="font-size: 10px; color: #666; font-weight: 700;">${(lead.client_type || 'lead').toUpperCase()}</div>
                                 <div style="font-size: 10px; color: #555;">${new Date(lead.created_at).toLocaleDateString()}</div>
                             </div>
                             <div style="font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 4px;">${lead.full_name || 'Unknown Client'}</div>
+                            ${lead.assigned_rep_name ? `<div style="font-size:10px; color:#888; margin-bottom:4px;"><i class="fas fa-user" style="font-size:9px; color:#555;"></i> ${lead.assigned_rep_name}</div>` : ''}
                             <div style="font-size: 16px; font-weight: 800; color: var(--gold);">₦${parseFloat(lead.amount || 0).toLocaleString()}</div>
+                            ${outstandingHtml}
                             
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
                                 ${lead.actual_paid > 0 ? `<div style="font-size: 10px; color: #3498db;">Paid: ₦${parseFloat(lead.actual_paid).toLocaleString()}</div>` : '<div></div>'}
@@ -2024,6 +2449,7 @@
                             </div>
                             
                             <div style="font-size: 10px; color: #22c55e; margin-top: 4px;">Forecast: ₦${weightedVal} <span style="color: #666;">(${probability}%)</span></div>
+                            ${lastContacted}
                             
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 8px; border-top: 1px solid #333;">
                                 <div style="display: flex; gap: 6px;">
@@ -2037,9 +2463,25 @@
                                             <i class="fas fa-arrow-right"></i>
                                         </button>
                                     ` : ''}
-                                    <button onclick="event.stopPropagation(); initiateLeadChat('${lead.id}', '${lead.full_name}')" title="Start Chat" style="color: var(--gold); background: rgba(196,125,10,0.1); width: 28px; height: 28px; border-radius: 4px; display: flex; align-items: center; justify-content: center; border:0;">
+                                    <button onclick="event.stopPropagation(); initiateLeadChat('${lead.id}', '${safeName}')" title="Start Chat" style="color: var(--gold); background: rgba(196,125,10,0.1); width: 28px; height: 28px; border-radius: 4px; display: flex; align-items: center; justify-content: center; border:0;">
                                         <i class="fas fa-comment-dots" style="font-size:10px;"></i>
                                     </button>
+                                    <button onclick="event.stopPropagation(); logDailyActivity('${lead.id}')" title="Log Activity" style="color: #fff; background: rgba(255,255,255,0.05); width: 28px; height: 28px; border-radius: 4px; display: flex; align-items: center; justify-content: center; border: 1px solid #333;">
+                                        <i class="fas fa-pen" style="font-size:10px;"></i>
+                                    </button>
+                                    <a href="tel:${lead.phone || ''}" 
+                                       onclick="event.stopPropagation(); handleCallInitiated('${lead.id}', '${safeName}', '${lead.phone || ''}')" 
+                                       style="color: #22c55e; background: rgba(34,197,94,0.1); width: 28px; height: 28px; border-radius: 4px; display: flex; align-items: center; justify-content: center; border:0; text-decoration: none;"
+                                       title="Call Client">
+                                        <i class="fas fa-phone" style="font-size:10px;"></i>
+                                    </a>
+                                    <a href="https://wa.me/${waPhone}" 
+                                       target="_blank"
+                                       onclick="event.stopPropagation();"
+                                       style="color: #25D366; background: rgba(37,211,102,0.1); width: 28px; height: 28px; border-radius: 4px; display: flex; align-items: center; justify-content: center; border:0; text-decoration: none;"
+                                       title="WhatsApp Client">
+                                        <i class="fab fa-whatsapp" style="font-size:10px;"></i>
+                                    </a>
                                 </div>
                                 <div style="font-size: 9px; color: #444; font-weight: 700; text-transform: uppercase;">ID: ${lead.id.split('-')[0]}</div>
                             </div>
@@ -2047,6 +2489,8 @@
                     `}).join("");
                     document.getElementById(`col-${stage}`).innerHTML = html || '<div style="text-align: center; color: #444; font-size: 11px; padding: 20px;">No leads</div>';
                 });
+                // Section 3b: apply lock state after cards are rendered
+                applyPipelineLock();
             } catch (err) {
                  console.error("Pipeline Error:", err);
             }
@@ -2102,7 +2546,7 @@
                     if (filterContainer) filterContainer.style.display = "none";
                 }
                 
-                const html = docs.map(doc => {
+                const html = docs.map((doc, index) => {
                     let badgeStyle = "background: rgba(255,255,255,0.05); color: #888;";
                     let badgeText = "Pending";
                     let actionBtn = "";
@@ -2115,16 +2559,16 @@
                     if (signingStatus === "completed") {
                         badgeStyle = "background: rgba(34,197,94,0.15); color: #22c55e;";
                         badgeText = "Fully Executed";
-                        actionBtn = `<a href="/api/contracts/${doc.invoice_id}/contract?token=${token}" target="_blank" class="btn btn-primary" style="padding: 6px 12px; font-size: 11px;">View Contract</a>`;
+                        actionBtn = `<a href="/api/contracts/${doc.invoice_id || doc.id}/contract?token=${token}" target="_blank" class="btn btn-primary" style="padding: 6px 12px; font-size: 11px;">View Contract</a>`;
                     } else if (signingStatus === "partial") {
                         badgeStyle = "background: rgba(196,125,10,0.15); color: var(--gold);";
                         badgeText = "Partially Signed";
-                        actionBtn = `<a href="/api/contracts/pdf/draft/${doc.invoice_id}?token=${token}" target="_blank" class="btn btn-secondary" style="padding: 6px 12px; font-size: 11px;">View Draft</a>`;
+                        actionBtn = `<a href="/api/contracts/pdf/draft/${doc.invoice_id || doc.id}?token=${token}" target="_blank" class="btn btn-secondary" style="padding: 6px 12px; font-size: 11px;">View Draft</a>`;
                     } else if (signingStatus === "not_started") {
                         badgeText = "Not Started";
                     } else {
                         badgeText = "Pending Signatures";
-                        actionBtn = `<a href="/api/contracts/pdf/draft/${doc.invoice_id}?token=${token}" target="_blank" class="btn btn-secondary" style="padding: 6px 12px; font-size: 11px;">View Draft</a>`;
+                        actionBtn = `<a href="/api/contracts/pdf/draft/${doc.invoice_id || doc.id}?token=${token}" target="_blank" class="btn btn-secondary" style="padding: 6px 12px; font-size: 11px;">View Draft</a>`;
                     }
 
                     return `
@@ -2161,10 +2605,12 @@
                 
                 const searchTxt = document.getElementById("logSearchInput")?.value || "";
                 const repId = document.getElementById("logRepFilter")?.value || "";
+                const dateRange = document.getElementById("logDateFilter")?.value || "";
                 
                 let url = "/api/crm/pro/activity-logs?";
                 if(searchTxt) url += `search_text=${encodeURIComponent(searchTxt)}&`;
                 if(repId) url += `rep_id=${repId}&`;
+                if(dateRange) url += `date_range=${dateRange}&`;
                 
                 renderSkeletons("activityLogsFeed", "table-row", 8);
                 const res = await fetch(url, {
@@ -2174,7 +2620,8 @@
                 
                 // Show/hide rep filter
                 const filterContainer = document.getElementById("adminRepFilterContainer");
-                if (role === "admin" || role === "legal") {
+                const logsRoles = role ? role.split(',').map(r => r.trim().toLowerCase()) : [];
+                if (logsRoles.some(r => ['admin', 'super_admin', 'operations', 'sales_manager'].includes(r))) {
                     if (filterContainer) filterContainer.style.display = "block";
                     if (filterContainer && !filterContainer.dataset.loaded) {
                         // Load reps into dropdown
@@ -2220,9 +2667,18 @@
                 });
                 const lead = await res.json();
                 
-                document.getElementById("detail-lead-name").textContent = lead.full_name;
-                document.getElementById("detail-lead-email").textContent = lead.email;
-                document.getElementById("detail-lead-phone").textContent = lead.phone;
+                document.getElementById("detail-lead-name").textContent = lead.full_name || "-";
+                document.getElementById("detail-lead-email").textContent = lead.email || "-";
+                document.getElementById("detail-lead-phone").textContent = lead.phone || "-";
+                document.getElementById("detail-lead-occupation").textContent = lead.occupation || "-";
+                document.getElementById("detail-lead-address").textContent = lead.address || "-";
+                  
+                let location = [];
+                if (lead.city) location.push(lead.city);
+                if (lead.state) location.push(lead.state);
+                document.getElementById("detail-lead-location").textContent = location.length > 0 ? location.join(', ') : "-";
+                
+                document.getElementById("detail-lead-source").textContent = lead.lead_source || "-";
                 
                 // --- MARKETING SAFETY INDICATOR ---
                 const suppressedDomains = ["temp-eximps.com", "placeholder.com"];
@@ -2251,6 +2707,21 @@
                 
                 document.getElementById("leadDetailModal").style.display = "flex";
                 document.getElementById("leadDetailModal").dataset.id = id;
+
+                // Show/hide Delete button based strictly on super_admin role
+                const deleteBtn = document.getElementById("detail-delete-btn");
+                if (deleteBtn) {
+                    if (adminData && adminData.role) {
+                        const roles = adminData.role.toLowerCase().split(',').map(r => r.trim());
+                        if (roles.includes("super_admin")) {
+                            deleteBtn.style.display = "block";
+                        } else {
+                            deleteBtn.style.display = "none";
+                        }
+                    } else {
+                        deleteBtn.style.display = "none";
+                    }
+                }
 
                 // Set current assignee if dropdown exists
                 const assigneeSelect = document.getElementById("detail-assignee-select");
@@ -2397,7 +2868,43 @@
               }
           }
  
-         async function saveLeadDetails(id, data) {
+         async function deleteLead() {
+                         const id = document.getElementById("leadDetailModal").dataset.id;
+                         const name = document.getElementById("detail-lead-name").textContent;
+                         
+                         if (!confirm(`Are you sure you want to permanently delete lead/contact "${name}"?\n\nThis will clean up their logs and outreach records. This action cannot be undone.`)) {
+                             return;
+                         }
+                         
+                         try {
+                             showPageLoader("Deleting lead...");
+                             const res = await fetch(`/api/clients/${id}`, {
+                                 method: "DELETE",
+                                 headers: { "Authorization": `Bearer ${token}` }
+                             });
+                             hidePageLoader();
+                             
+                             if (res.ok) {
+                                 alert("Lead deleted successfully.");
+                                 closeLeadDetailModal();
+                                 // Reload appropriate views
+                                 loadPipeline();
+                                 loadLeads();
+                                 if (document.getElementById("contacts-list").classList.contains("active")) {
+                                     loadContactsList();
+                                 }
+                             } else {
+                                 const data = await res.json();
+                                 alert("Failed to delete lead: " + (data.detail || "Unknown error"));
+                             }
+                         } catch (err) {
+                             hidePageLoader();
+                             console.error("Delete Error:", err);
+                             alert("Failed to delete lead due to network error.");
+                         }
+                     }
+
+                     async function saveLeadDetails(id, data) {
              try {
                  const res = await fetch(`/api/crm/clients/${id}`, {
                      method: "PATCH",
@@ -2843,6 +3350,10 @@
                  const res = await fetch("/api/notifications/", {
                      headers: { "Authorization": `Bearer ${token}` }
                  });
+                 if (!res.ok) {
+                     const text = await res.text();
+                     throw new Error(`Notifications fetch failed (${res.status}): ${text}`);
+                 }
                  const notifications = await res.json();
                  
                  const unreadCount = notifications.filter(n => !n.is_read).length;
@@ -2894,13 +3405,17 @@
                 switchView('support-desk');
                 viewTicket(refId);
                 document.getElementById("notif-dropdown").classList.remove("active");
-             } else if (type === 'chat_invite' && refId) {
+            } else if (type === 'chat_invite' && refId) {
                 // refId is room_id
                 switchView('support-desk');
                 openChatRoomById(refId);
                 document.getElementById("notif-dropdown").classList.remove("active");
-             }
-             fetchNotifications();
+            } else if (type === 'task_assigned' && refId) {
+                switchView('leads');
+                loadMyTasks();
+                document.getElementById("notif-dropdown").classList.remove("active");
+            }
+            fetchNotifications();
          }
 
          // Start Polling
@@ -2984,7 +3499,11 @@
                                 <select id="detail-assignee-select" onchange="updateLeadAssignee()" style="width: 100%; background: #1A1A1A; border: 1px solid var(--gold); color: #fff; border-radius: 8px; padding: 10px; font-size: 13px; outline: none;">
                                     <option value="">Unassigned</option>
                                 </select>
-                                <p style="font-size: 9px; color: #666; margin-top: 4px;">Changes are logged automatically.</p>
+                                        <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+                                            <button class="btn" style="background:transparent;color:var(--gold);border:1px solid rgba(196,125,10,0.15);padding:8px 10px;border-radius:6px;font-size:12px" onclick="generateKycLinkForSelect()">Generate KYC Link</button>
+                                            <small style="font-size:11px;color:#9ca3af">Copies a rep-specific link to clipboard</small>
+                                        </div>
+                                        <p style="font-size: 9px; color: #666; margin-top: 4px;">Changes are logged automatically.</p>
                             </div>
                         `;
                         container.insertAdjacentHTML('afterend', assignmentHtml);
@@ -3015,7 +3534,11 @@
                 }
                 // Customer Support does NOT get extra nav buttons (CRM only)
 
-                const isRestricted = (hasRole('sales') || hasRole('marketing')) && !hasRole('admin') && !hasRole('operations') && !hasRole('customer_support');
+                const isRestricted = (hasRole('sales') || hasRole('marketing')) 
+                    && !hasRole('admin') 
+                    && !hasRole('operations') 
+                    && !hasRole('customer_support')
+                    && !hasRole('sales_manager');
 
                 if (isRestricted) {
                     // Hide forbidden sections in sidebar
@@ -3028,7 +3551,7 @@
                     // Hide lead assignment tool in modal
                     const assignSection = document.getElementById('section-lead-assignment');
                     if (assignSection) assignSection.style.display = 'none';
-                } else if (hasRole('admin') || hasRole('operations') || hasRole('legal') || hasRole('customer_support')) {
+                } else if (hasRole('admin') || hasRole('super_admin') || hasRole('operations') || hasRole('legal') || hasRole('customer_support') || hasRole('sales_manager')) {
 
                     // Show lead assignment tool
                     const assignSection = document.getElementById('section-lead-assignment');
@@ -3082,6 +3605,32 @@
             } catch (err) {
                 hidePageLoader();
                 alert("Network error during assignment.");
+            }
+        }
+
+        function generateKycLinkForSelect() {
+            const select = document.getElementById('detail-assignee-select');
+            const repId = select ? select.value : null;
+            generateKycLink(repId);
+        }
+
+        function generateKycLink(repId) {
+            try {
+                // If no repId provided, derive from token payload (current user)
+                let id = repId;
+                if (!id && token) {
+                    try { const p = JSON.parse(atob(token.split('.')[1])); id = p.sub || p.sub; } catch(e) { }
+                }
+                if (!id) { alert('Please select a rep to generate a link for.'); return; }
+                const link = `${window.location.origin}/kyc?rep=${encodeURIComponent(id)}`;
+                navigator.clipboard.writeText(link).then(()=>{
+                    alert('KYC link copied to clipboard:\n' + link);
+                }).catch(err=>{
+                    prompt('Copy the KYC link:', link);
+                });
+            } catch (err) {
+                console.error('Generate link error', err);
+                alert('Could not generate link');
             }
         }
 
@@ -3467,6 +4016,940 @@
                  originalSubmitResponse();
              }
          }
+
+        // ============================================================
+        // SECTION 11: TOAST NOTIFICATION SYSTEM
+        // ============================================================
+        function showToast(message, type = 'success') {
+            const existing = document.getElementById('crmToast');
+            if (existing) existing.remove();
+            const toast = document.createElement('div');
+            toast.id = 'crmToast';
+            const bg = type === 'success' ? '#22c55e' : type === 'error' ? '#ef4444' : '#f59e0b';
+            toast.style.cssText = `position:fixed; bottom:24px; right:24px; background:${bg}; color:#fff; padding:12px 20px; border-radius:10px; font-size:13px; font-weight:700; z-index:9999; box-shadow:0 4px 20px rgba(0,0,0,0.4); transition:opacity 0.3s;`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
+        }
+        const showNotification = (msg, type) => showToast(msg, type);
+
+        // ============================================================
+        // SECTION 7d: formatTimeAgo HELPER
+        // ============================================================
+        function formatTimeAgo(dateStr) {
+            if (!dateStr) return 'Never';
+            const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+            if (diff < 60) return 'Just now';
+            if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+            if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+            if (diff < 604800) return `${Math.floor(diff/86400)}d ago`;
+            return new Date(dateStr).toLocaleDateString('en-NG', { day:'numeric', month:'short' });
+        }
+
+        // ============================================================
+        // SECTION 4: PHONE SANITIZER FOR WHATSAPP
+        // ============================================================
+        function sanitizePhoneForWhatsApp(phone) {
+            if (!phone) return '';
+            let cleaned = phone.replace(/[^0-9]/g, '');
+            if (cleaned.startsWith('0')) cleaned = '234' + cleaned.slice(1);
+            if (!cleaned.startsWith('234') && cleaned.length === 10) cleaned = '234' + cleaned;
+            return cleaned;
+        }
+
+        // ============================================================
+        // SECTION 3b: PIPELINE LOCK TOGGLE
+        // ============================================================
+        let pipelineLocked = localStorage.getItem('pipelineLocked') !== 'false'; // default true
+
+        function applyPipelineLock() {
+            const toggle = document.getElementById('pipelineLockToggle');
+            const thumb = document.getElementById('pipelineLockThumb');
+            const label = document.getElementById('pipelineLockLabel');
+            const cols = document.querySelectorAll('.kanban-col');
+            if (!toggle) return;
+
+            if (pipelineLocked) {
+                toggle.style.background = '#333';
+                thumb.style.left = '2px';
+                label.textContent = 'Locked';
+                cols.forEach(col => {
+                    col.removeAttribute('ondragover');
+                    col.removeAttribute('ondrop');
+                });
+                document.querySelectorAll('.kanban-card, .deal-card').forEach(card => {
+                    card.removeAttribute('draggable');
+                });
+            } else {
+                toggle.style.background = 'var(--gold)';
+                thumb.style.left = '22px';
+                label.textContent = 'Drag On';
+                const stageMap = { 'col-lead': 'lead', 'col-nurturing': 'nurturing', 'col-interest': 'interest', 'col-paid': 'paid', 'col-closed': 'closed' };
+                cols.forEach(col => {
+                    col.setAttribute('ondragover', 'allowDrop(event)');
+                    const stage = stageMap[col.id] || '';
+                    if (stage) col.setAttribute('ondrop', `drop(event, '${stage}')`);
+                });
+                document.querySelectorAll('.deal-card:not(.protected-col)').forEach(card => {
+                    card.setAttribute('draggable', 'true');
+                });
+            }
+        }
+
+        function togglePipelineLock() {
+            pipelineLocked = !pipelineLocked;
+            localStorage.setItem('pipelineLocked', pipelineLocked);
+            applyPipelineLock();
+        }
+
+        // Apply lock on page init
+        document.addEventListener('DOMContentLoaded', () => { applyPipelineLock(); });
+
+        // ============================================================
+        // SECTION 5: CALL INITIATION + OUTCOME MODAL
+        // ============================================================
+        let activeCallClientId = null;
+
+        function handleCallInitiated(clientId, clientName, phone) {
+            if (!phone) {
+                showToast('No phone number for this client', 'error');
+                return;
+            }
+            // 1. Save pending call to localStorage immediately
+            const pendingCall = {
+                clientId,
+                clientName,
+                phone,
+                initiatedAt: new Date().toISOString(),
+                status: 'pending'
+            };
+            localStorage.setItem('pendingCallLog', JSON.stringify(pendingCall));
+
+            // 2. Log "call initiated" to backend immediately
+            fetch(`/api/crm/contacts/${clientId}/call`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ notes: 'Call initiated', outcome: 'initiated', duration: 0 })
+            });
+
+            // 3. Show outcome modal after short delay (gives tel: time to fire)
+            setTimeout(() => showCallOutcomeModal(clientId, clientName), 1500);
+        }
+
+        function checkPendingCallLog() {
+            const pending = localStorage.getItem('pendingCallLog');
+            if (!pending) return;
+            try {
+                const call = JSON.parse(pending);
+                const age = (Date.now() - new Date(call.initiatedAt).getTime()) / 1000 / 60;
+                if (age < 120) {
+                    showCallOutcomeModal(call.clientId, call.clientName, true);
+                } else {
+                    localStorage.removeItem('pendingCallLog');
+                }
+            } catch(e) {
+                localStorage.removeItem('pendingCallLog');
+            }
+        }
+
+        function showCallOutcomeModal(clientId, clientName, fromRefresh = false) {
+            activeCallClientId = clientId;
+            document.getElementById('callOutcomeClientName').textContent = clientName;
+            document.getElementById('callOutcomeFromRefresh').textContent = fromRefresh ? '(recovered after refresh)' : '';
+            document.getElementById('callOutcomeModal').style.display = 'flex';
+            document.getElementById('selectedOutcome').value = '';
+            document.getElementById('callOutcomeNotes').value = '';
+            document.getElementById('callFollowUpDate').value = '';
+            document.querySelectorAll('.outcome-btn').forEach(btn => {
+                btn.style.opacity = '1';
+                btn.style.border = '1px solid #333';
+            });
+        }
+
+        function selectOutcome(outcome) {
+            document.getElementById('selectedOutcome').value = outcome;
+            document.querySelectorAll('.outcome-btn').forEach(btn => {
+                btn.style.opacity = btn.dataset.outcome === outcome ? '1' : '0.4';
+                btn.style.border = btn.dataset.outcome === outcome ? '2px solid var(--gold)' : '1px solid #333';
+            });
+        }
+
+        async function submitCallOutcome() {
+            const outcome = document.getElementById('selectedOutcome').value;
+            if (!outcome) { showToast('Please select a call outcome', 'error'); return; }
+            const notes = document.getElementById('callOutcomeNotes').value;
+            const followUpDate = document.getElementById('callFollowUpDate').value;
+            try {
+                await fetch(`/api/crm/contacts/${activeCallClientId}/call`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ outcome, notes, follow_up_date: followUpDate, duration: 0 })
+                });
+                localStorage.removeItem('pendingCallLog');
+                document.getElementById('callOutcomeModal').style.display = 'none';
+                showToast('Call outcome saved ✓', 'success');
+                // Refresh current active view
+                if (document.getElementById('pipeline')?.classList.contains('active')) loadPipeline();
+                if (document.getElementById('contacts-list')?.classList.contains('active')) loadContactsList();
+            } catch(err) {
+                showToast('Failed to save outcome', 'error');
+            }
+        }
+
+        // Run pending check on page load
+        document.addEventListener('DOMContentLoaded', checkPendingCallLog);
+
+        // ============================================================
+        // SECTION 6c: CONTACTS LIST VIEW
+        // ============================================================
+        let allContactsData = [];
+
+        async function loadContactsList() {
+            try {
+                const res = await fetch('/api/crm/contacts', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                allContactsData = await res.json();
+                renderContactsList(allContactsData);
+            } catch(e) {
+                document.getElementById('contactsListBody').innerHTML =
+                    '<tr><td colspan="6" style="text-align:center; padding:40px; color:#ef4444;">Failed to load contacts</td></tr>';
+            }
+        }
+
+        function renderContactsList(contacts) {
+            const tbody = document.getElementById('contactsListBody');
+            if (!contacts.length) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:40px; color:#444;">No contacts found</td></tr>';
+                return;
+            }
+            tbody.innerHTML = contacts.map(c => {
+                const outstanding = (c.balance || 0);
+                const outstandingHtml = outstanding > 0
+                    ? `<span style="color:#ef4444; font-weight:700;">₦${outstanding.toLocaleString()}</span>`
+                    : `<span style="color:#22c55e;">₦0</span>`;
+                const lastContacted = c.last_contacted_at
+                    ? formatTimeAgo(c.last_contacted_at)
+                    : '<span style="color:#666;">Never</span>';
+                const stageBadgeColor = {
+                    lead: '#6b7280', nurturing: '#f59e0b', interest: '#3b82f6',
+                    paid: '#22c55e', closed: '#8b5cf6'
+                }[c.pipeline_stage] || '#6b7280';
+                const waPhone = sanitizePhoneForWhatsApp(c.phone);
+                const safeName = (c.full_name || '').replace(/'/g, "\\'");
+                return `<tr style="border-bottom:1px solid #222; cursor:pointer;" onclick="openLeadDetails('${c.id}')">
+                    <td style="padding:14px 12px;">
+                        <div style="font-weight:700; color:#fff;">${c.full_name || '—'}</div>
+                        <div style="font-size:11px; color:#666;">${c.email || '—'}</div>
+                    </td>
+                    <td style="padding:14px 12px; color:#aaa;">${c.phone || '—'}</td>
+                    <td style="padding:14px 12px;">
+                        <span style="background:${stageBadgeColor}22; color:${stageBadgeColor}; border:1px solid ${stageBadgeColor}44; border-radius:4px; padding:3px 8px; font-size:10px; font-weight:700; text-transform:uppercase;">${c.pipeline_stage || '—'}</span>
+                    </td>
+                    <td style="padding:14px 12px; text-align:right;">${outstandingHtml}</td>
+                    <td style="padding:14px 12px; font-size:12px; color:#888;">${lastContacted}</td>
+                    <td style="padding:14px 12px;" onclick="event.stopPropagation()">
+                        <div style="display:flex; gap:6px; justify-content:center;">
+                            <a href="tel:${c.phone || ''}"
+                               onclick="handleCallInitiated('${c.id}', '${safeName}', '${c.phone || ''}')"
+                               style="color:#22c55e; background:rgba(34,197,94,0.1); width:32px; height:32px; border-radius:6px; display:flex; align-items:center; justify-content:center; text-decoration:none;" title="Call">
+                                <i class="fas fa-phone" style="font-size:12px;"></i>
+                            </a>
+                            <a href="https://wa.me/${waPhone}" target="_blank"
+                               style="color:#25D366; background:rgba(37,211,102,0.1); width:32px; height:32px; border-radius:6px; display:flex; align-items:center; justify-content:center; text-decoration:none;" title="WhatsApp">
+                                <i class="fab fa-whatsapp" style="font-size:12px;"></i>
+                            </a>
+                            <button onclick="logDailyActivity('${c.id}')"
+                               style="color:#fff; background:rgba(255,255,255,0.05); width:32px; height:32px; border-radius:6px; display:flex; align-items:center; justify-content:center; border:1px solid #333; cursor:pointer;" title="Log Activity">
+                                <i class="fas fa-pen" style="font-size:12px;"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function filterContactsList() {
+            const search = document.getElementById('contactsSearch').value.toLowerCase();
+            const stage = document.getElementById('contactsStageFilter').value;
+            const filtered = allContactsData.filter(c => {
+                const matchesSearch = !search ||
+                    (c.full_name || '').toLowerCase().includes(search) ||
+                    (c.phone || '').includes(search);
+                const matchesStage = !stage || c.pipeline_stage === stage;
+                return matchesSearch && matchesStage;
+            });
+            renderContactsList(filtered);
+        }
+
+        // ============================================================
+        // SECTION 9d: MANAGER FEED
+        // ============================================================
+        async function loadManagerFeed(append = false) {
+            const repId = document.getElementById('feedRepFilter')?.value || '';
+            const dateRange = document.getElementById('feedDateFilter')?.value || '';
+            const eventType = document.getElementById('feedTypeFilter')?.value || '';
+            const params = new URLSearchParams();
+            if (repId) params.append('rep_id', repId);
+            if (dateRange) params.append('date_range', dateRange);
+            if (eventType) params.append('event_type', eventType);
+
+            try {
+                const res = await fetch(`/api/crm/pro/manager/feed?${params}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const logs = await res.json();
+                const feed = document.getElementById('managerFeedList');
+                const eventIcons = {
+                    call: { icon: 'fa-phone', color: '#22c55e' },
+                    manual_note: { icon: 'fa-pen', color: '#f59e0b' },
+                    client_note: { icon: 'fa-pen', color: '#f59e0b' },
+                    pipeline_move: { icon: 'fa-arrow-right', color: '#3b82f6' },
+                    lead_assigned: { icon: 'fa-user-check', color: '#8b5cf6' },
+                    lead_created: { icon: 'fa-plus', color: '#06b6d4' },
+                    default: { icon: 'fa-circle', color: '#6b7280' }
+                };
+                if (!logs.length) {
+                    feed.innerHTML = '<div style="text-align:center; padding:40px; color:#444;">No activity found for this filter</div>';
+                    return;
+                }
+                feed.innerHTML = logs.map(log => {
+                    const rep = log.admins || {};
+                    const client = log.clients || {};
+                    const meta = log.metadata || {};
+                    const ev = eventIcons[log.event_type] || eventIcons.default;
+                    const outcome = meta.outcome ? ` — <strong style="color:#fff;">${meta.outcome.replace('_', ' ')}</strong>` : '';
+                    const safeClientName = (client.full_name || '').replace(/'/g, "\\'");
+                    const assignBtn = client.id
+                        ? `<button onclick="openAssignTaskModal('${client.id}', '${safeClientName}')" style="background:none; border:none; color:#555; font-size:10px; cursor:pointer; margin-left:10px; padding:0;">+ task</button>`
+                        : '';
+                    return `<div style="display:flex; gap:14px; padding:14px 0; border-bottom:1px solid #1a1a1a; align-items:flex-start;">
+                        <div style="width:32px; height:32px; border-radius:50%; background:${ev.color}22; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                            <i class="fas ${ev.icon}" style="color:${ev.color}; font-size:12px;"></i>
+                        </div>
+                        <div style="flex:1;">
+                            <div style="font-size:13px; color:#ccc;">${log.description}${outcome}</div>
+                            <div style="font-size:11px; color:#555; margin-top:4px;">
+                                <strong style="color:#888;">${rep.full_name || 'Unknown Rep'}</strong>
+                                ${client.full_name ? ` → ${client.full_name}` : ''}
+                                <span style="margin-left:8px;">${formatTimeAgo(log.created_at)}</span>
+                                ${assignBtn}
+                            </div>
+                        </div>
+                    </div>`;
+                }).join('');
+            } catch(e) {
+                document.getElementById('managerFeedList').innerHTML = '<div style="text-align:center; padding:40px; color:#ef4444;">Failed to load feed</div>';
+            }
+        }
+
+        async function loadOutstandingPanel() {
+            try {
+                const res = await fetch('/api/crm/pro/manager/outstanding', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                const tbody = document.getElementById('outstandingTableBody');
+                if (!data.length) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#22c55e;">No outstanding balances 🎉</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = data.map(c => `
+                    <tr style="border-bottom:1px solid #1a1a1a;">
+                        <td style="padding:12px; color:#fff; font-weight:600;">${c.client_name || '—'}</td>
+                        <td style="padding:12px; color:#aaa;">${c.assigned_rep_name}</td>
+                        <td style="padding:12px; text-align:right; color:#ef4444; font-weight:700;">₦${c.outstanding.toLocaleString()}</td>
+                        <td style="padding:12px; color:#888; font-size:12px;">${c.last_contacted_at ? formatTimeAgo(c.last_contacted_at) : '<span style="color:#ef4444;">Never</span>'}</td>
+                        <td style="padding:12px;"><span style="font-size:10px; text-transform:uppercase; font-weight:700; color:#888;">${c.pipeline_stage || '—'}</span></td>
+                        <td style="padding:12px;">
+                            <button onclick="openAssignTaskModal('${c.client_id}', '${(c.client_name||'').replace(/'/g,"\\'")}')"
+                                style="background:rgba(196,125,10,0.15); color:var(--gold); border:1px solid rgba(196,125,10,0.3); border-radius:6px; padding:4px 10px; font-size:11px; font-weight:700; cursor:pointer;">
+                                + Assign Task
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch(e) {
+                console.error('Failed to load outstanding panel', e);
+            }
+        }
+
+        async function populateManagerFeedRepFilter() {
+            try {
+                const res = await fetch('/api/crm/pro/team/assignable', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const reps = await res.json();
+                const select = document.getElementById('feedRepFilter');
+                if (!select) return;
+                // Clear existing options except "All Reps"
+                select.innerHTML = '<option value="">All Reps</option>';
+                reps.forEach(r => {
+                    const opt = document.createElement('option');
+                    opt.value = r.id;
+                    opt.textContent = r.full_name;
+                    select.appendChild(opt);
+                });
+            } catch(e) { console.error('Failed to load reps for feed filter', e); }
+        }
+
+        // ============================================================
+        // SECTION 10c: TASKS PANEL
+        // ============================================================
+        async function loadMyTasks() {
+            try {
+                const res = await fetch('/api/crm/pro/tasks/mine', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const tasks = await res.json();
+                const container = document.getElementById('myTasksContainer');
+                if (!container) return;
+                const badge = document.getElementById('tasksBadge');
+                if (badge) {
+                    if (tasks.length > 0) {
+                        badge.textContent = tasks.length;
+                        badge.style.display = 'inline-block';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                }
+                if (!tasks.length) {
+                    if (badge) {
+                        badge.style.display = 'none';
+                    }
+                    container.style.display = 'block';
+                    container.innerHTML = `
+                        <div class="card" style="margin-bottom:24px; border-left:3px solid var(--gold); padding:18px; background:#111;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                                <h3 style="font-weight:800; font-size:15px; color:#fff;">📋 My Tasks (0)</h3>
+                            </div>
+                            <div style="color:#aaa; font-size:13px; line-height:1.6;">You have no pending tasks at the moment. Tasks assigned to you will appear here and in your notification bell.</div>
+                        </div>`;
+                    return;
+                }
+                container.style.display = 'block';
+                container.innerHTML = `
+                    <div class="card" style="margin-bottom:24px; border-left:3px solid var(--gold);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                            <h3 style="font-weight:800; font-size:15px; color:#fff;">📋 My Tasks (${tasks.length})</h3>
+                        </div>
+                        ${tasks.map(t => {
+                            const client = t.clients || {};
+                            const manager = t.admins || {};
+                            const isOverdue = t.due_date && new Date(t.due_date) < new Date();
+                            const safeCName = (client.full_name || '').replace(/'/g, "\\'");
+                            return `<div style="background:#111; border-radius:8px; padding:14px; margin-bottom:10px; border:1px solid ${isOverdue ? '#ef4444' : '#333'};">
+                                <div style="display:flex; justify-content:space-between; align-items:start;">
+                                    <div style="flex:1;">
+                                        <div style="font-weight:700; color:#fff; font-size:13px;">${t.title}</div>
+                                        ${t.notes ? `<div style="font-size:12px; color:#888; margin-top:4px;">${t.notes}</div>` : ''}
+                                        <div style="font-size:11px; color:#666; margin-top:6px;">
+                                            ${client.full_name ? `Client: <strong style="color:#aaa;">${client.full_name}</strong> · ` : ''}
+                                            ${t.due_date ? `Due: <strong style="color:${isOverdue ? '#ef4444' : '#aaa'};">${new Date(t.due_date).toLocaleDateString('en-NG', {day:'numeric', month:'short'})}</strong> · ` : ''}
+                                            From: <strong style="color:#aaa;">${manager.full_name || 'Manager'}</strong>
+                                        </div>
+                                    </div>
+                                    <div style="display:flex; gap:6px; margin-left:12px;">
+                                        ${client.phone ? `
+                                        <a href="tel:${client.phone}"
+                                           onclick="handleCallInitiated('${client.id}', '${safeCName}', '${client.phone}')"
+                                           style="color:#22c55e; background:rgba(34,197,94,0.1); width:30px; height:30px; border-radius:6px; display:flex; align-items:center; justify-content:center; text-decoration:none;" title="Call">
+                                            <i class="fas fa-phone" style="font-size:11px;"></i>
+                                        </a>` : ''}
+                                        <button onclick="completeTask('${t.id}')"
+                                            style="color:#22c55e; background:rgba(34,197,94,0.1); border:1px solid #22c55e44; width:30px; height:30px; border-radius:6px; cursor:pointer;" title="Mark Done">
+                                            <i class="fas fa-check" style="font-size:11px;"></i>
+                                        </button>
+                                        <button onclick="dismissTask('${t.id}')"
+                                            style="color:#6b7280; background:rgba(107,114,128,0.1); border:1px solid #33333344; width:30px; height:30px; border-radius:6px; cursor:pointer;" title="Dismiss">
+                                            <i class="fas fa-times" style="font-size:11px;"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>`;
+                        }).join('')}
+                    </div>`;
+            } catch(e) {
+                console.error('Failed to load tasks', e);
+            }
+        }
+
+        async function completeTask(taskId) {
+            await fetch(`/api/crm/pro/tasks/${taskId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ status: 'done' })
+            });
+            showToast('Task marked as done ✓', 'success');
+            loadMyTasks();
+        }
+
+        async function dismissTask(taskId) {
+            await fetch(`/api/crm/pro/tasks/${taskId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ status: 'dismissed' })
+            });
+            loadMyTasks();
+        }
+
+        // ============================================================
+        // SECTION 10c (cont.): TASK ASSIGNMENT MODAL — Manager UI
+        // ============================================================
+        async function openAssignTaskModal(clientId, clientName) {
+            document.getElementById('assignTaskClientId').value = clientId || '';
+            document.getElementById('assignTaskClientLabel').textContent = clientName ? `For: ${clientName}` : 'General Task';
+            document.getElementById('assignTaskTitle').value = '';
+            document.getElementById('assignTaskNotes').value = '';
+            document.getElementById('assignTaskDueDate').value = '';
+
+            // Populate rep dropdown
+            const repSelect = document.getElementById('assignTaskRep');
+            repSelect.innerHTML = '<option value="">Loading reps...</option>';
+            try {
+                const res = await fetch('/api/crm/pro/team/assignable', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const reps = await res.json();
+                repSelect.innerHTML = '<option value="">Select a rep...</option>';
+                reps.forEach(r => {
+                    const opt = document.createElement('option');
+                    opt.value = r.id;
+                    opt.textContent = r.full_name;
+                    repSelect.appendChild(opt);
+                });
+            } catch(e) {
+                repSelect.innerHTML = '<option value="">Failed to load reps</option>';
+            }
+
+            document.getElementById('assignTaskModal').style.display = 'flex';
+        }
+
+        async function submitAssignTask() {
+            const title = document.getElementById('assignTaskTitle').value.trim();
+            const assignedTo = document.getElementById('assignTaskRep').value;
+            const clientId = document.getElementById('assignTaskClientId').value;
+            const notes = document.getElementById('assignTaskNotes').value.trim();
+            const dueDate = document.getElementById('assignTaskDueDate').value;
+
+            if (!title) { showToast('Task title is required', 'error'); return; }
+            if (!assignedTo) { showToast('Please select a rep to assign to', 'error'); return; }
+
+            try {
+                const res = await fetch('/api/crm/pro/tasks', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({
+                        title,
+                        assigned_to: assignedTo,
+                        client_id: clientId || null,
+                        notes,
+                        due_date: dueDate || null
+                    })
+                });
+                if (res.ok) {
+                    document.getElementById('assignTaskModal').style.display = 'none';
+                    showToast('Task assigned successfully ✓', 'success');
+                } else {
+                    const err = await res.json();
+                    showToast(err.detail || 'Failed to assign task', 'error');
+                }
+            } catch(e) {
+                showToast('Network error — task not assigned', 'error');
+            }
+        }
+
+        // ============================================================
+        // SECTION 2c: ROLE MANAGER (in Team view)
+        // ============================================================
+        async function loadRoleManager() {
+            const body = document.getElementById('roleManagerBody');
+            if (!body) return;
+            body.innerHTML = '<div style="text-align:center; padding:20px; color:#444;">Loading...</div>';
+            try {
+                const res = await fetch('/api/crm/pro/team/assignable', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const reps = await res.json();
+                if (!reps.length) {
+                    body.innerHTML = '<div style="text-align:center; padding:20px; color:#444;">No team members found</div>';
+                    return;
+                }
+                body.innerHTML = `<table style="width:100%; font-size:13px; border-collapse:collapse;">
+                    <thead><tr style="border-bottom:1px solid #333;">
+                        <th style="text-align:left; padding:10px; color:#888; font-size:11px; text-transform:uppercase;">Name</th>
+                        <th style="text-align:left; padding:10px; color:#888; font-size:11px; text-transform:uppercase;">Email</th>
+                        <th style="text-align:left; padding:10px; color:#888; font-size:11px; text-transform:uppercase;">Role</th>
+                        <th style="text-align:left; padding:10px; color:#888; font-size:11px; text-transform:uppercase;">Action</th>
+                    </tr></thead>
+                    <tbody>${reps.map(r => `
+                        <tr style="border-bottom:1px solid #1a1a1a;" id="reprow-${r.id}">
+                            <td style="padding:12px; color:#fff; font-weight:600;">${r.full_name}</td>
+                            <td style="padding:12px; color:#aaa;">${r.email}</td>
+                            <td style="padding:12px;">
+                                ${(() => {
+                                    const currentRole = (r.role || '').toLowerCase().trim();
+                                    return `
+                                        <select id="roleSelect-${r.id}" style="background:#111; border:1px solid #333; border-radius:6px; padding:6px 10px; color:#fff; font-size:12px; outline:none;">
+                                            <option value="sales" ${currentRole === 'sales' ? 'selected' : ''}>sales</option>
+                                            <option value="sales_manager" ${currentRole === 'sales_manager' ? 'selected' : ''}>sales_manager</option>
+                                            <option value="staff" ${currentRole === 'staff' ? 'selected' : ''}>staff</option>
+                                            <option value="customer_support" ${currentRole === 'customer_support' ? 'selected' : ''}>customer_support</option>
+                                            <option value="marketing" ${currentRole === 'marketing' ? 'selected' : ''}>marketing</option>
+                                            <option value="operations" ${currentRole === 'operations' ? 'selected' : ''}>operations</option>
+                                        </select>
+                                    `;
+                                })()}
+                            </td>
+                            <td style="padding:12px;">
+                                <button onclick="saveRepRole('${r.id}')" style="background:var(--gold); border:none; border-radius:6px; padding:6px 14px; color:#000; font-weight:700; font-size:12px; cursor:pointer;">Save</button>
+                            </td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>`;
+            } catch(e) {
+                body.innerHTML = '<div style="text-align:center; padding:20px; color:#ef4444;">Failed to load team members</div>';
+            }
+        }
+
+        async function saveRepRole(adminId) {
+            const select = document.getElementById(`roleSelect-${adminId}`);
+            if (!select) return;
+            const newRole = select.value;
+            try {
+                const res = await fetch(`/api/crm/pro/team/${adminId}/role`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ role: newRole })
+                });
+                if (res.ok) {
+                    showToast(`Role updated to ${newRole} ✓`, 'success');
+                } else {
+                    const err = await res.json();
+                    showToast(err.detail || 'Failed to update role', 'error');
+                }
+            } catch(e) {
+                showToast('Network error', 'error');
+            }
+        }
+
+        // ============================================================
+        // SWITCHVIEW EXTENSION — wire all new views
+        // ============================================================
+        const _origSwitchViewCRM = switchView;  // captures the already-once-overridden switchView
+        switchView = function(viewName) {
+            _origSwitchViewCRM(viewName);  // → calls first override → calls originalSwitchView
+            if (viewName === 'contacts-list') loadContactsList();
+            if (viewName === 'feedback') loadFeedback();
+            if (viewName === 'manager-feed') {
+                loadManagerFeed();
+                loadOutstandingPanel();
+                populateManagerFeedRepFilter();
+            }
+            if (viewName === 'leads') loadMyTasks();
+            if (viewName === 'team') {
+                // Show role manager only for admin/operations
+                try {
+                    const payload = JSON.parse(atob(token.split('.')[1]));
+                    const roles = (payload.role || '').split(',').map(r => r.trim().toLowerCase());
+                    const canManageRoles = roles.some(r => ['admin', 'operations', 'super_admin'].includes(r));
+                    const roleSection = document.getElementById('roleManagerSection');
+                    if (roleSection) {
+                        roleSection.style.display = canManageRoles ? 'block' : 'none';
+                        if (canManageRoles) loadRoleManager();
+                    }
+                } catch(e) {}
+            }
+        };
+
+        // Check pending call on every DOMContentLoaded is already handled above.
+        // Also load tasks on initial leads view load.
+        document.addEventListener('DOMContentLoaded', () => {
+            // Inject myTasksContainer before the leads view content if not already present
+            const leadsSection = document.getElementById('leads');
+            if (leadsSection && !document.getElementById('myTasksContainer')) {
+                const taskDiv = document.createElement('div');
+                taskDiv.id = 'myTasksContainer';
+                taskDiv.style.display = 'none';
+                leadsSection.insertBefore(taskDiv, leadsSection.firstChild);
+            }
+            loadMyTasks();
+            // Show/hide manager-feed nav based on role
+            try {
+                if (token) {
+                    const payload = JSON.parse(atob(token.split('.')[1]));
+                    const roles = (payload.role || '').split(',').map(r => r.trim().toLowerCase());
+                    const isManager = roles.some(r => ['admin', 'operations', 'super_admin', 'sales_manager'].includes(r));
+                    const feedNav = document.getElementById('nav-manager-feed');
+                    if (feedNav) feedNav.style.display = isManager ? 'flex' : 'none';
+                }
+            } catch(e) {}
+        });
+
+        // ============================================================
+        // CLIENT FEEDBACK JS IMPLEMENTATION
+        // ============================================================
+        async function loadFeedback() {
+            const container = document.getElementById("crmFeedbackTable");
+            renderSkeletons("crmFeedbackTable", "table-row", 6);
+            
+            // Fetch stats
+            await loadFeedbackStats();
+            
+            // Build query params
+            const userType = document.getElementById("filter-feedback-usertype").value;
+            const feedbackType = document.getElementById("filter-feedback-type").value;
+            const status = document.getElementById("filter-feedback-status").value;
+            const nps = document.getElementById("filter-feedback-nps").value;
+            
+            let query = `?limit=100`;
+            if (userType) query += `&user_type=${userType}`;
+            if (feedbackType) query += `&feedback_type=${feedbackType}`;
+            if (status) query += `&status=${status}`;
+            if (nps) query += `&nps_group=${nps}`;
+            
+            try {
+                const res = await fetch(`/api/feedback/${query}`, {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const submissions = await res.json();
+                
+                if (!submissions || submissions.length === 0) {
+                    container.innerHTML = '<tr><td colspan="7" style="padding: 40px; text-align: center; color: #666;">No feedback submissions match filters.</td></tr>';
+                    return;
+                }
+                
+                container.innerHTML = submissions.map((f, idx) => {
+                    const stars = '★'.repeat(f.experience_rating) + '☆'.repeat(5 - f.experience_rating);
+                    const npsColor = f.nps_score >= 9 ? 'text-emerald-500 bg-emerald-500/10' : 
+                                     f.nps_score >= 7 ? 'text-amber-500 bg-amber-500/10' : 'text-red-500 bg-red-500/10';
+                    const statusClass = f.status === 'new' ? 'bg-blue-500/10 text-blue-500' :
+                                      f.status === 'reviewed' ? 'bg-amber-500/10 text-amber-500' :
+                                      f.status === 'contacted' ? 'bg-purple-500/10 text-purple-500' : 'bg-emerald-500/10 text-emerald-500';
+                    
+                    const dateStr = new Date(f.created_at).toLocaleDateString('en-NG', {day:'numeric', month:'short', year:'numeric'});
+                    const commentSnippet = f.comments.length > 50 ? f.comments.substring(0, 50) + '...' : f.comments;
+                    
+                    return `
+                        <tr style="border-bottom: 1px solid #222; transition: background 0.2s;" class="hover:bg-white/5">
+                            <td style="padding: 16px; color: #666; font-size: 11px;">${dateStr}</td>
+                            <td style="padding: 16px;">
+                                <div>
+                                    <div style="font-weight: 700; color: #fff;">${f.name || 'Anonymous'}</div>
+                                    <div style="font-size: 11px; color: #9ca3af;">${f.email || 'No email'}</div>
+                                </div>
+                            </td>
+                            <td style="padding: 16px;">
+                                <div style="color: #fff; font-weight: 600; text-transform: capitalize;">${f.feedback_type}</div>
+                                <div style="font-size: 11px; color: #666; text-transform: uppercase;">${f.user_type}</div>
+                            </td>
+                            <td style="padding: 16px; text-align: center;">
+                                <div style="color: #C47D0A; font-size: 12px; margin-bottom: 2px;">${stars}</div>
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${npsColor}">NPS: ${f.nps_score}</span>
+                            </td>
+                            <td style="padding: 16px; color: #ccc; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                ${commentSnippet}
+                            </td>
+                            <td style="padding: 16px; text-align: center;">
+                                <span style="font-size: 10px; padding: 4px 10px; border-radius: 99px; font-weight: 700; text-transform: uppercase;" class="${statusClass}">
+                                    ${f.status}
+                                </span>
+                            </td>
+                            <td style="padding: 16px; text-align: right;">
+                                <button class="btn btn-secondary btn-sm" onclick="openFeedbackDetail('${f.id}')" style="padding: 6px 12px; font-size: 11px;">
+                                    <i class="fas fa-eye"></i> View
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }).join("");
+                
+            } catch (err) {
+                console.error("Error loading feedback submissions:", err);
+                container.innerHTML = '<tr><td colspan="7" style="padding: 40px; text-align: center; color: #EF4444;">Error loading feedback submissions.</td></tr>';
+            }
+        }
+        
+        async function loadFeedbackStats() {
+            try {
+                const res = await fetch("/api/feedback/stats", {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const s = await res.json();
+                
+                document.getElementById("feedback-total-val").textContent = s.total_count || 0;
+                document.getElementById("feedback-experience-val").textContent = s.avg_experience ? s.avg_experience.toFixed(1) : "-";
+                document.getElementById("feedback-communication-val").textContent = s.avg_communication ? s.avg_communication.toFixed(1) : "-";
+                
+                const npsEl = document.getElementById("feedback-nps-val");
+                const labelEl = document.getElementById("feedback-nps-label");
+                
+                if (s.total_count === 0) {
+                    npsEl.textContent = "-";
+                    npsEl.style.color = "#fff";
+                    labelEl.textContent = "No feedback received";
+                } else {
+                    const nps = s.nps_score;
+                    npsEl.textContent = (nps > 0 ? "+" : "") + nps;
+                    
+                    if (nps >= 50) {
+                        npsEl.style.color = "#10B981"; // Emerald
+                        labelEl.innerHTML = `Excellent (${s.promoters_pct}% Promoters)`;
+                    } else if (nps >= 0) {
+                        npsEl.style.color = "#F59E0B"; // Amber
+                        labelEl.innerHTML = `Good (${s.promoters_pct}% Promoters)`;
+                    } else {
+                        npsEl.style.color = "#EF4444"; // Red
+                        labelEl.innerHTML = `Critical (${s.detractors_pct}% Detractors)`;
+                    }
+                }
+            } catch (err) {
+                console.error("Error loading feedback stats:", err);
+            }
+        }
+        
+        async function openFeedbackDetail(id) {
+            try {
+                const res = await fetch(`/api/feedback/${id}`, {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const f = await res.json();
+                
+                document.getElementById("detail-feedback-id").value = f.id;
+                document.getElementById("detail-feedback-name").textContent = f.name || "Anonymous";
+                
+                const utEl = document.getElementById("detail-feedback-usertype");
+                utEl.textContent = f.user_type;
+                
+                document.getElementById("detail-feedback-email").textContent = f.email || "No email provided";
+                document.getElementById("detail-feedback-phone").textContent = f.phone || "No phone provided";
+                
+                document.getElementById("detail-feedback-exp-stars").textContent = '★'.repeat(f.experience_rating) + '☆'.repeat(5 - f.experience_rating);
+                document.getElementById("detail-feedback-comm-stars").textContent = '★'.repeat(f.communication_rating) + '☆'.repeat(5 - f.communication_rating);
+                
+                const npsEl = document.getElementById("detail-feedback-nps");
+                npsEl.textContent = f.nps_score;
+                if (f.nps_score >= 9) {
+                    npsEl.style.background = "rgba(16, 185, 129, 0.1)";
+                    npsEl.style.color = "#10B981";
+                } else if (f.nps_score >= 7) {
+                    npsEl.style.background = "rgba(245, 158, 11, 0.1)";
+                    npsEl.style.color = "#F59E0B";
+                } else {
+                    npsEl.style.background = "rgba(239, 68, 68, 0.1)";
+                    npsEl.style.color = "#EF4444";
+                }
+                
+                document.getElementById("detail-feedback-comments").textContent = f.comments;
+                
+                // Property Interest
+                const propContainer = document.getElementById("detail-feedback-property-container");
+                if (f.properties && f.properties.name) {
+                    document.getElementById("detail-feedback-property").textContent = f.properties.name;
+                    propContainer.style.display = "block";
+                } else {
+                    propContainer.style.display = "none";
+                }
+                
+                // Consent status
+                const consentIcon = document.getElementById("detail-feedback-consent-icon");
+                const consentText = document.getElementById("detail-feedback-consent-text");
+                if (f.contact_consent) {
+                    consentIcon.innerHTML = "✅";
+                    consentIcon.style.color = "#10B981";
+                    consentText.textContent = "Yes — Follow up requested";
+                    consentText.style.color = "#10B981";
+                } else {
+                    consentIcon.innerHTML = "❌";
+                    consentIcon.style.color = "#ef4444";
+                    consentText.textContent = "No follow-up requested";
+                    consentText.style.color = "#6b7280";
+                }
+                
+                // File Attachments
+                const attachSection = document.getElementById("detail-feedback-attachments-section");
+                const attachList = document.getElementById("detail-feedback-attachments");
+                attachList.innerHTML = "";
+                
+                if (f.attachments && f.attachments.length > 0) {
+                    attachSection.style.display = "block";
+                    attachList.innerHTML = f.attachments.map(att => {
+                        let icon = "fa-paperclip";
+                        const ext = att.filename.split('.').pop().toLowerCase();
+                        if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) icon = "fa-file-image";
+                        else if (['mp4', 'mov', 'webm', 'avi', 'mpeg'].includes(ext)) icon = "fa-file-video";
+                        else if (ext === 'pdf') icon = "fa-file-pdf";
+                        
+                        return `
+                            <div class="flex justify-between items-center bg-black/40 border border-[#333] p-3 rounded-lg">
+                                <span class="text-xs text-gray-300 font-semibold truncate max-w-[250px]"><i class="fas ${icon} mr-2 text-gray-500"></i>${att.filename}</span>
+                                <a href="${att.url}" target="_blank" class="btn btn-secondary btn-sm text-xs py-1 px-3">
+                                    <i class="fas fa-external-link-alt mr-1"></i> View File
+                                </a>
+                            </div>
+                        `;
+                    }).join("");
+                } else {
+                    attachSection.style.display = "none";
+                }
+                
+                // Review Status Form
+                document.getElementById("detail-feedback-status").value = f.status;
+                document.getElementById("detail-feedback-notes").value = f.admin_notes || "";
+                
+                document.getElementById("feedbackDetailModal").style.display = "flex";
+            } catch (err) {
+                console.error("Error opening feedback detail modal:", err);
+                showToast("Failed to load feedback details", "error");
+            }
+        }
+        
+        async function saveFeedbackReview() {
+            const id = document.getElementById("detail-feedback-id").value;
+            const status = document.getElementById("detail-feedback-status").value;
+            const adminNotes = document.getElementById("detail-feedback-notes").value.trim();
+            const btn = document.getElementById("save-feedback-btn");
+            
+            btn.disabled = true;
+            btn.textContent = "Saving...";
+            
+            try {
+                const res = await fetch(`/api/feedback/${id}/review`, {
+                    method: "PUT",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ status, admin_notes: adminNotes })
+                });
+                
+                if (res.ok) {
+                    document.getElementById("feedbackDetailModal").style.display = "none";
+                    showToast("Feedback review saved successfully ✓", "success");
+                    loadFeedback();
+                } else {
+                    const err = await res.json();
+                    showToast(err.detail || "Failed to save review", "error");
+                }
+            } catch (err) {
+                showToast("Network error", "error");
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "Save Review";
+            }
+        }
+        
+        function copyFeedbackLink(e) {
+            const domain = window.location.hostname === 'localhost' ? 'http://localhost:5173' : window.location.origin.replace('api.', '').replace('backend.', '');
+            const feedbackUrl = `${domain}/feedback`;
+            
+            navigator.clipboard.writeText(feedbackUrl).then(() => {
+                const origText = e.target.innerHTML;
+                e.target.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                showToast("Feedback form link copied to clipboard", "success");
+                setTimeout(() => { e.target.innerHTML = origText; }, 1500);
+            });
+        }
     </script>
 
     <!-- ADD PROPERTY MODAL -->
@@ -3619,6 +5102,163 @@
                 <button class="btn btn-primary w-full py-4" onclick="submitInvitation()">
                     <i class="fas fa-paper-plane mr-2"></i> Send Invitation
                 </button>
+            </div>
+        </div>
+    </div>
+    <!-- TASK ASSIGNMENT MODAL (Section 10c — Manager UI) -->
+    <div id="assignTaskModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:2100; align-items:center; justify-content:center;">
+        <div style="background:#1A1A1A; width:460px; border-radius:16px; border:1px solid #333; overflow:hidden;">
+            <div style="padding:20px 24px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <div style="font-size:11px; color:#888; text-transform:uppercase; font-weight:700; letter-spacing:1px;">Assign Task</div>
+                    <div id="assignTaskClientLabel" style="font-size:15px; font-weight:800; color:#fff; margin-top:4px;"></div>
+                </div>
+                <button onclick="document.getElementById('assignTaskModal').style.display='none'" style="background:none; border:none; color:#666; cursor:pointer; font-size:18px;">✕</button>
+            </div>
+            <div style="padding:24px;">
+                <input type="hidden" id="assignTaskClientId">
+                <div style="margin-bottom:16px;">
+                    <label style="font-size:11px; color:#888; text-transform:uppercase; font-weight:700; display:block; margin-bottom:8px;">Task Title *</label>
+                    <input type="text" id="assignTaskTitle" placeholder="e.g. Follow up on payment" style="width:100%; background:#111; border:1px solid #333; border-radius:8px; padding:10px 14px; color:#fff; outline:none; font-size:13px; box-sizing:border-box;">
+                </div>
+                <div style="margin-bottom:16px;">
+                    <label style="font-size:11px; color:#888; text-transform:uppercase; font-weight:700; display:block; margin-bottom:8px;">Assign To *</label>
+                    <select id="assignTaskRep" style="width:100%; background:#111; border:1px solid #333; border-radius:8px; padding:10px; color:#fff; outline:none; font-size:13px;">
+                        <option value="">Select a rep...</option>
+                    </select>
+                </div>
+                <div style="margin-bottom:16px;">
+                    <label style="font-size:11px; color:#888; text-transform:uppercase; font-weight:700; display:block; margin-bottom:8px;">Notes (optional)</label>
+                    <textarea id="assignTaskNotes" placeholder="Additional context for the rep..." style="width:100%; height:70px; background:#111; border:1px solid #333; border-radius:8px; padding:12px; color:#fff; outline:none; resize:none; font-size:13px; box-sizing:border-box;"></textarea>
+                </div>
+                <div style="margin-bottom:20px;">
+                    <label style="font-size:11px; color:#888; text-transform:uppercase; font-weight:700; display:block; margin-bottom:8px;">Due Date (optional)</label>
+                    <input type="date" id="assignTaskDueDate" style="width:100%; background:#111; border:1px solid #333; border-radius:8px; padding:10px; color:#fff; outline:none; font-size:13px; box-sizing:border-box;">
+                </div>
+                <button onclick="submitAssignTask()" style="width:100%; padding:14px; background:var(--gold); border:none; border-radius:8px; color:#000; font-weight:800; cursor:pointer; font-size:14px;">Assign Task</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CALL OUTCOME MODAL (Section 5c) -->
+    <div id="callOutcomeModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:2000; align-items:center; justify-content:center;">
+        <div style="background:#1A1A1A; width:420px; border-radius:16px; border:1px solid #333; overflow:hidden;">
+            <div style="padding:20px 24px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <div style="font-size:11px; color:#888; text-transform:uppercase; font-weight:700;">Log Call Outcome</div>
+                    <div id="callOutcomeClientName" style="font-size:16px; font-weight:800; color:#fff; margin-top:4px;"></div>
+                </div>
+                <div style="font-size:11px; color:#666;" id="callOutcomeFromRefresh"></div>
+            </div>
+            <div style="padding:24px;">
+                <div style="font-size:11px; color:#888; text-transform:uppercase; font-weight:700; margin-bottom:12px;">How did the call go?</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:20px;">
+                    <button onclick="selectOutcome('answered')" class="outcome-btn" data-outcome="answered" style="padding:12px; border-radius:8px; border:1px solid #333; background:#111; color:#22c55e; font-weight:700; cursor:pointer;">✅ Answered</button>
+                    <button onclick="selectOutcome('no_answer')" class="outcome-btn" data-outcome="no_answer" style="padding:12px; border-radius:8px; border:1px solid #333; background:#111; color:#ef4444; font-weight:700; cursor:pointer;">📵 No Answer</button>
+                    <button onclick="selectOutcome('callback')" class="outcome-btn" data-outcome="callback" style="padding:12px; border-radius:8px; border:1px solid #333; background:#111; color:#f59e0b; font-weight:700; cursor:pointer;">🔁 Callback</button>
+                    <button onclick="selectOutcome('not_interested')" class="outcome-btn" data-outcome="not_interested" style="padding:12px; border-radius:8px; border:1px solid #333; background:#111; color:#6b7280; font-weight:700; cursor:pointer;">❌ Not Interested</button>
+                </div>
+                <input type="hidden" id="selectedOutcome" value="">
+                <textarea id="callOutcomeNotes" placeholder="Add notes (optional)..." style="width:100%; height:80px; background:#111; border:1px solid #333; border-radius:8px; padding:12px; color:#fff; outline:none; resize:none; font-size:13px; margin-bottom:16px; box-sizing:border-box;"></textarea>
+                <div style="margin-bottom:16px;">
+                    <label style="font-size:11px; color:#888; text-transform:uppercase; font-weight:700; display:block; margin-bottom:8px;">Follow-up Date (optional)</label>
+                    <input type="date" id="callFollowUpDate" style="width:100%; background:#111; border:1px solid #333; border-radius:8px; padding:10px; color:#fff; outline:none; font-size:13px; box-sizing:border-box;">
+                </div>
+                <button onclick="submitCallOutcome()" style="width:100%; padding:14px; background:var(--gold); border:none; border-radius:8px; color:#000; font-weight:800; cursor:pointer; font-size:14px;">Save Outcome</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: FEEDBACK DETAIL -->
+    <div id="feedbackDetailModal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 2050; align-items: center; justify-content: center; backdrop-filter: blur(8px);">
+        <div class="modal-content text-white" style="background: #111; width: 600px; border-radius: 16px; border: 1px solid #333; overflow: hidden; max-height: 90vh; display: flex; flex-direction: column;">
+            <div style="padding: 20px 24px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+                <h2 style="font-size: 18px; font-weight: 800; color: var(--gold);"><i class="fas fa-comment-dots mr-2"></i> Feedback Details</h2>
+                <button onclick="document.getElementById('feedbackDetailModal').style.display='none'" style="color: #666; font-size: 18px; background: none; border: none; cursor: pointer;"><i class="fas fa-times"></i></button>
+            </div>
+            
+            <div style="padding: 24px; overflow-y: auto; flex: 1;">
+                <div class="grid-2 mb-6">
+                    <div style="background: rgba(255,255,255,0.02); padding: 14px; border-radius: 8px; border: 1px solid #222;">
+                        <label style="font-size: 10px; color: #888; text-transform: uppercase; display: block; margin-bottom: 4px;">Submitter Name</label>
+                        <span id="detail-feedback-name" style="font-weight: 700; color: #fff; font-size: 14px;">-</span>
+                        <span id="detail-feedback-usertype" class="text-[10px] ml-2 px-2 py-0.5 rounded font-bold uppercase" style="background: rgba(255,255,255,0.08); color: #ccc;">-</span>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.02); padding: 14px; border-radius: 8px; border: 1px solid #222;">
+                        <label style="font-size: 10px; color: #888; text-transform: uppercase; display: block; margin-bottom: 4px;">Contact Info</label>
+                        <div id="detail-feedback-email" style="color: #ccc; font-size: 13px; word-break: break-all;">-</div>
+                        <div id="detail-feedback-phone" style="color: #888; font-size: 12px; margin-top: 2px;">-</div>
+                    </div>
+                </div>
+
+                <div class="grid-3 mb-6">
+                    <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px; border: 1px solid #222; text-align: center;">
+                        <label style="font-size: 10px; color: #888; text-transform: uppercase; display: block; margin-bottom: 6px;">Experience</label>
+                        <div id="detail-feedback-exp-stars" style="color: #C47D0A; font-size: 14px;">-</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px; border: 1px solid #222; text-align: center;">
+                        <label style="font-size: 10px; color: #888; text-transform: uppercase; display: block; margin-bottom: 6px;">NPS Recommend</label>
+                        <div id="detail-feedback-nps" class="font-bold text-sm" style="margin: 0 auto; width: fit-content; padding: 2px 8px; border-radius: 4px;">-</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px; border: 1px solid #222; text-align: center;">
+                        <label style="font-size: 10px; color: #888; text-transform: uppercase; display: block; margin-bottom: 6px;">Communication</label>
+                        <div id="detail-feedback-comm-stars" style="color: #C47D0A; font-size: 14px;">-</div>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <label style="font-size: 10px; color: #888; text-transform: uppercase; display: block; margin-bottom: 6px;">Feedback Comments</label>
+                    <div id="detail-feedback-comments" style="background: #0A0A0A; border: 1px solid #222; padding: 16px; border-radius: 10px; font-size: 14px; line-height: 1.6; color: #eee; white-space: pre-wrap; max-height: 120px; overflow-y: auto;">-</div>
+                </div>
+
+                <!-- Dynamic Property Interest / Consent -->
+                <div class="grid-2 mb-6">
+                    <div id="detail-feedback-property-container" style="display:none; background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px; border: 1px solid #222;">
+                        <label style="font-size: 10px; color: #888; text-transform: uppercase; display: block; margin-bottom: 4px;">Property of Interest</label>
+                        <span id="detail-feedback-property" style="font-weight: 600; color: #fff; font-size: 13px;">-</span>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px; border: 1px solid #222; display: flex; align-items: center; gap: 8px;">
+                        <div id="detail-feedback-consent-icon" style="font-size: 16px;">-</div>
+                        <div>
+                            <label style="font-size: 10px; color: #888; text-transform: uppercase; display: block;">Follow-up Consent</label>
+                            <span id="detail-feedback-consent-text" style="font-weight: 600; font-size: 12px;">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Attachments List -->
+                <div class="mb-6" id="detail-feedback-attachments-section" style="display: none;">
+                    <label style="font-size: 10px; color: #888; text-transform: uppercase; display: block; margin-bottom: 6px;">Attachments</label>
+                    <div id="detail-feedback-attachments" class="space-y-2">
+                        <!-- attachments render here -->
+                    </div>
+                </div>
+
+                <!-- Review Section -->
+                <div class="pt-6 border-t border-[#333]">
+                    <h3 style="font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 12px;"><i class="fas fa-user-edit text-[#C47D0A] mr-2"></i> Administrative Review</h3>
+                    <input type="hidden" id="detail-feedback-id">
+                    
+                    <div class="mb-4">
+                        <label style="font-size: 11px; color: #888; display: block; margin-bottom: 6px;">Review Status</label>
+                        <select id="detail-feedback-status" style="width: 100%; background: #000; border: 1px solid #333; color: #fff; border-radius: 8px; padding: 10px; font-size: 13px; outline: none;">
+                            <option value="new">New</option>
+                            <option value="reviewed">Reviewed</option>
+                            <option value="contacted">Contacted</option>
+                            <option value="resolved">Resolved</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-6">
+                        <label style="font-size: 11px; color: #888; display: block; margin-bottom: 6px;">Follow-up Notes / Internal Remarks</label>
+                        <textarea id="detail-feedback-notes" placeholder="Log details of call, action taken or resolution notes..." style="width: 100%; height: 80px; background: #000; border: 1px solid #333; border-radius: 8px; padding: 10px; color: #fff; outline: none; resize: none; font-size: 13px;"></textarea>
+                    </div>
+
+                    <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                        <button class="btn btn-secondary" onclick="document.getElementById('feedbackDetailModal').style.display='none'">Cancel</button>
+                        <button class="btn btn-primary" id="save-feedback-btn" onclick="saveFeedbackReview()">Save Review</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

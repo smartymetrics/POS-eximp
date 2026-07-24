@@ -529,11 +529,24 @@
                 <div class="mt-6 mb-6">
                     <label class="block text-sm font-bold text-gray-700 mb-2">Is this property being purchased: <span
                             class="text-red-500">*</span></label>
-                    <select name="purchase_purpose" required
+                    <select name="purchase_for" required
                         class="w-full p-4 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none">
                         <option value="" disabled selected>-- Select an Option --</option>
                         <option value="For yourself">For yourself</option>
                         <option value="For someone else">For someone else</option>
+                    </select>
+                </div>
+
+                <div class="mt-6 mb-6">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Purpose of Purchase: <span
+                            class="text-red-500">*</span></label>
+                    <select name="purchase_purpose" required
+                        class="w-full p-4 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none">
+                        <option value="" disabled selected>-- Select Purpose --</option>
+                        <option value="Residential">Residential</option>
+                        <option value="Commercial">Commercial</option>
+                        <option value="Land Banking">Land Banking</option>
+                        <option value="Investment">Investment</option>
                     </select>
                 </div>
 

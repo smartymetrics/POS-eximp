@@ -1,0 +1,263 @@
+pages=9
+=== PAGE 1 ===
+HUMAN RESOURCES MANAGEMENT SYSTEM
+Payroll & Performance
+Update Guide
+A clear guide to recent improvements in payroll
+accuracy, deductions reporting, and employee
+performance tracking.
+DOCUMENT
+TYPE
+Stakeholder
+GuideAUDIENCE
+Management &
+LeadershipVERSION
+1.0 — May
+2026
+
+=== PAGE 2 ===
+📋
+OVERVIEW
+What Has Changed & Why It
+Matters
+The HR management system has received important
+improvements across two key areas: payroll processing
+and employee performance goal tracking.  These
+changes make payroll calculations more accurate, give
+management a clearer breakdown of deductions, and reduce
+the manual effort required to grade staff performance. This
+guide explains what changed and what actions are needed
+from your team.
+📅
+Correct Payroll Periods
+Payroll now automatically uses
+the correct first and last day of
+each month — no more manual
+date adjustments or end-of-
+month errors.🧮
+Accurate Tax Calculations
+All statutory deductions —
+including CRA, pension, and NHF
+— now follow the correct
+Nigerian employer rules
+consistently across all staff.
+📊
+Clearer Payslip
+Breakdown
+Every payslip now shows a full
+deduction breakdown, making
+payroll easier to review, query,
+and audit at any time.🎯
+Automatic Goal Grading
+Completed employee goals are
+now graded automatically by
+the system, reducing manual
+review and improving
+
+=== PAGE 3 ===
+consistency across
+departments.
+HRM System — Stakeholder Guide Confidential · Internal Use Only · Page 1AreaPrevious
+BehaviourAfter This
+UpdateStatus
+Payroll
+PeriodAssumed every
+month ended on
+the 28thUses the actual
+last day of each
+month✓ Fixed
+CRA
+CalculationUsed a simplified
+formulaUses the correct
+statutory formula✓ Fixed
+Pension &
+NHFInconsistent —
+tied to PAYE
+settingsCalculated
+consistently for all
+staff✓ Fixed
+Payslip
+DetailLimited deduction
+visibilityFull breakdown:
+gross, tax,
+pension, NHF,
+CRA, net✓
+Improved
+Goal
+GradingRequired manual
+HR review for
+each objectiveAuto-graded on
+completion using
+set criteria✓
+Improved
+
+=== PAGE 4 ===
+💰
+SECTION 1
+How to Use the Updated Payroll
+Process
+Running Payroll — Step by Step
+1Run Payroll for Active Staff
+Initiate payroll as you normally would through the HR payroll section. The
+system will automatically generate payroll for all currently active employees
+for the current month.
+No changes to the way you start a payroll run — the improvements happen
+automatically in the background.
+2Confirm the Payroll Period
+The system will now correctly calculate from the first to the last day of the
+month. You do not need to manually adjust or verify the month-end date —
+this is handled automatically.
+3Review the Deduction Breakdown on Each Payslip
+When reviewing generated payslips, you will now see a clearly itemised
+deduction breakdown. Confirm that each of the following lines is present and
+makes sense for the staff member:
+
+=== PAGE 5 ===
+📄 What You Should See on Every Payslip
+Gross PayT otal earnings before any deductions — the
+starting figure for all calculations.
+Tax (PAYE)Personal income tax withheld in line with
+Nigerian tax law.
+PensionEmployee and employer pension contributions
+calculated from the base salary.
+NHFNational Housing Fund deduction — calculated
+consistently for all staff.
+CRAConsolidated Relief Allowance — now
+calculated using the correct statutory formula.
+Total DeductionsThe sum of all deductions above — useful for
+audit and verification.
+Net PayWhat the employee actually receives — Gross
+Pay minus T otal Deductions.
+4Verify the First Payroll Run After This Update
+For the first payroll cycle after this update, take extra care to spot-check a
+few payslips before releasing them to staff. Compare the figures to your
+expected deduction values and confirm the CRA appears as its own separate
+line item.
+A sample of 3 to 5 payslips from different salary bands is usually sufficient
+for a confidence check.
+5Keep Tax Settings Up to Date
+The payroll engine uses centrally configured tax, pension, and NHF rates. If
+government policy changes — such as a revised pension rate or a new tax
+threshold — update these central settings and all future payroll runs will
+automatically use the new rates. No manual adjustments per staff member
+are required.
+HRM System — Stakeholder Guide Confidential · Internal Use Only · Page 2
+
+=== PAGE 6 ===
+🎯
+SECTION 2
+How to Use Auto-Graded
+Performance Goals
+Previously, HR staff had to manually review and score each
+completed employee goal — a time-consuming process that
+could also introduce inconsistency between reviewers. The
+system now automatically grades goals  once they are
+marked complete, based on the criteria set by your team.
+HR's role shifts from manual scoring to reviewing and
+validating the results.
+Managing Performance Goals — Step by Step
+1Set Up or Review Staff Goals
+Create or update staff goals using the existing HR goals workflow. For auto-
+grading to work accurately, each goal must have clearly defined success
+criteria. The more specific the criteria, the more reliable the automatic grade
+will be.
+Goals with vague or missing criteria will still require manual review. Use this
+update as an opportunity to tighten up goal definitions going forward.
+2Let the System Grade Completed Goals
+Once a goal is marked as complete — either by the employee or their line
+manager — the system will evaluate it automatically against the configured
+criteria and assign a grade. No further action is needed for standard
+objectives.
+
+=== PAGE 7 ===
+3Review the Auto-Grade Results
+HR and line managers can view the automatically assigned grades on the
+goal performance dashboard or individual goal records. These results can be
+used directly to inform performance conversations, appraisal scores, or
+incentive decisions.
+Auto-grades are not final by default — HR or a manager can still override a
+grade where context requires human judgement.
+4Adjust Grading Criteria When Business Priorities Change
+If organisational goals shift — such as a new performance framework or
+revised KPIs — update the goal scoring criteria within the system. All goals
+created or completed after the update will be graded using the new criteria
+automatically.
+✅ Quick Checklist for This Performance Cycle
+Ensure all active staff goals have clearly defined success criteria set.
+Review auto-grade results on the goal dashboard at the end of the cycle.
+Flag any auto-graded results that need human review or override.
+Update grading criteria if business performance priorities have changed.
+Use auto-grade results to support appraisal and incentive discussions.
+HRM System — Stakeholder Guide Confidential · Internal Use Only · Page 3
+
+=== PAGE 8 ===
+⚡
+SECTION 3
+Practical Recommendations & Next
+Steps
+Recommended Actions for Management
+🔍
+Run a validation payroll cycle immediately after the update.
+Before releasing payslips to staff, verify a small sample of payroll
+outputs to confirm that figures are correct. Comparing 3–5 payslips
+across different salary bands will give confidence that the update is
+working as expected.
+📋
+Check that CRA appears as a separate deduction line.  One of the
+visible changes on payslips is a dedicated CRA line. If this is absent on
+any payslip, flag it for review before staff are paid.
+⚙️
+Keep the central tax and pension settings maintained.  The
+accuracy of payroll going forward depends on these settings being
+current. Whenever a government policy changes — pension rates, PAYE
+thresholds, or NHF rates — update the central configuration promptly.
+This is the only change HR needs to make; individual payslips update
+automatically.
+🎯
+Review goal auto-grade results in the next performance cycle.
+This is the first cycle with automatic grading enabled. HR should review
+the generated grades and validate that they align with expectations
+before using them for formal appraisals.
+📝
+Tighten goal success criteria for all active objectives.  Auto-
+grading is most reliable when criteria are clearly defined. Use the start
+of this cycle to review and sharpen any goals with vague or missing
+success metrics.
+
+=== PAGE 9 ===
+Why This Matters for the Business
+🛡️
+Reduced Payroll Risk
+Accurate deductions and correct
+month boundaries mean less
+exposure to underpayment,
+overpayment, or statutory non-
+compliance.🔎
+Stronger Audit
+Confidence
+A full deduction breakdown on
+every payslip makes internal
+and external payroll audits
+faster and more straightforward.
+⏱️
+HR Time Savings
+Auto-graded goals reduce the
+time HR spends on manual
+scoring, freeing capacity for
+higher-value people
+management work.⚖️
+Greater Consistency
+Automated grading applies the
+same criteria to every
+employee, removing scoring
+variability between different
+reviewers.
+SUMMARY
+These updates bring the HR system in line with correct payroll
+and performance standards, reduce the chance of manual
+errors, and give management a clearer view of what is being
+paid to each employee and why. The required actions from
+leadership are minimal — primarily a one-time validation check
+and ensuring configuration settings remain current over time.
+HRM System — Stakeholder Guide Confidential · Internal Use Only · Page 4
+

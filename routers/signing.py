@@ -4,7 +4,7 @@ from fastapi.templating import Jinja2Templates
 from database import get_db, db_execute, SUPABASE_URL
 from models import WitnessSignatureSubmit, ClientContractSignatureSubmit
 from routers.analytics import log_activity
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import base64
 import io
 from PIL import Image
@@ -85,6 +85,36 @@ def _upload_client_signature(db, invoice_id: str, signature_base64: str) -> str:
         print(f"WARNING: Client signature upload failed: {e}")
         return signature_base64
 
+
+async def _notify_lawyers(db, notif_type: str, title: str, message: str, matter_id: str = None):
+    """
+    Fire a legal_notifications row for every admin whose role includes
+    'lawyer' or 'legal'.  Non-critical — errors are swallowed.
+    """
+    try:
+        lawyers_res = await db_execute(
+            lambda: db.table("admins")
+                .select("id, role")
+                .eq("is_active", True)
+                .execute()
+        )
+        for admin in (lawyers_res.data or []):
+            roles = {r.strip().lower() for r in (admin.get("role") or "").split(",")}
+            if roles & {"lawyer", "legal", "super_admin", "admin"}:
+                try:
+                    await db_execute(lambda: db.table("legal_notifications").insert({
+                        "recipient_id": admin["id"],
+                        "type": notif_type,
+                        "title": title,
+                        "message": message,
+                        "matter_id": matter_id,
+                    }).execute())
+                except Exception:
+                    pass
+    except Exception as _e:
+        print(f"[LegalNotif] {notif_type} broadcast error: {_e}")
+
+
 @router.get("/sign/client/{token}", response_class=HTMLResponse)
 async def get_client_signing_page(request: Request, token: str):
     return templates.TemplateResponse("sign_client.html", {"request": request})
@@ -100,7 +130,7 @@ async def get_client_signing_context(token: str):
         raise HTTPException(status_code=404, detail="Invalid signing link")
     session = session_res.data[0]
     expires_at = datetime.fromisoformat(session["expires_at"].replace('Z', '+00:00'))
-    if expires_at < datetime.now().astimezone():
+    if expires_at < datetime.now(timezone(timedelta(hours=1))):
         raise HTTPException(status_code=400, detail="This signing link has expired")
     invoice = session["invoices"]
     client = invoice["clients"]
@@ -112,14 +142,14 @@ async def get_client_signing_context(token: str):
     }
 
 @router.post("/api/signing/client/{token}")
-async def submit_client_signature(token: str, data: ClientContractSignatureSubmit, request: Request):
+async def submit_client_signature(token: str, data: ClientContractSignatureSubmit, request: Request, background_tasks: BackgroundTasks):
     db = get_db()
 
     if not data.acknowledgement:
         raise HTTPException(status_code=400, detail="You must acknowledge that you have read and understood the contract to proceed.")
 
     session_res = db.table("contract_signing_sessions")\
-        .select("*, invoices(*)")\
+        .select("*, invoices(*, clients(*))")\
         .eq("token", token)\
         .execute()
     if not session_res.data:
@@ -127,9 +157,13 @@ async def submit_client_signature(token: str, data: ClientContractSignatureSubmi
 
     session = session_res.data[0]
     invoice = session["invoices"]
+    client_raw = invoice.get("clients", {})
+    client = client_raw[0] if isinstance(client_raw, list) and client_raw else client_raw
+    if not client:
+        client = {}
 
     expires_at = datetime.fromisoformat(session["expires_at"].replace('Z', '+00:00'))
-    if expires_at < datetime.now().astimezone():
+    if expires_at < datetime.now(timezone(timedelta(hours=1))):
         raise HTTPException(status_code=400, detail="Link expired")
 
     try:
@@ -137,16 +171,22 @@ async def submit_client_signature(token: str, data: ClientContractSignatureSubmi
         audit_ip = request.client.host if request.client else "unknown"
         audit_agent = request.headers.get("User-Agent", "unknown")
 
-        stored_signature = _upload_client_signature(db, invoice["id"], data.signature_base64)
-        db.table("invoices").update({
+        # Map frontend values to DB constraint values
+        method_map = {"draw": "drawn", "upload": "uploaded"}
+        db_method = method_map.get(data.signature_method, data.signature_method)
+
+        # Use db_execute for signature processing and upload (Fix for 502/timeouts)
+        stored_signature = await db_execute(lambda: _upload_client_signature(db, invoice["id"], data.signature_base64))
+        
+        # Use db_execute for DB update
+        await db_execute(lambda: db.table("invoices").update({
             "contract_signature_url": stored_signature,
-            "contract_signature_method": data.signature_method,
-            "contract_signed_at": datetime.now().isoformat(),
+            "contract_signature_method": db_method,
+            "contract_signed_at": datetime.now(timezone(timedelta(hours=1))).isoformat(),
             "contract_audit_ip": audit_ip,
             "contract_audit_agent": audit_agent,
             "pipeline_stage": "paid"
-        }).eq("id", invoice["id"]).execute()
-
+        }).eq("id", invoice["id"]).execute())
 
         await log_activity(
             "client_signed_contract",
@@ -156,9 +196,26 @@ async def submit_client_signature(token: str, data: ClientContractSignatureSubmi
             invoice_id=invoice["id"]
         )
 
+        # Send Confirmation Email to Client
+        from email_service import send_client_confirmation_email
+        background_tasks.add_task(
+            send_client_confirmation_email,
+            invoice,
+            client
+        )
+
+        # ── Legal notification: client has signed ──
+        client_name = invoice.get("client_name") or invoice.get("invoice_number", "Client")
+        await _notify_lawyers(
+            db, "signing",
+            title=f"✍️ Client signed — {invoice.get('invoice_number', 'Contract')}",
+            message=f"{client_name} has signed their property contract."
+        )
+
         return {"message": "Client contract signature recorded successfully"}
 
     except Exception as e:
+        print(f"CRITICAL ERROR in client signing: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to record client signature: {str(e)}")
 
 @router.get("/sign/{token}", response_class=HTMLResponse)
@@ -181,7 +238,7 @@ async def get_signing_context(token: str):
     
     # 2. Check expiry
     expires_at = datetime.fromisoformat(session["expires_at"].replace('Z', '+00:00'))
-    if expires_at < datetime.now().astimezone():
+    if expires_at < datetime.now(timezone(timedelta(hours=1))):
         raise HTTPException(status_code=400, detail="This signing link has expired")
     
     if session["status"] == "completed":
@@ -214,7 +271,7 @@ async def get_contract_pdf_for_witness(token: str):
     
     # 2. Check expiry
     expires_at = datetime.fromisoformat(session["expires_at"].replace('Z', '+00:00'))
-    if expires_at < datetime.now().astimezone():
+    if expires_at < datetime.now(timezone(timedelta(hours=1))):
         raise HTTPException(status_code=400, detail="This signing link has expired")
     
     invoice = session["invoices"]
@@ -291,7 +348,7 @@ async def submit_witness_signature(token: str, data: WitnessSignatureSubmit, req
     
     # 2. Check expiry & status
     expires_at = datetime.fromisoformat(session["expires_at"].replace('Z', '+00:00'))
-    if expires_at < datetime.now().astimezone():
+    if expires_at < datetime.now(timezone(timedelta(hours=1))):
         raise HTTPException(status_code=400, detail="Link expired")
     
     if session["status"] == "completed":
@@ -309,6 +366,10 @@ async def submit_witness_signature(token: str, data: WitnessSignatureSubmit, req
     witness_num = 1 if 1 not in signed_numbers else 2
     
     # 4. Insert signature
+    # Map frontend values to DB constraint values (mirrors client signing fix in 036)
+    method_map = {"draw": "drawn", "upload": "uploaded"}
+    db_method = method_map.get(data.signature_method, data.signature_method)
+
     try:
         stored_signature = _upload_witness_signature(db, invoice["id"], witness_num, data.signature_base64)
 
@@ -322,7 +383,7 @@ async def submit_witness_signature(token: str, data: WitnessSignatureSubmit, req
             "phone_number": data.phone_number,
             "relationship_to_parties": data.relationship_to_parties,
             "signature_base64": stored_signature,
-            "signature_method": data.signature_method,
+            "signature_method": db_method,
             "acknowledgement": data.acknowledgement,
             "ip_address": request.client.host if request.client else "unknown",
             "user_agent": request.headers.get("user-agent", "unknown")
@@ -361,7 +422,15 @@ async def submit_witness_signature(token: str, data: WitnessSignatureSubmit, req
                 "system",
                 invoice_id=invoice["id"]
             )
-            
+
+        # ── Legal notification: witness has signed ──
+        await _notify_lawyers(
+            db, "witness",
+            title=f"🖊️ Witness {witness_num} signed — {invoice.get('invoice_number', 'Contract')}",
+            message=f"{data.full_name} has witnessed the contract."
+            + (" Contract is now fully witnessed and ready for execution." if new_status == "completed" else "")
+        )
+
         return {"message": "Signature recorded successfully", "witness_number": witness_num}
         
     except Exception as e:

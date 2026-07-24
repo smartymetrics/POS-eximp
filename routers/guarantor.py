@@ -1,0 +1,1514 @@
+"""
+routers/guarantor.py  — DROP-IN REPLACEMENT
+
+Key fixes vs. original:
+  1. /public/save-partial now accepts passport_photo + id_document as
+     optional UploadFile fields so guarantor photos are stored correctly.
+  2. /public/check returns both submission AND staff_info even when a
+     submission already exists (needed by the frontend relay-link flow).
+  3. /general-link builds the URL from APP_BASE_URL correctly for any
+     deployment (no hard-coded trailing /hr assumption).
+  4. /submissions/{id}/review supports section-level accept/reject
+     (sections a, b, c) AND overall status changes.
+  5. New endpoint: POST /submissions/{id}/bulk-review — approve or reject
+     all sections in one call (used by "Approve All / Reject All" in the HR modal).
+"""
+
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
+from database import get_db, db_execute
+from routers.auth import verify_token, has_any_role
+import uuid
+import os
+import base64
+import json
+from datetime import datetime, timedelta, timezone
+from storage_service import upload_portal_file, generate_signed_url, PORTAL_CLAIMS_BUCKET
+from typing import Optional
+
+router = APIRouter()
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+
+def _build_base_url(request: Request) -> str:
+    """
+    Return the public frontend base URL.
+    The Vite app is built with base: '/hr/' so all links must include /hr/.
+    Set APP_BASE_URL=https://yourapp.com in .env — the /hr/ is appended automatically.
+    Example result: https://yourapp.com/hr
+    """
+    base = os.getenv("APP_BASE_URL", "").rstrip("/")
+    if not base:
+        # Derive from request origin (works for local dev / reverse proxy)
+        base = str(request.base_url).rstrip("/")
+    # The frontend is always mounted at /hr/ (vite base: '/hr/')
+    if not base.endswith("/hr"):
+        base = f"{base}/hr"
+    return base
+
+
+def _sign_sub(sub: dict) -> dict:
+    """Generate signed URLs for a submission dict in-place."""
+    sub["employee_signature_url"] = generate_signed_url(
+        PORTAL_CLAIMS_BUCKET, sub.get("employee_signature_url")
+    )
+    return sub
+
+
+def _sign_guarantor(g: dict) -> dict:
+    for field in ["passport_photo_url", "id_document_url", "signature_url"]:
+        g[field] = generate_signed_url(PORTAL_CLAIMS_BUCKET, g.get(field))
+    return g
+
+
+# ── Admin Endpoints ───────────────────────────────────────────────────────────
+
+@router.get("/submissions")
+async def get_submissions(current_admin=Depends(verify_token)):
+    if not has_any_role(current_admin, "admin", "super_admin", "hr_admin"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    db = get_db()
+    res = await db_execute(
+        lambda: db.table("guarantor_submissions")
+        .select("*, guarantors(count)")
+        .order("submitted_at", desc=True)
+        .execute()
+    )
+    for item in res.data:
+        item["guarantors_count"] = (
+            item["guarantors"][0]["count"] if item.get("guarantors") else 0
+        )
+        item.pop("guarantors", None)
+    return res.data
+
+
+@router.get("/submissions/{id}")
+async def get_submission_detail(id: str, current_admin=Depends(verify_token)):
+    if not has_any_role(current_admin, "admin", "super_admin", "hr_admin"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    db = get_db()
+
+    sub_res = await db_execute(
+        lambda: db.table("guarantor_submissions").select("*").eq("id", id).execute()
+    )
+    if not sub_res.data:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    sub = sub_res.data[0]
+    _sign_sub(sub)
+
+    g_res = await db_execute(
+        lambda: db.table("guarantors")
+        .select("*")
+        .eq("submission_id", id)
+        .order("slot_number")
+        .execute()
+    )
+
+    sub["guarantor1"] = None
+    sub["guarantor2"] = None
+    for g in g_res.data:
+        _sign_guarantor(g)
+        slot = g.get("slot_number", 1)
+        sub[f"guarantor{slot}"] = g
+
+    return sub
+
+
+@router.post("/submissions/{id}/review")
+async def review_submission(id: str, data: dict, current_admin=Depends(verify_token)):
+    """
+    Section-level or overall review.
+    data = { section: "a" | "b" | "c" | "overall", status: "approved"|"rejected"|"pending", reason?: str }
+    """
+    if not has_any_role(current_admin, "admin", "super_admin", "hr_admin"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    section = data.get("section")
+    status  = data.get("status")
+    reason  = data.get("reason", "")
+
+    if status not in ("approved", "rejected", "pending"):
+        raise HTTPException(status_code=400, detail="Invalid status")
+
+    db = get_db()
+
+    update = {
+        "reviewed_at": datetime.utcnow().isoformat(),
+        "reviewed_by": current_admin["sub"],
+    }
+
+    if section in ("a", "b", "c"):
+        update[f"section_{section}_status"] = status
+        update[f"section_{section}_reason"] = reason
+    else:
+        # Overall status
+        update["status"] = status
+
+    res = await db_execute(
+        lambda: db.table("guarantor_submissions").update(update).eq("id", id).execute()
+    )
+
+    # Notify employee
+    # Fetch submission data needed for all notifications
+    emp_email = None
+    emp_name = None
+    try:
+        sub_res = await db_execute(
+            lambda: db.table("guarantor_submissions")
+            .select("employee_email, employee_name")
+            .eq("id", id)
+            .execute()
+        )
+        if sub_res.data:
+            emp_email = sub_res.data[0]["employee_email"]
+            emp_name = sub_res.data[0].get("employee_name") or emp_email
+    except Exception:
+        pass
+
+    # In-app notification for the employee (isolated — never blocks emails)
+    if emp_email:
+        try:
+            admin_res = await db_execute(
+                lambda: db.table("admins").select("id").eq("email", emp_email).execute()
+            )
+            if admin_res.data:
+                labels = {"a": "Employee Details", "b": "Guarantor 1", "c": "Guarantor 2"}
+                sec_label_notif = labels.get(section, "Submission")
+                title_map = {"rejected": "Guarantor Form Requires Revision", "approved": "Guarantor Form Section Approved"}
+                msg = f"Your Guarantor Form ({sec_label_notif}) has been {status}."
+                if status == "rejected" and reason:
+                    msg += f" Reason: {reason}"
+                await db_execute(
+                    lambda: db.table("notifications").insert({
+                        "admin_id": admin_res.data[0]["id"],
+                        "title": title_map.get(status, "Guarantor Form Update"),
+                        "notification_type": "guarantor_update",
+                        "message": msg,
+                    }).execute()
+                )
+        except Exception:
+            pass
+
+    # Email the employee on rejection
+    if emp_email and status == "rejected":
+        try:
+            inv_res = await db_execute(
+                lambda: db.table("guarantor_invites")
+                .select("token")
+                .eq("email", emp_email)
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            invite_token = inv_res.data[0]["token"] if inv_res.data else None
+            base_url = os.getenv("APP_BASE_URL", "").rstrip("/")
+            if not base_url.endswith("/hr"):
+                base_url = f"{base_url}/hr"
+            form_link = f"{base_url}/?guarantor_token={invite_token}&email={emp_email}" if invite_token else ""
+            labels = {"a": "Employee Details (Section A)", "b": "Guarantor 1 (Section B)", "c": "Guarantor 2 (Section C)"}
+            await _send_guarantor_rejection_email(emp_email, labels.get(section, "a section"), reason, form_link)
+        except Exception:
+            pass
+
+    # Email the employee on approval
+    if emp_email and status == "approved":
+        try:
+            labels_full = {"a": "Section A — Employee Details", "b": "Section B — Guarantor 1", "c": "Section C — Guarantor 2", "overall": "All Sections"}
+            await _send_guarantor_approval_email(emp_email, emp_name, labels_full.get(section, "Your submission"))
+        except Exception:
+            pass
+
+    # Email the guarantor directly if section b or c
+    if section in ("b", "c"):
+        try:
+            slot_num = 1 if section == "b" else 2
+            g_res = await db_execute(
+                lambda: db.table("guarantors")
+                .select("email, full_name")
+                .eq("submission_id", id)
+                .eq("slot_number", slot_num)
+                .limit(1)
+                .execute()
+            )
+            if g_res.data and g_res.data[0].get("email"):
+                g_email = g_res.data[0]["email"]
+                g_name = g_res.data[0].get("full_name") or "Guarantor"
+                g_labels = {"b": "Section B (Guarantor 1)", "c": "Section C (Guarantor 2)"}
+                sec_label_g = g_labels.get(section, "Your section")
+                if status == "rejected":
+                    await _send_guarantor_own_rejection_email(g_email, g_name, sec_label_g, reason)
+                elif status == "approved":
+                    await _send_guarantor_own_approval_email(g_email, g_name, sec_label_g)
+        except Exception:
+            pass
+
+    return res.data[0] if res.data else {"status": "ok"}
+
+
+@router.post("/submissions/{id}/bulk-review")
+async def bulk_review_submission(id: str, data: dict, current_admin=Depends(verify_token)):
+    """
+    Approve or reject ALL sections (a, b, c) plus overall status in one call.
+    data = { status: "approved" | "rejected", reason?: str }
+    """
+    if not has_any_role(current_admin, "admin", "super_admin", "hr_admin"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    status = data.get("status")
+    reason = data.get("reason", "")
+    if status not in ("approved", "rejected"):
+        raise HTTPException(status_code=400, detail="status must be 'approved' or 'rejected'")
+
+    db = get_db()
+    update = {
+        "reviewed_at": datetime.utcnow().isoformat(),
+        "reviewed_by": current_admin["sub"],
+        "status": status,
+        "section_a_status": status,
+        "section_a_reason": reason,
+        "section_b_status": status,
+        "section_b_reason": reason,
+        "section_c_status": status,
+        "section_c_reason": reason,
+    }
+
+    res = await db_execute(
+        lambda: db.table("guarantor_submissions").update(update).eq("id", id).execute()
+    )
+
+    # Notify employee
+    # Fetch submission data
+    emp_email = None
+    emp_name = None
+    try:
+        sub_res = await db_execute(
+            lambda: db.table("guarantor_submissions")
+            .select("employee_email, employee_name")
+            .eq("id", id)
+            .execute()
+        )
+        if sub_res.data:
+            emp_email = sub_res.data[0]["employee_email"]
+            emp_name = sub_res.data[0].get("employee_name") or emp_email
+    except Exception:
+        pass
+
+    # In-app notification (isolated)
+    if emp_email:
+        try:
+            admin_res = await db_execute(
+                lambda: db.table("admins").select("id").eq("email", emp_email).execute()
+            )
+            if admin_res.data:
+                title_map = {"rejected": "Guarantor Form Requires Revision", "approved": "Guarantor Form Approved"}
+                msg = f"Your Guarantor Form has been {status} by HR."
+                if status == "rejected" and reason:
+                    msg += f" Reason: {reason}"
+                await db_execute(
+                    lambda: db.table("notifications").insert({
+                        "admin_id": admin_res.data[0]["id"],
+                        "title": title_map.get(status, "Guarantor Form Update"),
+                        "notification_type": "guarantor_update",
+                        "message": msg,
+                    }).execute()
+                )
+        except Exception:
+            pass
+
+    # Email employee on rejection
+    if emp_email and status == "rejected":
+        try:
+            inv_res = await db_execute(
+                lambda: db.table("guarantor_invites")
+                .select("token")
+                .eq("email", emp_email)
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            invite_token = inv_res.data[0]["token"] if inv_res.data else None
+            base_url = os.getenv("APP_BASE_URL", "").rstrip("/")
+            if not base_url.endswith("/hr"):
+                base_url = f"{base_url}/hr"
+            form_link = f"{base_url}/?guarantor_token={invite_token}&email={emp_email}" if invite_token else ""
+            await _send_guarantor_rejection_email(emp_email, "All Sections", reason, form_link)
+        except Exception:
+            pass
+
+    # Email employee on approval
+    if emp_email and status == "approved":
+        try:
+            await _send_guarantor_approval_email(emp_email, emp_name, "All Sections")
+        except Exception:
+            pass
+
+    # Email both guarantors
+    try:
+        g_all_res = await db_execute(
+            lambda: db.table("guarantors")
+            .select("email, full_name, slot_number")
+            .eq("submission_id", id)
+            .execute()
+        )
+        for g in (g_all_res.data or []):
+            if g.get("email"):
+                slot_label = "Section B (Guarantor 1)" if g["slot_number"] == 1 else "Section C (Guarantor 2)"
+                try:
+                    if status == "rejected":
+                        await _send_guarantor_own_rejection_email(
+                            g["email"], g.get("full_name") or "Guarantor", slot_label, reason
+                        )
+                    elif status == "approved":
+                        await _send_guarantor_own_approval_email(
+                            g["email"], g.get("full_name") or "Guarantor", slot_label
+                        )
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    return res.data[0] if res.data else {"status": "ok"}
+
+
+@router.get("/invites")
+async def get_invites(current_admin=Depends(verify_token)):
+    if not has_any_role(current_admin, "admin", "super_admin", "hr_admin"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    db = get_db()
+    res = await db_execute(
+        lambda: db.table("guarantor_invites").select("*").order("created_at", desc=True).execute()
+    )
+    return res.data
+
+
+@router.post("/invites")
+async def create_invite(data: dict, request: Request, current_admin=Depends(verify_token)):
+    if not has_any_role(current_admin, "admin", "super_admin", "hr_admin"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    db = get_db()
+    email = data.get("email", "").strip()
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+
+    token      = str(uuid.uuid4())
+    expires_at = (datetime.utcnow() + timedelta(days=7)).isoformat()
+
+    res = await db_execute(
+        lambda: db.table("guarantor_invites").insert({
+            "email":      email,
+            "token":      token,
+            "expires_at": expires_at,
+            "created_by": current_admin["sub"],
+        }).execute()
+    )
+
+    # ── Send the invite email ───────────────────────────────────────────────
+    try:
+        base_url   = _build_base_url(request)
+        form_link  = f"{base_url}/?guarantor_token={token}&email={email}"
+        inviter_name = current_admin.get("name") or current_admin.get("email") or "HR"
+        await _send_guarantor_invite_email(email, inviter_name, form_link)
+    except Exception as e:
+        # Log but don't fail — the invite is already saved; HR can share the link manually
+        import logging
+        logging.getLogger(__name__).error(f"Guarantor invite email failed for {email}: {e}")
+
+    return res.data[0]
+
+
+
+async def _send_guarantor_rejection_email(
+    email_addr: str, section_label: str, reason: str, form_link: str
+):
+    """Send a rejection email to the employee with a direct link to re-fill the rejected section(s)."""
+    import resend
+    resend.api_key = os.getenv("RESEND_API_KEY")
+    from_email = os.getenv("FROM_EMAIL", "hr@eximps-cloves.com")
+
+    reason_block = f"""
+                <div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:3px;padding:16px 20px;margin:20px 0;color:#DC2626;font-size:13px;line-height:1.7;">
+                  <strong>Reason:</strong> {reason}
+                </div>""" if reason else ""
+
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+    <body style="margin:0;padding:0;background:#F5F0E8;font-family:'Segoe UI',Arial,sans-serif;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F0E8;padding:40px 20px;">
+        <tr><td align="center">
+          <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:4px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+            <!-- Header -->
+            <tr>
+              <td style="background:#0D1B2A;padding:0;border-left:6px solid #DC2626;">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="padding:28px 36px;">
+                      <div style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">Eximp &amp; Cloves Infrastructure Limited</div>
+                      <div style="font-size:10px;color:#DC2626;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-top:4px;">Human Resources Division</div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <!-- Body -->
+            <tr>
+              <td style="padding:40px 36px;">
+                <div style="width:56px;height:56px;background:#FEE2E2;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:20px;font-size:26px;text-align:center;line-height:56px;">✕</div>
+                <p style="font-size:13px;color:#DC2626;margin:0 0 8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;">Action Required</p>
+                <h1 style="font-size:22px;font-weight:800;color:#0D1B2A;margin:0 0 20px;line-height:1.3;">Guarantor Form — Revision Needed</h1>
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 12px;">Dear Employee,</p>
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 16px;">
+                  HR has reviewed your Guarantor Form and requires a revision for the following section:
+                  <strong>{section_label}</strong>.
+                </p>
+                {reason_block}
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 28px;">
+                  Please use the button below to return to your form, correct the flagged section(s), and re-sign where required.
+                </p>
+                <!-- CTA -->
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td align="center" style="padding:0 0 28px;">
+                      <a href="{form_link}" style="display:inline-block;background:#B8860B;color:#ffffff;text-decoration:none;padding:16px 40px;border-radius:3px;font-size:14px;font-weight:700;letter-spacing:0.5px;">
+                        Return to Form &amp; Re-sign &rarr;
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+                <!-- Link fallback -->
+                <div style="background:#F8F9FB;border:1px solid #E8E2D9;border-radius:3px;padding:16px 18px;margin-bottom:24px;">
+                  <p style="font-size:11px;color:#6B7280;margin:0 0 6px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">Or copy this link into your browser</p>
+                  <p style="font-size:12px;color:#B8860B;margin:0;word-break:break-all;font-family:monospace;">{form_link}</p>
+                </div>
+                <div style="background:#FEF9EC;border:1px solid #B8860B;border-radius:3px;padding:14px 18px;">
+                  <p style="font-size:13px;font-weight:800;color:#92640A;margin:0 0 4px;">⚠ Remember — Login Required</p>
+                  <p style="font-size:13px;color:#78510A;line-height:1.7;margin:0;">
+                    Ensure you are already logged into your staff account before opening the link.
+                  </p>
+                </div>
+              </td>
+            </tr>
+            <!-- Footer -->
+            <tr>
+              <td style="background:#F8F9FB;border-top:1px solid #E8E2D9;padding:20px 36px;">
+                <p style="font-size:11px;color:#9CA3AF;margin:0;line-height:1.6;">
+                  <strong style="color:#6B7280;">Eximp &amp; Cloves Infrastructure Limited</strong><br>
+                  RC 8311800 &nbsp;|&nbsp; 57B, Isaac John Street, Yaba, Lagos &nbsp;|&nbsp; +234 912 686 4383<br>
+                  This is an automated HR system notification.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+      </table>
+    </body>
+    </html>
+    """
+
+    import asyncio
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, lambda: resend.Emails.send({
+        "from":     f"Eximp & Cloves HR <{from_email}>",
+        "to":       [email_addr],
+        "subject":  f"Action Required: Guarantor Form Revision — {section_label}",
+        "html":     html,
+        "reply_to": "hr@eximps-cloves.com",
+    }))
+
+
+async def _send_guarantor_own_rejection_email(
+    email_addr: str, guarantor_name: str, section_label: str, reason: str, emp_name: str = ""
+):
+    """Sent directly to the guarantor when their submitted section is rejected by HR."""
+    import resend
+    resend.api_key = os.getenv("RESEND_API_KEY")
+    from_email = os.getenv("FROM_EMAIL", "hr@eximps-cloves.com")
+
+    reason_block = f"""
+                <div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:3px;padding:16px 20px;margin:20px 0;color:#DC2626;font-size:13px;line-height:1.7;">
+                  <strong>Reason for rejection:</strong> {reason}
+                </div>""" if reason else ""
+
+    staff_ref = f"for <strong>{emp_name}</strong>" if emp_name else ""
+
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+    <body style="margin:0;padding:0;background:#F5F0E8;font-family:'Segoe UI',Arial,sans-serif;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F0E8;padding:40px 20px;">
+        <tr><td align="center">
+          <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:4px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+            <!-- Header -->
+            <tr>
+              <td style="background:#0D1B2A;padding:0;border-left:6px solid #DC2626;">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="padding:28px 36px;">
+                      <div style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">Eximp &amp; Cloves Infrastructure Limited</div>
+                      <div style="font-size:10px;color:#DC2626;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-top:4px;">Human Resources Division</div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <!-- Body -->
+            <tr>
+              <td style="padding:40px 36px;">
+                <div style="width:56px;height:56px;background:#FEE2E2;border-radius:50%;text-align:center;line-height:56px;font-size:26px;margin-bottom:20px;">✕</div>
+                <p style="font-size:13px;color:#DC2626;margin:0 0 8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;">Submission Not Accepted</p>
+                <h1 style="font-size:22px;font-weight:800;color:#0D1B2A;margin:0 0 20px;line-height:1.3;">Guarantor Form — Revision Required</h1>
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 16px;">Dear <strong>{guarantor_name}</strong>,</p>
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 16px;">
+                  Thank you for completing <strong>{section_label}</strong> of the Employee Guarantor Form {staff_ref}.
+                  Unfortunately, HR has reviewed your submission and it could not be accepted at this time.
+                </p>
+                {reason_block}
+                <div style="background:#FEF9EC;border:1px solid #B8860B40;border-radius:3px;padding:16px 20px;margin:20px 0;">
+                  <p style="font-size:13px;font-weight:700;color:#92640A;margin:0 0 6px;">What should you do?</p>
+                  <p style="font-size:13px;color:#78510A;line-height:1.7;margin:0;">
+                    Please contact <strong>{emp_name or "the employee"}</strong> whose form you were filling for. They will receive a new link to share with you so you can re-submit the corrected information.
+                  </p>
+                </div>
+                <p style="font-size:13px;color:#9CA3AF;line-height:1.7;margin:0;">
+                  For any queries, contact HR at
+                  <a href="mailto:hr@eximps-cloves.com" style="color:#B8860B;">hr@eximps-cloves.com</a>.
+                </p>
+              </td>
+            </tr>
+            <!-- Footer -->
+            <tr>
+              <td style="background:#F8F9FB;border-top:1px solid #E8E2D9;padding:20px 36px;">
+                <p style="font-size:11px;color:#9CA3AF;margin:0;line-height:1.6;">
+                  <strong style="color:#6B7280;">Eximp &amp; Cloves Infrastructure Limited</strong><br>
+                  RC 8311800 &nbsp;|&nbsp; 57B, Isaac John Street, Yaba, Lagos &nbsp;|&nbsp; +234 912 686 4383<br>
+                  This is an automated HR system notification.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+      </table>
+    </body>
+    </html>
+    """
+
+    import asyncio
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, lambda: resend.Emails.send({
+        "from":     f"Eximp & Cloves HR <{from_email}>",
+        "to":       [email_addr],
+        "subject":  f"Guarantor Form Submission Not Accepted — {section_label}",
+        "html":     html,
+        "reply_to": "hr@eximps-cloves.com",
+    }))
+
+
+async def _send_guarantor_own_approval_email(
+    email_addr: str, guarantor_name: str, section_label: str
+):
+    """Sent directly to the guarantor when their submitted section is approved by HR."""
+    import resend
+    resend.api_key = os.getenv("RESEND_API_KEY")
+    from_email = os.getenv("FROM_EMAIL", "hr@eximps-cloves.com")
+
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+    <body style="margin:0;padding:0;background:#F5F0E8;font-family:'Segoe UI',Arial,sans-serif;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F0E8;padding:40px 20px;">
+        <tr><td align="center">
+          <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:4px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+            <!-- Header -->
+            <tr>
+              <td style="background:#0D1B2A;padding:0;border-left:6px solid #10B981;">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="padding:28px 36px;">
+                      <div style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">Eximp &amp; Cloves Infrastructure Limited</div>
+                      <div style="font-size:10px;color:#10B981;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-top:4px;">Human Resources Division</div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <!-- Body -->
+            <tr>
+              <td style="padding:40px 36px;">
+                <div style="width:64px;height:64px;background:#ECFDF5;border-radius:50%;text-align:center;line-height:64px;font-size:30px;margin-bottom:20px;">✓</div>
+                <p style="font-size:13px;color:#10B981;margin:0 0 8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;">Submission Accepted</p>
+                <h1 style="font-size:22px;font-weight:800;color:#0D1B2A;margin:0 0 20px;line-height:1.3;">Guarantor Form Approved</h1>
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 16px;">Dear <strong>{guarantor_name}</strong>,</p>
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 16px;">
+                  We are pleased to inform you that your submission for <strong>{section_label}</strong> of the Employee Guarantor Form
+                  has been reviewed and <strong style="color:#059669;">approved</strong> by HR. No further action is required from you.
+                </p>
+                <div style="background:#ECFDF5;border:1px solid #10B98140;border-radius:3px;padding:16px 20px;margin:20px 0;">
+                  <p style="font-size:13px;color:#065F46;line-height:1.7;margin:0;">
+                    Your details are now on file with the HR department as part of the official employment documentation for the staff member you guaranteed.
+                    We appreciate your time and cooperation.
+                  </p>
+                </div>
+                <p style="font-size:13px;color:#9CA3AF;line-height:1.7;margin:0;">
+                  For any queries, contact HR at
+                  <a href="mailto:hr@eximps-cloves.com" style="color:#B8860B;">hr@eximps-cloves.com</a>.
+                </p>
+              </td>
+            </tr>
+            <!-- Footer -->
+            <tr>
+              <td style="background:#F8F9FB;border-top:1px solid #E8E2D9;padding:20px 36px;">
+                <p style="font-size:11px;color:#9CA3AF;margin:0;line-height:1.6;">
+                  <strong style="color:#6B7280;">Eximp &amp; Cloves Infrastructure Limited</strong><br>
+                  RC 8311800 &nbsp;|&nbsp; 57B, Isaac John Street, Yaba, Lagos &nbsp;|&nbsp; +234 912 686 4383<br>
+                  This is an automated HR system notification.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+      </table>
+    </body>
+    </html>
+    """
+
+    import asyncio
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, lambda: resend.Emails.send({
+        "from":     f"Eximp & Cloves HR <{from_email}>",
+        "to":       [email_addr],
+        "subject":  f"Guarantor Form Approved — {section_label}",
+        "html":     html,
+        "reply_to": "hr@eximps-cloves.com",
+    }))
+
+
+async def _send_guarantor_invite_email(email_addr: str, inviter_name: str, form_link: str):
+    """Send a professional guarantor form invitation email via Resend."""
+    import resend
+    resend.api_key = os.getenv("RESEND_API_KEY")
+    from_email = os.getenv("FROM_EMAIL", "hr@eximps-cloves.com")
+
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+    <body style="margin:0;padding:0;background:#F5F0E8;font-family:'Segoe UI',Arial,sans-serif;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F0E8;padding:40px 20px;">
+        <tr><td align="center">
+          <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:4px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+
+            <!-- Header bar -->
+            <tr>
+              <td style="background:#0D1B2A;padding:0 0 0 0;border-left:6px solid #B8860B;">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="padding:28px 36px;">
+                      <div style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">
+                        Eximp &amp; Cloves Infrastructure Limited
+                      </div>
+                      <div style="font-size:10px;color:#B8860B;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-top:4px;">
+                        Human Resources Division
+                      </div>
+                    </td>
+                    <td align="right" style="padding:28px 36px;">
+                      <div style="display:inline-block;border:1px solid #B8860B;color:#B8860B;font-size:9px;font-weight:800;letter-spacing:2px;text-transform:uppercase;padding:5px 12px;border-radius:2px;">
+                        Confidential
+                      </div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Body -->
+            <tr>
+              <td style="padding:40px 36px;">
+                <p style="font-size:13px;color:#6B7280;margin:0 0 8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;">
+                  Official HR Communication
+                </p>
+                <h1 style="font-size:24px;font-weight:800;color:#0D1B2A;margin:0 0 24px;line-height:1.2;">
+                  Guarantor Form Submission Required
+                </h1>
+
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 16px;">
+                  Dear Employee,
+                </p>
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 16px;">
+                  As part of your employment documentation process, you are required to complete the
+                  <strong>Employee Guarantor's Form</strong>. This form must be filled out by you
+                  and two independent guarantors before your file can be considered complete.
+                </p>
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 32px;">
+                  Please click the button below to access your secure, personalised form. Once you
+                  complete your section, a link will be generated for you to share with your guarantors.
+                </p>
+
+                <!-- CTA Button -->
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td align="center" style="padding:0 0 32px;">
+                      <a href="{form_link}"
+                         style="display:inline-block;background:#0D1B2A;color:#ffffff;text-decoration:none;padding:16px 40px;border-radius:3px;font-size:14px;font-weight:700;letter-spacing:0.5px;">
+                        Open Guarantor Form &rarr;
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+
+                <!-- Link fallback -->
+                <div style="background:#F8F9FB;border:1px solid #E8E2D9;border-radius:3px;padding:16px 18px;margin-bottom:28px;">
+                  <p style="font-size:11px;color:#6B7280;margin:0 0 6px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">
+                    Or copy this link into your browser
+                  </p>
+                  <p style="font-size:12px;color:#B8860B;margin:0;word-break:break-all;font-family:monospace;">
+                    {form_link}
+                  </p>
+                </div>
+
+                <!-- Login Notice -->
+                <div style="background:#FEF9EC;border:1px solid #B8860B;border-radius:3px;padding:16px 20px;margin-bottom:20px;">
+                  <p style="font-size:13px;font-weight:800;color:#92640A;margin:0 0 6px;">⚠ Important — Login Required</p>
+                  <p style="font-size:13px;color:#78510A;line-height:1.7;margin:0;">
+                    This form requires you to be logged in to the company portal.
+                    <strong>Before clicking the link or copying it into your browser, please ensure you are already
+                    logged in to your staff account at
+                    <a href="https://app.eximps-cloves.com/hr" style="color:#B8860B;">app.eximps-cloves.com/hr</a>.</strong>
+                    Once logged in, then open or paste the form link in the same browser.
+                  </p>
+                </div>
+
+                <!-- Instructions -->
+                <div style="border-left:3px solid #B8860B;padding:16px 20px;background:#FDFBF7;margin-bottom:28px;">
+                  <p style="font-size:13px;font-weight:700;color:#0D1B2A;margin:0 0 10px;">How to complete your form</p>
+                  <ol style="font-size:13px;color:#374151;line-height:1.9;margin:0;padding-left:18px;">
+                    <li>Log in to your staff account at <a href="https://app.eximps-cloves.com/hr" style="color:#B8860B;">app.eximps-cloves.com/hr</a> first.</li>
+                    <li>Once logged in, click the button above <em>in the same browser</em>, or copy and paste the link below into that browser.</li>
+                    <li>Verify your identity with your company email address on the form.</li>
+                    <li>Complete <strong>Section A</strong> — your personal employment details and signature.</li>
+                    <li>Share the generated link with your <strong>two guarantors</strong> to complete Sections B &amp; C.</li>
+                  </ol>
+                </div>
+
+                <p style="font-size:13px;color:#9CA3AF;line-height:1.7;margin:0;">
+                  This link is unique to your account and expires in <strong>7 days</strong>.
+                  If you have any questions, please contact HR at
+                  <a href="mailto:hr@eximps-cloves.com" style="color:#B8860B;">hr@eximps-cloves.com</a>.
+                </p>
+              </td>
+            </tr>
+
+            <!-- Footer -->
+            <tr>
+              <td style="background:#F8F9FB;border-top:1px solid #E8E2D9;padding:20px 36px;">
+                <p style="font-size:11px;color:#9CA3AF;margin:0;line-height:1.6;">
+                  <strong style="color:#6B7280;">Eximp &amp; Cloves Infrastructure Limited</strong><br>
+                  RC 8311800 &nbsp;|&nbsp; 57B, Isaac John Street, Yaba, Lagos &nbsp;|&nbsp; +234 912 686 4383<br>
+                  This email was sent by {inviter_name} via the HR Management System.
+                  It contains confidential employment information intended solely for the named recipient.
+                </p>
+              </td>
+            </tr>
+
+          </table>
+        </td></tr>
+      </table>
+    </body>
+    </html>
+    """
+
+    import asyncio
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, lambda: resend.Emails.send({
+        "from":     f"Eximp & Cloves HR <{from_email}>",
+        "to":       [email_addr],
+        "subject":  "Action Required: Complete Your Employee Guarantor Form",
+        "html":     html,
+        "reply_to": "hr@eximps-cloves.com",
+    }))
+
+
+@router.get("/general-link")
+async def get_general_link(request: Request):
+    db = get_db()
+    settings_res = await db_execute(
+        lambda: db.table("guarantor_settings").select("*").limit(1).execute()
+    )
+    if not settings_res.data:
+        return {"link": "", "is_collecting": False}
+
+    settings = settings_res.data[0]
+    base_url  = _build_base_url(request)
+
+    # The Vite app is mounted at /hr/ so the public form URL is /hr/?guarantor_token=...
+    link = f"{base_url}/?guarantor_token={settings['general_link_token']}"
+
+    return {
+        "link":         link,
+        "is_collecting": settings["is_collecting"],
+    }
+
+
+@router.get("/my-submission")
+async def get_my_submission(current_admin=Depends(verify_token)):
+    """
+    Staff-scoped endpoint. Returns the logged-in employee's own guarantor
+    submission (including both guarantor slots) without exposing any other
+    employee's data. Any authenticated user can call this — no HR role required.
+    """
+    db = get_db()
+    email = current_admin.get("email")
+    if not email:
+        raise HTTPException(status_code=400, detail="Could not resolve your email from the session.")
+
+    sub_res = await db_execute(
+        lambda: db.table("guarantor_submissions")
+        .select("*")
+        .eq("employee_email", email)
+        .order("submitted_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+
+    if not sub_res.data:
+        return {"submission": None}
+
+    sub = sub_res.data[0]
+    _sign_sub(sub)
+
+    g_res = await db_execute(
+        lambda: db.table("guarantors")
+        .select("*")
+        .eq("submission_id", sub["id"])
+        .order("slot_number")
+        .execute()
+    )
+
+    sub["guarantor1"] = None
+    sub["guarantor2"] = None
+    for g in g_res.data:
+        _sign_guarantor(g)
+        slot = g.get("slot_number", 1)
+        sub[f"guarantor{slot}"] = g
+
+    return {"submission": sub}
+
+
+@router.patch("/settings")
+async def update_settings(data: dict, current_admin=Depends(verify_token)):
+    if not has_any_role(current_admin, "admin", "super_admin", "hr_admin"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    db = get_db()
+
+    update_data = {}
+    if "is_collecting" in data:
+        update_data["is_collecting"] = data["is_collecting"]
+
+    settings_res = await db_execute(
+        lambda: db.table("guarantor_settings").select("id").limit(1).execute()
+    )
+    if not settings_res.data:
+        raise HTTPException(status_code=404, detail="Settings record not found")
+
+    res = await db_execute(
+        lambda: db.table("guarantor_settings")
+        .update(update_data)
+        .eq("id", settings_res.data[0]["id"])
+        .execute()
+    )
+    return res.data[0]
+
+
+async def _send_guarantor_submission_email(email_addr: str, name: str, role_label: str, emp_name: str = ""):
+    """Sent immediately to the guarantor on successful form submission."""
+    import resend
+    resend.api_key = os.getenv("RESEND_API_KEY")
+    from_email = os.getenv("FROM_EMAIL", "hr@eximps-cloves.com")
+
+    staff_line = f"as a guarantor for <strong>{emp_name}</strong>" if emp_name else "as part of the Employee Guarantor Form"
+
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+    <body style="margin:0;padding:0;background:#F5F0E8;font-family:'Segoe UI',Arial,sans-serif;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F0E8;padding:40px 20px;">
+        <tr><td align="center">
+          <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:4px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+            <!-- Header -->
+            <tr>
+              <td style="background:#0D1B2A;padding:0;border-left:6px solid #10B981;">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="padding:28px 36px;">
+                      <div style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">Eximp &amp; Cloves Infrastructure Limited</div>
+                      <div style="font-size:10px;color:#10B981;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-top:4px;">Human Resources Division</div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <!-- Body -->
+            <tr>
+              <td style="padding:40px 36px;">
+                <div style="width:64px;height:64px;background:#ECFDF5;border-radius:50%;text-align:center;line-height:64px;font-size:30px;margin-bottom:20px;">✓</div>
+                <p style="font-size:13px;color:#10B981;margin:0 0 8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;">Submission Confirmed</p>
+                <h1 style="font-size:22px;font-weight:800;color:#0D1B2A;margin:0 0 20px;line-height:1.3;">Guarantor Form Received</h1>
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 16px;">Dear <strong>{name}</strong>,</p>
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 16px;">
+                  We confirm that your <strong>{role_label}</strong> submission {staff_line} has been successfully received by the HR &amp; Admin team at Eximp &amp; Cloves Infrastructure Limited.
+                </p>
+                <div style="background:#ECFDF5;border:1px solid #10B98140;border-radius:3px;padding:16px 20px;margin:20px 0;">
+                  <p style="font-size:13px;font-weight:700;color:#065F46;margin:0 0 6px;">What happens next?</p>
+                  <ul style="font-size:13px;color:#374151;line-height:1.9;margin:0;padding-left:18px;">
+                    <li>HR and Admin will review your submitted details.</li>
+                    <li>You will receive an email notification once verification is complete.</li>
+                    <li>If any revision is required, you will be contacted with clear instructions.</li>
+                  </ul>
+                </div>
+                <p style="font-size:13px;color:#9CA3AF;line-height:1.7;margin:0;">
+                  If you have any questions, contact HR at
+                  <a href="mailto:hr@eximps-cloves.com" style="color:#B8860B;">hr@eximps-cloves.com</a>.
+                </p>
+              </td>
+            </tr>
+            <!-- Footer -->
+            <tr>
+              <td style="background:#F8F9FB;border-top:1px solid #E8E2D9;padding:20px 36px;">
+                <p style="font-size:11px;color:#9CA3AF;margin:0;line-height:1.6;">
+                  <strong style="color:#6B7280;">Eximp &amp; Cloves Infrastructure Limited</strong><br>
+                  RC 8311800 &nbsp;|&nbsp; 57B, Isaac John Street, Yaba, Lagos &nbsp;|&nbsp; +234 912 686 4383<br>
+                  This is an automated HR system notification.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+      </table>
+    </body>
+    </html>
+    """
+
+    import asyncio
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, lambda: resend.Emails.send({
+        "from":     f"Eximp & Cloves HR <{from_email}>",
+        "to":       [email_addr],
+        "cc":       ["hr@eximps-cloves.com"],
+        "subject":  "Guarantor Form Submission Received — Eximp & Cloves",
+        "html":     html,
+        "reply_to": "hr@eximps-cloves.com",
+    }))
+
+
+async def _send_staff_guarantor_notification_email(
+    email_addr: str, emp_name: str, guarantor_name: str, section_label: str
+):
+    """Sent to the employee/staff when one of their guarantors successfully submits their section."""
+    import resend
+    resend.api_key = os.getenv("RESEND_API_KEY")
+    from_email = os.getenv("FROM_EMAIL", "hr@eximps-cloves.com")
+
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+    <body style="margin:0;padding:0;background:#F5F0E8;font-family:'Segoe UI',Arial,sans-serif;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F0E8;padding:40px 20px;">
+        <tr><td align="center">
+          <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:4px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+            <!-- Header -->
+            <tr>
+              <td style="background:#0D1B2A;padding:0;border-left:6px solid #3B82F6;">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="padding:28px 36px;">
+                      <div style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">Eximp &amp; Cloves Infrastructure Limited</div>
+                      <div style="font-size:10px;color:#3B82F6;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-top:4px;">Human Resources Division</div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <!-- Body -->
+            <tr>
+              <td style="padding:40px 36px;">
+                <div style="width:64px;height:64px;background:#EFF6FF;border-radius:50%;text-align:center;line-height:64px;font-size:30px;margin-bottom:20px;">📋</div>
+                <p style="font-size:13px;color:#3B82F6;margin:0 0 8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;">Guarantor Update</p>
+                <h1 style="font-size:22px;font-weight:800;color:#0D1B2A;margin:0 0 20px;line-height:1.3;">Your Guarantor Has Submitted Their Form</h1>
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 16px;">Dear <strong>{emp_name}</strong>,</p>
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 16px;">
+                  We are writing to inform you that <strong>{guarantor_name}</strong> has successfully completed and submitted
+                  <strong>{section_label}</strong> of your Employee Guarantor Form.
+                </p>
+                <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:3px;padding:16px 20px;margin:20px 0;">
+                  <p style="font-size:13px;font-weight:700;color:#1D4ED8;margin:0 0 6px;">What happens next?</p>
+                  <ul style="font-size:13px;color:#374151;line-height:1.9;margin:0;padding-left:18px;">
+                    <li>HR and Admin will review the submitted guarantor details.</li>
+                    <li>You will receive an email notification once the review is complete.</li>
+                    <li>If any corrections are required, you and/or your guarantor will be contacted.</li>
+                  </ul>
+                </div>
+                <p style="font-size:13px;color:#9CA3AF;line-height:1.7;margin:0;">
+                  If you have any questions, contact HR at
+                  <a href="mailto:hr@eximps-cloves.com" style="color:#B8860B;">hr@eximps-cloves.com</a>.
+                </p>
+              </td>
+            </tr>
+            <!-- Footer -->
+            <tr>
+              <td style="background:#F8F9FB;border-top:1px solid #E8E2D9;padding:20px 36px;">
+                <p style="font-size:11px;color:#9CA3AF;margin:0;line-height:1.6;">
+                  <strong style="color:#6B7280;">Eximp &amp; Cloves Infrastructure Limited</strong><br>
+                  RC 8311800 &nbsp;|&nbsp; 57B, Isaac John Street, Yaba, Lagos &nbsp;|&nbsp; +234 912 686 4383<br>
+                  This is an automated HR system notification.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+      </table>
+    </body>
+    </html>
+    """
+
+    import asyncio
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, lambda: resend.Emails.send({
+        "from":     f"Eximp & Cloves HR <{from_email}>",
+        "to":       [email_addr],
+        "cc":       ["hr@eximps-cloves.com"],
+        "subject":  f"Your Guarantor Has Submitted — {section_label}",
+        "html":     html,
+        "reply_to": "hr@eximps-cloves.com",
+    }))
+
+
+async def _send_guarantor_approval_email(email_addr: str, name: str, section_label: str):
+    """Sent to the employee when HR approves their guarantor form (section or overall)."""
+    import resend
+    resend.api_key = os.getenv("RESEND_API_KEY")
+    from_email = os.getenv("FROM_EMAIL", "hr@eximps-cloves.com")
+
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+    <body style="margin:0;padding:0;background:#F5F0E8;font-family:'Segoe UI',Arial,sans-serif;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F0E8;padding:40px 20px;">
+        <tr><td align="center">
+          <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:4px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+            <!-- Header -->
+            <tr>
+              <td style="background:#0D1B2A;padding:0;border-left:6px solid #B8860B;">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="padding:28px 36px;">
+                      <div style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">Eximp &amp; Cloves Infrastructure Limited</div>
+                      <div style="font-size:10px;color:#B8860B;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-top:4px;">Human Resources Division</div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <!-- Body -->
+            <tr>
+              <td style="padding:40px 36px;">
+                <div style="width:64px;height:64px;background:#FEF9EC;border-radius:50%;text-align:center;line-height:64px;font-size:30px;margin-bottom:20px;">✅</div>
+                <p style="font-size:13px;color:#B8860B;margin:0 0 8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;">Verification Complete</p>
+                <h1 style="font-size:22px;font-weight:800;color:#0D1B2A;margin:0 0 20px;line-height:1.3;">Guarantor Form Approved</h1>
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 16px;">Dear <strong>{name}</strong>,</p>
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 16px;">
+                  We are pleased to inform you that <strong>{section_label}</strong> of your Employee Guarantor Form has been reviewed and <strong style="color:#059669;">approved</strong> by HR.
+                </p>
+                <div style="background:#FEF9EC;border:1px solid #B8860B40;border-radius:3px;padding:16px 20px;margin:20px 0;">
+                  <p style="font-size:13px;color:#78510A;line-height:1.7;margin:0;">
+                    This section is now on file with the HR department as part of your official employment documentation. No further action is required from you at this time.
+                  </p>
+                </div>
+                <p style="font-size:13px;color:#9CA3AF;line-height:1.7;margin:0;">
+                  For any queries, contact HR at
+                  <a href="mailto:hr@eximps-cloves.com" style="color:#B8860B;">hr@eximps-cloves.com</a>.
+                </p>
+              </td>
+            </tr>
+            <!-- Footer -->
+            <tr>
+              <td style="background:#F8F9FB;border-top:1px solid #E8E2D9;padding:20px 36px;">
+                <p style="font-size:11px;color:#9CA3AF;margin:0;line-height:1.6;">
+                  <strong style="color:#6B7280;">Eximp &amp; Cloves Infrastructure Limited</strong><br>
+                  RC 8311800 &nbsp;|&nbsp; 57B, Isaac John Street, Yaba, Lagos &nbsp;|&nbsp; +234 912 686 4383<br>
+                  This is an automated HR system notification.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+      </table>
+    </body>
+    </html>
+    """
+
+    import asyncio
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, lambda: resend.Emails.send({
+        "from":     f"Eximp & Cloves HR <{from_email}>",
+        "to":       [email_addr],
+        "cc":       ["hr@eximps-cloves.com"],
+        "subject":  f"Guarantor Form Approved — {section_label}",
+        "html":     html,
+        "reply_to": "hr@eximps-cloves.com",
+    }))
+
+
+# ── Public Endpoints ──────────────────────────────────────────────────────────
+
+@router.get("/public/check")
+async def check_public_token(token: str, email: str):
+    db = get_db()
+    settings_res = await db_execute(
+        lambda: db.table("guarantor_settings").select("*").limit(1).execute()
+    )
+    if not settings_res.data or not settings_res.data[0]["is_collecting"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Guarantor form collection is currently closed. Please contact HR.",
+        )
+
+    settings   = settings_res.data[0]
+    is_general = token == settings["general_link_token"]
+
+    if not is_general:
+        invite_res = await db_execute(
+            lambda: db.table("guarantor_invites")
+            .select("*")
+            .eq("token", token)
+            .eq("email", email)
+            .execute()
+        )
+        if not invite_res.data:
+            raise HTTPException(
+                status_code=404, detail="Invalid invitation link or email address."
+            )
+        invite = invite_res.data[0]
+        if invite["status"] != "pending":
+            # Allow re-access if any section on their submission was rejected by HR
+            sub_check_res = await db_execute(
+                lambda: db.table("guarantor_submissions")
+                .select("section_a_status,section_b_status,section_c_status")
+                .eq("employee_email", email)
+                .limit(1)
+                .execute()
+            )
+            has_rejected_section = False
+            if sub_check_res.data:
+                s = sub_check_res.data[0]
+                has_rejected_section = any(
+                    s.get(f"section_{x}_status") == "rejected" for x in ("a", "b", "c")
+                )
+            if not has_rejected_section:
+                raise HTTPException(
+                    status_code=400,
+                    detail="This invitation link has already been used.",
+                )
+        expires_at = datetime.fromisoformat(invite["expires_at"].replace("Z", "+00:00"))
+        if expires_at < datetime.now(timezone.utc):
+            raise HTTPException(status_code=400, detail="This invitation link has expired.")
+
+    # Load submission (if any) for this email
+    sub_res = await db_execute(
+        lambda: db.table("guarantor_submissions")
+        .select("*, guarantors(*)")
+        .eq("employee_email", email)
+        .execute()
+    )
+
+    submission = None
+    if sub_res.data:
+        submission = sub_res.data[0]
+        _sign_sub(submission)
+
+        guarantors = submission.pop("guarantors", []) or []
+        submission["g1"] = next((g for g in guarantors if g["slot_number"] == 1), None)
+        submission["g2"] = next((g for g in guarantors if g["slot_number"] == 2), None)
+        for key in ("g1", "g2"):
+            if submission[key]:
+                _sign_guarantor(submission[key])
+
+    # Always try to load staff info (used to pre-fill the form)
+    staff_info = None
+    staff_res = await db_execute(
+        lambda: db.table("admins")
+        .select("id, full_name, role, department")
+        .eq("email", email)
+        .execute()
+    )
+    if staff_res.data:
+        staff_info = staff_res.data[0]
+        profile_res = await db_execute(
+            lambda: db.table("staff_profiles")
+            .select("*")
+            .eq("admin_id", staff_info["id"])
+            .execute()
+        )
+        profile = profile_res.data[0] if profile_res.data else {}
+        staff_info["staff_id"]  = profile.get("staff_id", "")
+        staff_info["job_title"] = profile.get("job_title") or staff_info.get("role", "")
+
+    return {
+        "status":     "ok",
+        "staff_info": staff_info,
+        "submission": submission,
+        "is_general": is_general,
+    }
+
+
+@router.post("/public/save-partial")
+async def save_partial_submission(
+    request:        Request,
+    token:          str           = Form(...),
+    email:          str           = Form(...),
+    section:        str           = Form(...),   # "employee" | "g1" | "g2"
+    data:           str           = Form(...),   # JSON string
+    passport_photo:  Optional[UploadFile] = File(None),
+    id_document:     Optional[UploadFile] = File(None),
+    signature_file:  Optional[UploadFile] = File(None),  # canvas blob sent as file (avoids base64-in-JSON part-size limit)
+):
+    fields = json.loads(data)
+    db     = get_db()
+
+    # Resolve or create submission ID
+    sub_res = await db_execute(
+        lambda: db.table("guarantor_submissions")
+        .select("id")
+        .eq("employee_email", email)
+        .execute()
+    )
+    submission_id = sub_res.data[0]["id"] if sub_res.data else str(uuid.uuid4())
+
+    async def _upload_file(file: Optional[UploadFile], name: str) -> Optional[str]:
+        if not file:
+            return None
+        try:
+            content = await file.read()
+            path    = f"guarantors/{submission_id}/{name}_{file.filename}"
+            upload_portal_file(path, content, file.content_type)
+            return path
+        except Exception:
+            return None
+
+    async def _upload_sig_file(file: Optional[UploadFile], name: str) -> Optional[str]:
+        """Upload signature sent as a proper file part (preferred — avoids base64-in-JSON part-size limit)."""
+        if not file:
+            return None
+        try:
+            content = await file.read()
+            ext  = "jpg" if (file.content_type or "").endswith("jpeg") else "png"
+            path = f"guarantors/{submission_id}/{name}.{ext}"
+            upload_portal_file(path, content, file.content_type or "image/png")
+            return path
+        except Exception:
+            return None
+
+    def _upload_sig(b64: Optional[str], name: str) -> Optional[str]:
+        """Fallback: upload signature from base64 string embedded in JSON data field."""
+        if not b64 or "," not in b64:
+            return None
+        try:
+            img_data = base64.b64decode(b64.split(",")[1])
+            path     = f"guarantors/{submission_id}/{name}.png"
+            upload_portal_file(path, img_data, "image/png")
+            return path
+        except Exception:
+            return None
+
+    # ── EMPLOYEE SECTION ──────────────────────────────────────────────────
+    if section == "employee":
+        sig_path = await _upload_sig_file(signature_file, "employee_sig") or _upload_sig(fields.get("signature"), "employee_sig")
+
+        meta = _signing_meta(request)
+        payload: dict = {
+            "id":                       submission_id,
+            "employee_name":            fields.get("full_name"),
+            "employee_email":           email,
+            "position":                 fields.get("position"),
+            "staff_id":                 fields.get("staff_id"),
+            "date_of_employment":       fields.get("date_of_employment"),
+            "employee_phone":           fields.get("phone"),
+            "employee_address":         fields.get("address"),
+            "section_a_status":         "pending",
+            "submitted_at":             datetime.utcnow().isoformat(),
+            # Signing audit trail
+            "employee_signed_at":       meta["signed_at"],
+            "employee_ip":              meta["ip"],
+            "employee_device_type":     meta["device_type"],
+            "employee_user_agent":      meta["user_agent"],
+            "employee_signed_date":     fields.get("signed_date"),
+        }
+        if sig_path:
+            payload["employee_signature_url"] = sig_path
+
+        await db_execute(
+            lambda: db.table("guarantor_submissions").upsert(payload).execute()
+        )
+
+        # Confirm receipt to the employee
+        try:
+            emp_name = fields.get("full_name") or email
+            await _send_guarantor_submission_email(email, emp_name, "Section A (Employee Details)")
+        except Exception:
+            pass
+
+    # ── GUARANTOR SECTIONS ────────────────────────────────────────────────
+    elif section in ("g1", "g2"):
+        slot    = 1 if section == "g1" else 2
+        sig_key = f"g{slot}_sig"
+
+        sig_path      = await _upload_sig_file(signature_file, sig_key) or _upload_sig(fields.get("signature"), sig_key)
+        passport_path = await _upload_file(passport_photo, f"g{slot}_passport")
+        id_doc_path   = await _upload_file(id_document,    f"g{slot}_id")
+
+        meta = _signing_meta(request)
+        g_payload: dict = {
+            "submission_id":    submission_id,
+            "slot_number":      slot,
+            "full_name":        fields.get("full_name"),
+            "relationship":     fields.get("relationship"),
+            "address":          fields.get("address"),
+            "occupation":       fields.get("occupation"),
+            "employer_name":    fields.get("employer_name"),
+            "position_held":    fields.get("position_held"),
+            "years_at_job":     fields.get("years_at_job"),
+            "phone":            fields.get("phone"),
+            "email":            fields.get("email"),
+            "id_type":          fields.get("id_type"),
+            "id_number":        fields.get("id_number"),
+            # Signing audit trail
+            "signed_at":        meta["signed_at"],
+            "ip_address":       meta["ip"],
+            "device_type":      meta["device_type"],
+            "user_agent":       meta["user_agent"],
+            "signed_date":      fields.get("signed_date"),
+        }
+        if sig_path:
+            g_payload["signature_url"] = sig_path
+        if passport_path:
+            g_payload["passport_photo_url"] = passport_path
+        if id_doc_path:
+            g_payload["id_document_url"] = id_doc_path
+
+        await db_execute(
+            lambda: db.table("guarantors")
+            .upsert(g_payload, on_conflict="submission_id, slot_number")
+            .execute()
+        )
+
+        # Reset section status to pending (so HR knows to re-review)
+        sec_col = "section_b_status" if section == "g1" else "section_c_status"
+        await db_execute(
+            lambda: db.table("guarantor_submissions")
+            .update({sec_col: "pending"})
+            .eq("id", submission_id)
+            .execute()
+        )
+
+        # Notify employee (in-app) + send confirmation email to the guarantor
+        try:
+            # Email the guarantor their own submission confirmation — do this first,
+            # independently, so it always fires regardless of what happens with the
+            # employee lookup below.
+            g_email = fields.get("email")
+            g_name  = fields.get("full_name") or f"Guarantor {slot}"
+            sec_label = "Section B (Guarantor 1)" if slot == 1 else "Section C (Guarantor 2)"
+            if g_email:
+                await _send_guarantor_submission_email(g_email, g_name, sec_label)
+        except Exception:
+            pass
+
+        # Notify the employee (in-app + email) that their guarantor has submitted
+        try:
+            sub_res = await db_execute(
+                lambda: db.table("guarantor_submissions")
+                .select("employee_email, employee_name")
+                .eq("id", submission_id)
+                .execute()
+            )
+            emp_email_from_sub = sub_res.data[0]["employee_email"] if sub_res.data else None
+            emp_name_from_sub = (sub_res.data[0].get("employee_name") or emp_email_from_sub) if sub_res.data else None
+
+            if emp_email_from_sub:
+                # In-app notification (isolated so failure never blocks email)
+                try:
+                    admin_res = await db_execute(
+                        lambda: db.table("admins").select("id").eq("email", emp_email_from_sub).execute()
+                    )
+                    if admin_res.data:
+                        g_name_notify = fields.get("full_name") or f"Guarantor {slot}"
+                        await db_execute(
+                            lambda: db.table("notifications").insert({
+                                "admin_id": admin_res.data[0]["id"],
+                                "title": "Your Guarantor Has Submitted",
+                                "notification_type": "guarantor_submission",
+                                "message": f"{g_name_notify} has completed their part of your Guarantor Form.",
+                            }).execute()
+                        )
+                except Exception:
+                    pass
+
+                # Email the staff/employee
+                try:
+                    g_name_notify = fields.get("full_name") or f"Guarantor {slot}"
+                    sec_label_notify = "Section B (Guarantor 1)" if slot == 1 else "Section C (Guarantor 2)"
+                    await _send_staff_guarantor_notification_email(
+                        emp_email_from_sub, emp_name_from_sub, g_name_notify, sec_label_notify
+                    )
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    # Build relay link — the Vite app is mounted at /hr/
+    base_url   = _build_base_url(request)
+    relay_link = f"{base_url}/?guarantor_token={token}&email={email}"
+
+    return {
+        "status":        "success",
+        "submission_id": submission_id,
+        "relay_link":    relay_link,
+    }
+
+
+
+def _parse_device_type(ua: str) -> str:
+    """Derive a simple device category from the User-Agent string."""
+    ua_l = ua.lower()
+    if any(k in ua_l for k in ("iphone", "android", "mobile", "blackberry", "windows phone")):
+        return "Mobile"
+    if any(k in ua_l for k in ("ipad", "tablet")):
+        return "Tablet"
+    return "Desktop"
+
+
+def _signing_meta(request) -> dict:
+    """Return IP address, user-agent, device type, and UTC timestamp from an HTTP request."""
+    forwarded = request.headers.get("x-forwarded-for", "")
+    ip = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else "unknown")
+    ua = request.headers.get("user-agent", "unknown")
+    return {
+        "ip":          ip,
+        "user_agent":  ua,
+        "device_type": _parse_device_type(ua),
+        "signed_at":   datetime.utcnow().isoformat(),
+    }
+
+@router.get("/company-info")
+async def get_company_info():
+    return {
+        "name":       "Eximp & Cloves Infrastructure Limited",
+        "address":    "57B, Isaac John Street, Yaba, Lagos",
+        "rc":         "RC 8311800",
+        "phone":      "+234 912 686 4383",
+        "email_addr": "hr@eximps-cloves.com",
+    }

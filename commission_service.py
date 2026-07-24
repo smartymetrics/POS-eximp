@@ -33,12 +33,13 @@ def get_commission_config(sales_rep_id: str, estate_name: str, verification_date
         }
 
     # 3. Check if this is a Vendor Partner
-    vendor_res = db.table("vendors").select("gross_commission_rate, wht_rate").eq("id", sales_rep_id).eq("is_commission_partner", True).execute()
+    vendor_res = db.table("vendors").select("id, gross_commission_rate, wht_rate").eq("id", sales_rep_id).eq("is_commission_partner", True).execute()
     if vendor_res.data:
         v = vendor_res.data[0]
         return {
             "gross_rate": float(v.get("gross_commission_rate") or 15.0),
-            "wht_rate": float(v.get("wht_rate") or 5.0)
+            "wht_rate": float(v.get("wht_rate") or 5.0),
+            "vendor_id": v["id"]
         }
 
     return {"gross_rate": 10.0, "wht_rate": 5.0}
@@ -141,24 +142,40 @@ async def sync_invoice_commissions(invoice_id: str, db, performed_by: str = "sys
         )
         
         pay_amt = float(pay["amount"])
-        gross_comm = round(pay_amt * config["gross_rate"] / 100, 2)
+        # Handle legacy vs itemized invoices dynamically
+        has_itemization = invoice.get("land_cost") is not None
+        if has_itemization:
+            amount = float(invoice.get("amount") or 1.0)
+            land_cost = float(invoice.get("land_cost") or 0.0)
+            ratio = land_cost / amount if amount > 0 else 0.90
+            commission_base = pay_amt * ratio
+        else:
+            commission_base = pay_amt
+        gross_comm = round(commission_base * config["gross_rate"] / 100, 2)
         wht_amt = round(gross_comm * config["wht_rate"] / 100, 2)
         net_comm = gross_comm - wht_amt
         
-        earning = db.table("commission_earnings").insert({
-            "sales_rep_id": rep_id,
-            "invoice_id": invoice_id,
-            "payment_id": pay["id"],
-            "client_id": invoice["client_id"],
-            "estate_name": invoice["property_name"],
-            "payment_amount": pay_amt,
-            "commission_rate": config["gross_rate"],
-            "commission_amount": net_comm, # Still keep this for backward compat
+        earning_payload = {
+            "invoice_id":       invoice_id,
+            "payment_id":       pay["id"],
+            "client_id":        invoice["client_id"],
+            "estate_name":      invoice["property_name"],
+            "payment_amount":   pay_amt,
+            "commission_rate":  config["gross_rate"],
+            "commission_amount": net_comm,
             "gross_commission": gross_comm,
-            "wht_amount": wht_amt,
-            "net_commission": net_comm,
-            "created_at": pay["created_at"]
-        }).execute().data[0]
+            "wht_amount":       wht_amt,
+            "net_commission":   net_comm,
+            "created_at":       pay["created_at"],
+        }
+        # Write the correct owner — vendor_id for partners, sales_rep_id for staff
+        # config should include vendor_id if this is a partner commission
+        if config.get("vendor_id"):
+            earning_payload["vendor_id"]    = config["vendor_id"]
+        else:
+            earning_payload["sales_rep_id"] = rep_id
+
+        earning = db.table("commission_earnings").insert(earning_payload).execute().data[0]
         
         synced_count += 1
         

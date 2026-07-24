@@ -3,6 +3,7 @@ from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 from database import get_db, db_execute
 from routers.auth import verify_token
+from routers.analytics import log_activity
 from datetime import datetime, timedelta
 
 router = APIRouter()
@@ -72,6 +73,12 @@ async def create_sequence(data: SequenceCreate, current_admin=Depends(verify_tok
     if step_entries:
         await db_execute(lambda: db.table("sequence_steps").insert(step_entries).execute())
         
+    await log_activity(
+        "marketing_sequence_created",
+        f"Sequence '{data.name}' created with {len(data.steps)} step(s).",
+        current_admin["sub"]
+    )
+        
     return {"id": seq_id, "message": "Sequence and steps created successfully."}
 
 @router.get("/{id}")
@@ -104,8 +111,24 @@ async def enroll_contact(id: str, contact_id: str, current_admin=Depends(verify_
     
     return {"message": "Contact enrolled successfully.", "data": res.data[0] if res.data else None}
 
-@router.delete("/{id}")
-async def delete_sequence(id: str, current_admin=Depends(verify_token)):
-    db = get_db()
     await db_execute(lambda: db.table("marketing_sequences").delete().eq("id", id).execute())
     return {"message": "Sequence deleted."}
+
+@router.patch("/{id}/toggle")
+async def toggle_sequence(id: str, current_admin=Depends(verify_token)):
+    """TASK 4B: Enable or disable a sequence."""
+    db = get_db()
+    res = await db_execute(lambda: db.table("marketing_sequences").select("is_active").eq("id", id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Sequence not found")
+    
+    new_value = not res.data[0].get("is_active", True)
+    await db_execute(lambda: db.table("marketing_sequences").update({"is_active": new_value}).eq("id", id).execute())
+    
+    await log_activity(
+        "marketing_sequence_toggled",
+        f"Sequence '{id}' {'enabled' if new_value else 'disabled'}.",
+        current_admin["sub"]
+    )
+    
+    return {"message": f"Sequence {'enabled' if new_value else 'disabled'}.", "is_active": new_value}

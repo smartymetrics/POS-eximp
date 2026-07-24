@@ -1,11 +1,14 @@
 import math
 import os
-from fastapi import APIRouter, Depends, HTTPException, status
+import logging
+import uuid
+import calendar
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, BackgroundTasks
 from typing import List, Optional
 from pydantic import BaseModel
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from database import get_db, db_execute
-from routers.auth import verify_token
+from routers.auth import verify_token, resolve_admin_token
 from models import (
     KPITemplateCreate, KPITemplateUpdate, PerformanceReviewCreate,
     LeaveRequestCreate, LeaveRequestUpdate, StaffDocumentCreate, 
@@ -13,10 +16,441 @@ from models import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+def serialize_dates(data: dict) -> dict:
+    """Convert any date/datetime values in a dict to ISO format strings for JSON serialization."""
+    return {k: v.isoformat() if isinstance(v, (date, datetime)) else v for k, v in data.items()}
+
+async def send_notification(admin_id: str, title: str, message: str, notification_type: str = "general"):
+    """Creates a notification record in the database using standard schema."""
+    db = get_db()
+    try:
+        await db_execute(lambda: db.table("notifications").insert({
+            "admin_id": admin_id,
+            "title": title,
+            "message": message,
+            "notification_type": notification_type,
+            "is_read": False,
+            "created_at": datetime.utcnow().isoformat()
+        }).execute())
+    except Exception as e:
+        # Fallback: if 'title' column doesn't exist in DB, store combined into message
+        if "title" in str(e):
+            try:
+                await db_execute(lambda: db.table("notifications").insert({
+                    "admin_id": admin_id,
+                    "message": f"{title}: {message}",
+                    "notification_type": notification_type,
+                    "is_read": False,
+                    "created_at": datetime.utcnow().isoformat()
+                }).execute())
+            except Exception as e2:
+                print(f"NOTIFICATION ERROR: {e2}")
+        else:
+            print(f"NOTIFICATION ERROR: {e}")
+
+async def notify_hr_admins(title: str, message: str, notification_type: str = "hr_alert"):
+    """Sends a notification to all active HR and Admin users."""
+    db = get_db()
+    try:
+        # Fetch admins whose role or primary_role contains 'admin' or 'hr_admin'
+        res = await db_execute(lambda: db.table("admins").select("id").or_("role.ilike.*admin*,role.ilike.*hr_admin*,primary_role.ilike.*admin*,primary_role.ilike.*hr_admin*").eq("is_active", True).execute())
+        if res.data:
+            for admin in res.data:
+                await send_notification(admin["id"], title, message, notification_type)
+    except Exception as e:
+        print(f"HR NOTIFICATION ERROR: {e}")
+
+
+def _is_hr(current_admin: dict) -> bool:
+    role_str = current_admin.get("role", "") or ""
+    primary_role_str = current_admin.get("primary_role", "") or ""
+    all_roles = f"{role_str},{primary_role_str}"
+    user_roles = {r.strip().lower().replace(" ", "_") for r in all_roles.split(",") if r.strip()}
+    return bool(user_roles & {"admin", "super_admin", "hr", "hr_admin", "operations"})
+
+
+async def _resolve_payroll_record_ids(body: dict, db) -> list:
+    ids = body.get("ids") or []
+    department = body.get("department")
+    all_records = bool(body.get("all"))
+    period_start = body.get("period_start")
+
+    if ids:
+        if not isinstance(ids, list) or len(ids) == 0:
+            raise HTTPException(status_code=400, detail="'ids' must be a non-empty list of payroll record IDs.")
+        return ids
+
+    if department:
+        staff_res = await db_execute(lambda: db.table("admins").select("id").eq("department", department).execute())
+        staff_ids = [s["id"] for s in (staff_res.data or [])]
+        if not staff_ids:
+            return []
+
+        query = db.table("payroll_records").select("id").in_("staff_id", staff_ids)
+        if period_start:
+            query = query.eq("period_start", period_start)
+        res = await db_execute(lambda: query.execute())
+        return [r["id"] for r in (res.data or [])]
+
+    if all_records:
+        query = db.table("payroll_records").select("id")
+        if period_start:
+            query = query.eq("period_start", period_start)
+        res = await db_execute(lambda: query.execute())
+        return [r["id"] for r in (res.data or [])]
+
+    raise HTTPException(status_code=400, detail="Specify 'ids', 'department', or 'all': true to target payroll records.")
+
+
+async def _send_bulk_payslips_task(current_admin: dict, record_ids: list):
+    db = get_db()
+    for record_id in record_ids:
+        try:
+            pr = await db_execute(lambda: db.table("payroll_records")
+                .select("*, admins!payroll_records_staff_id_fkey(*, staff_profiles(*))")
+                .eq("id", record_id).single().execute())
+            if not pr.data:
+                continue
+
+            payroll = pr.data
+            staff = payroll.pop("admins", {}) or {}
+            if not staff.get("email"):
+                continue
+
+            period_start = payroll.get("period_start", "")
+            period_end = payroll.get("period_end", period_start)
+
+            commissions = []
+            try:
+                rep_res = await db_execute(lambda: db.table("sales_reps").select("id")
+                    .eq("email", staff.get("email", "")).limit(1).execute())
+                if rep_res.data:
+                    rep_id = rep_res.data[0]["id"]
+                    comm_res = await db_execute(lambda: db.table("commission_earnings")
+                        .select("*, clients(full_name)")
+                        .eq("rep_id", rep_id)
+                        .eq("is_voided", False)
+                        .gte("created_at", period_start)
+                        .lte("created_at", period_end + "T23:59:59").execute())
+                    commissions = comm_res.data or []
+            except Exception:
+                pass
+
+            bonuses = []
+            try:
+                bonus_res = await db_execute(lambda: db.table("bonuses").select("*")
+                    .eq("staff_id", staff.get("id"))
+                    .gte("created_at", period_start)
+                    .lte("created_at", period_end + "T23:59:59").execute())
+                bonuses = bonus_res.data or []
+            except Exception:
+                pass
+
+            from email_service import send_payslip_email
+            result = await send_payslip_email(
+                staff=staff,
+                payroll=payroll,
+                commissions=commissions,
+                bonuses=bonuses,
+                sent_by=current_admin.get("sub", "hr"),
+            )
+            if result is None:
+                continue
+
+            await db_execute(lambda: db.table("payroll_records")
+                .update({"payslip_sent_at": datetime.utcnow().isoformat()})
+                .eq("id", record_id).execute())
+
+            await send_notification(
+                staff["id"],
+                "Payslip Emailed",
+                f"Your payslip for {period_start[:7]} has been emailed to {staff['email']}.",
+                "payroll_run"
+            )
+        except Exception as e:
+            logger.warning(f"[bulk-send-payslips] record {record_id} failed: {e}")
+
+
+async def _load_kpi_template_metadata(template_id: Optional[str]):
+    if not template_id:
+        return {}
+    db = get_db()
+    res = await db_execute(lambda: db.table("kpi_templates").select("measurement_source, default_unit").eq("id", template_id).execute())
+    return res.data[0] if res.data else {}
+
+
+def _month_start(month_value: Optional[str]):
+    if not month_value:
+        return None
+    if isinstance(month_value, date):
+        month_date = month_value
+    else:
+        month_date = date.fromisoformat(str(month_value))
+    return date(month_date.year, month_date.month, 1).isoformat()
+
+
+def _bounds_for_goal(goal: dict):
+    period_start = None
+    period_end = None
+
+    if goal.get("period_start") and goal.get("period_end"):
+        period_start = goal["period_start"]
+        period_end = goal["period_end"]
+        if isinstance(period_start, str):
+            period_start = date.fromisoformat(period_start)
+        if isinstance(period_end, str):
+            period_end = date.fromisoformat(period_end)
+    else:
+        month_value = goal.get("month")
+        if isinstance(month_value, str):
+            month_value = date.fromisoformat(month_value)
+        elif month_value is None:
+            month_value = date.today()
+        period_start = date(month_value.year, month_value.month, 1)
+        period_end = (period_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+
+    return {
+        "start": period_start.isoformat(),
+        "end": period_end.isoformat(),
+        "month": period_start.isoformat(),
+    }
+
+
+def _achievement_status_from_pct(achievement_pct: float) -> str:
+    if achievement_pct >= 100:
+        return "Achieved"
+    if achievement_pct >= 80:
+        return "On Track"
+    if achievement_pct >= 50:
+        return "Fair"
+    return "Behind"
+
+
+async def _count_marketing_leads_added(staff_id: Optional[str], period: dict) -> float:
+    if not staff_id:
+        return 0
+    db = get_db()
+    mc = await db_execute(lambda: db.table("marketing_contacts")
+        .select("id", count="exact")
+        .eq("created_by", staff_id)
+        .gte("created_at", period["start"])
+        .lte("created_at", period["end"])
+        .execute())
+    clients = await db_execute(lambda: db.table("clients")
+        .select("id", count="exact")
+        .eq("added_by", staff_id)
+        .gte("created_at", period["start"])
+        .lte("created_at", period["end"])
+        .execute())
+    return float((mc.count or 0) + (clients.count or 0))
+
+
+async def _sales_revenue(staff_id: Optional[str], period: dict) -> float:
+    if not staff_id:
+        return 0
+    db = get_db()
+    q = f"SELECT COALESCE(sum(amount), 0) as total FROM payments WHERE recorded_by = '{staff_id}' AND is_voided = false AND payment_date >= '{period['start']}' AND payment_date <= '{period['end']}'"
+    res = await db_execute(lambda: db.rpc("exec_sql", {"sql_body": q}).execute())
+    return float(res.data[0].get("total") or 0) if res.data else 0
+
+
+async def _sales_deals_closed(staff_id: Optional[str], period: dict) -> float:
+    if not staff_id:
+        return 0
+    db = get_db()
+    res = await db_execute(lambda: db.table("invoices")
+        .select("id", count="exact")
+        .eq("created_by", staff_id)
+        .eq("pipeline_stage", "closed")
+        .gte("invoice_date", period["start"])
+        .lte("invoice_date", period["end"])
+        .execute())
+    return float(res.count or 0)
+
+
+async def _sales_collection_rate(staff_id: Optional[str], period: dict) -> float:
+    if not staff_id:
+        return 0
+    db = get_db()
+    q = f"WITH invs AS (SELECT sum(amount) as total_inv FROM invoices WHERE created_by = '{staff_id}' AND invoice_date >= '{period['start']}' AND invoice_date <= '{period['end']}'), pays AS (SELECT sum(amount) as total_pay FROM payments WHERE recorded_by = '{staff_id}' AND is_voided = false AND payment_date >= '{period['start']}' AND payment_date <= '{period['end']}') SELECT COALESCE((COALESCE(pays.total_pay,0) * 100.0 / NULLIF(invs.total_inv,0)), 0) as rate FROM invs, pays"
+    res = await db_execute(lambda: db.rpc("exec_sql", {"sql_body": q}).execute())
+    return float(res.data[0].get("rate") or 0) if res.data else 0
+
+
+async def _marketing_lead_conversion(staff_id: Optional[str], period: dict) -> float:
+    if not staff_id:
+        return 0
+    db = get_db()
+    q = f"SELECT COALESCE((count(case when contact_type = 'client' then 1 end) * 100.0 / NULLIF(count(*), 0)), 0) as rate FROM marketing_contacts WHERE created_by = '{staff_id}' AND created_at >= '{period['start']}' AND created_at <= '{period['end']}'"
+    res = await db_execute(lambda: db.rpc("exec_sql", {"sql_body": q}).execute())
+    return float(res.data[0].get("rate") or 0) if res.data else 0
+
+
+async def _marketing_campaigns_sent(staff_id: Optional[str], period: dict) -> float:
+    if not staff_id:
+        return 0
+    db = get_db()
+    res = await db_execute(lambda: db.table("email_campaigns")
+        .select("id", count="exact")
+        .eq("created_by", staff_id)
+        .eq("status", "sent")
+        .gte("sent_at", period["start"])
+        .lte("sent_at", period["end"])
+        .execute())
+    return float(res.count or 0)
+
+
+async def _marketing_open_rate(staff_id: Optional[str], period: dict) -> float:
+    if not staff_id:
+        return 0
+    db = get_db()
+    q = f"SELECT COALESCE((count(case when opened_at is not null then 1 end) * 100.0 / NULLIF(count(*),0)), 0) as rate FROM campaign_recipients cr JOIN email_campaigns ec ON cr.campaign_id = ec.id WHERE ec.created_by = '{staff_id}' AND ec.sent_at >= '{period['start']}' AND ec.sent_at <= '{period['end']}'"
+    res = await db_execute(lambda: db.rpc("exec_sql", {"sql_body": q}).execute())
+    return float(res.data[0].get("rate") or 0) if res.data else 0
+
+
+async def _ops_appointments(staff_id: Optional[str], period: dict) -> float:
+    if not staff_id:
+        return 0
+    db = get_db()
+    res = await db_execute(lambda: db.table("appointments")
+        .select("id", count="exact")
+        .eq("created_by", staff_id)
+        .eq("status", "completed")
+        .gte("scheduled_at", period["start"])
+        .lte("scheduled_at", period["end"])
+        .execute())
+    return float(res.count or 0)
+
+
+async def _admin_ticket_esc(staff_id: Optional[str], period: dict) -> float:
+    if not staff_id:
+        return 0
+    db = get_db()
+    res = await db_execute(lambda: db.table("support_tickets")
+        .select("id", count="exact")
+        .eq("assigned_admin_id", staff_id)
+        .eq("status", "pending")
+        .gte("created_at", period["start"])
+        .lte("created_at", period["end"])
+        .execute())
+    return float(res.count or 0)
+
+
+async def _admin_verify_time(staff_id: Optional[str], period: dict) -> float:
+    if not staff_id:
+        return 0
+    db = get_db()
+    q = f"SELECT COALESCE(EXTRACT(EPOCH FROM AVG(reviewed_at - created_at)) / 3600, 0) as avg_hrs FROM pending_verifications WHERE reviewed_by = '{staff_id}' AND status = 'confirmed' AND reviewed_at >= '{period['start']}' AND reviewed_at <= '{period['end']}'"
+    res = await db_execute(lambda: db.rpc("exec_sql", {"sql_body": q}).execute())
+    return float(res.data[0].get("avg_hrs") or 0) if res.data else 0
+
+
+async def _team_achievement(staff_id: Optional[str], period: dict) -> float:
+    if not staff_id:
+        return 0
+    db = get_db()
+    q = f"WITH team_avg AS (SELECT staff_id, AVG((actual_value / NULLIF(target_value,0)) * 100) as ach FROM staff_goals WHERE month = '{period['month']}' GROUP BY staff_id) SELECT COALESCE((COUNT(CASE WHEN ach >= 100 THEN 1 END) * 100.0 / NULLIF(COUNT(*),0)), 0) as rate FROM admins a JOIN team_avg t ON t.staff_id = a.id WHERE a.line_manager_id = '{staff_id}' AND a.is_active = true"
+    res = await db_execute(lambda: db.rpc("exec_sql", {"sql_body": q}).execute())
+    return float(res.data[0].get("rate") or 0) if res.data else 0
+
+
+MEASUREMENT_SOURCE_CALCULATORS = {
+    "mkt_leads_added": _count_marketing_leads_added,
+    "mkt_lead_conversion": _marketing_lead_conversion,
+    "mkt_campaigns_sent": _marketing_campaigns_sent,
+    "mkt_open_rate": _marketing_open_rate,
+    "sales_deals_closed": _sales_deals_closed,
+    "sales_revenue": _sales_revenue,
+    "sales_collection_rate": _sales_collection_rate,
+    "ops_appointments": _ops_appointments,
+    "admin_ticket_esc": _admin_ticket_esc,
+    "admin_verify_time": _admin_verify_time,
+    "team_achievement": _team_achievement,
+}
+
+
+async def sync_goal_actuals(staff_id: Optional[str] = None, goal_id: Optional[str] = None, month: Optional[str] = None):
+    db = get_db()
+    query = db.table("staff_goals").select("*, kpi_templates(measurement_source)")
+    if staff_id:
+        query = query.eq("staff_id", staff_id)
+    if goal_id:
+        query = query.eq("id", goal_id)
+    if month:
+        query = query.eq("month", _month_start(month))
+    query = query.neq("measurement_source", "manual")
+
+    res = await db_execute(lambda: query.execute())
+    goals = res.data or []
+    logger.info(f"Syncing {len(goals)} automated goals for month={month or 'all'}")
+
+    synced = 0
+    errors = []
+    for goal in goals:
+        source = goal.get("measurement_source") or (goal.get("kpi_templates") or {}).get("measurement_source")
+        if not source or source == "manual":
+            continue
+
+        calculator = MEASUREMENT_SOURCE_CALCULATORS.get(source)
+        if not calculator:
+            errors.append({"goal_id": goal.get("id"), "source": source, "error": "Unknown measurement source"})
+            continue
+
+        period = _bounds_for_goal(goal)
+        try:
+            actual_value = await calculator(goal.get("staff_id"), period)
+        except Exception as exc:
+            errors.append({"goal_id": goal.get("id"), "error": str(exc)})
+            continue
+
+        target_value = float(goal.get("target_value") or 0)
+        achievement_pct = 0.0
+        if target_value <= 0:
+            achievement_pct = 100.0 if actual_value > 0 else 0.0
+        else:
+            achievement_pct = round((actual_value / target_value) * 100, 2)
+
+        achievement_status = _achievement_status_from_pct(achievement_pct)
+        if goal.get("achievement_status") == "Achieved" and achievement_pct < 100:
+            achievement_status = "Achieved"
+
+        update_payload = {
+            "actual_value": round(actual_value, 2),
+            "achievement_pct": round(min(achievement_pct, 120), 2),
+            "achievement_status": achievement_status,
+            "last_synced_at": datetime.utcnow().isoformat(),
+        }
+
+        await db_execute(lambda: db.table("staff_goals").update(update_payload).eq("id", goal["id"]).execute())
+        synced += 1
+
+    return {
+        "synced": synced,
+        "errors": errors,
+        "timestamp": datetime.utcnow().isoformat(),
+    }
+
 
 # ─── MODELS ───────────────────────────────────────────────────────────────────
 
 # ─── MODELS ───────────────────────────────────────────────────────────────────
+
+class PolicyCreate(BaseModel):
+    title: str
+    category: str = "HR"
+    summary: Optional[str] = None
+    document_url: Optional[str] = None
+    effective_date: Optional[str] = None
+
+class PolicyUpdate(BaseModel):
+    title: Optional[str] = None
+    category: Optional[str] = None
+    summary: Optional[str] = None
+    document_url: Optional[str] = None
+    effective_date: Optional[str] = None
 
 class GoalBase(BaseModel):
     kpi_name: str
@@ -24,6 +458,7 @@ class GoalBase(BaseModel):
     unit: str
     weight: float
     status: str = "Draft"
+    actual_value: Optional[float] = 0
 
 class GoalCreate(GoalBase):
     staff_id: Optional[str] = None
@@ -41,12 +476,15 @@ class GoalUpdate(BaseModel):
     template_id: Optional[str] = None
     staff_id: Optional[str] = None
     department: Optional[str] = None
+    actual_value: Optional[float] = None
 
 class KPITemplateBase(BaseModel):
     name: str
     department: str
     category: Optional[str] = None
     description: Optional[str] = None
+    measurement_source: Optional[str] = "manual"
+    default_unit: Optional[str] = None
     is_active: Optional[bool] = True
 
 class KPITemplateCreate(KPITemplateBase):
@@ -57,6 +495,8 @@ class KPITemplateUpdate(BaseModel):
     department: Optional[str] = None
     category: Optional[str] = None
     description: Optional[str] = None
+    measurement_source: Optional[str] = None
+    default_unit: Optional[str] = None
     is_active: Optional[bool] = None
 
 class PerformanceReviewBase(BaseModel):
@@ -89,9 +529,14 @@ class StaffProfileUpdate(BaseModel):
     account_name: Optional[str] = None
     cv_url: Optional[str] = None
     base_salary: Optional[float] = None
+    pension_pin: Optional[str] = None
     leave_quota: Optional[int] = None
     exit_date: Optional[date] = None
     exit_reason: Optional[str] = None
+    tin: Optional[str] = None
+
+class TINUpdate(BaseModel):
+    tin: str
 
 class CompanyAssetCreate(BaseModel):
     asset_name: str
@@ -125,6 +570,7 @@ class LeaveRequestCreate(BaseModel):
     end_date: date
     days_count: int
     reason: Optional[str] = None
+    proof_url: Optional[str] = None
 
 class MigrationResponse(BaseModel):
     message: str
@@ -180,6 +626,9 @@ class PolicyCreate(BaseModel):
     summary: Optional[str] = None
     document_url: Optional[str] = None
     effective_date: Optional[date] = None
+
+class TINUpdate(BaseModel):
+    tin: str
 
 # ─── ENDPOINTS ────────────────────────────────────────────────────────────────
 
@@ -266,8 +715,7 @@ async def get_staff_list(current_admin: dict = Depends(verify_token)):
 async def get_staff_profile(staff_id: str, current_admin: dict = Depends(verify_token)):
     """Fetch full personnel data for a staff member. Accessible by HR, Manager, or Self."""
     user_email = current_admin["email"]
-    user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = _is_hr(current_admin)
     
     db = get_db()
     
@@ -289,16 +737,61 @@ async def get_staff_profile(staff_id: str, current_admin: dict = Depends(verify_
         raise HTTPException(status_code=403, detail="Permission denied")
 
     # Fetch profile data
-    profile = await db_execute(lambda: db.table("admins").select("*, staff_profiles(*), staff_documents!staff_documents_staff_id_fkey(*), staff_qualifications(*)").eq("id", staff_id).execute())
+    profile_res = await db_execute(lambda: db.table("admins").select("*, staff_profiles(*), staff_documents!staff_documents_staff_id_fkey(*), staff_qualifications(*)").eq("id", staff_id).execute())
+    if not profile_res.data:
+        return None
+        
+    profile = profile_res.data[0]
     
-    return profile.data[0] if profile.data else None
+    # Refresh signed URLs for staff_profiles if paths exist
+    if profile.get("staff_profiles"):
+        sp = profile["staff_profiles"][0]
+        HR_BIODATA_BUCKET = "hr-documents"
+        if sp.get("passport_photo_path"):
+            try:
+                url_res = db.storage.from_(HR_BIODATA_BUCKET).create_signed_url(sp["passport_photo_path"], 3600)
+                if isinstance(url_res, dict):
+                    sp["passport_photo_url"] = url_res.get("signedURL") or url_res.get("signed_url", sp.get("passport_photo_url"))
+            except Exception: pass
+            
+        if sp.get("signature_path"):
+            try:
+                url_res = db.storage.from_(HR_BIODATA_BUCKET).create_signed_url(sp["signature_path"], 3600)
+                if isinstance(url_res, dict):
+                    sp["signature_url"] = url_res.get("signedURL") or url_res.get("signed_url", sp.get("signature_url"))
+            except Exception: pass
+
+    return profile
+
+@router.patch("/profile/tin")
+async def update_my_tin(body: TINUpdate, current_admin: dict = Depends(verify_token)):
+    """Silent patch: Staff member updates their own TIN without requiring a full profile edit."""
+    db = get_db()
+    staff_id = current_admin["sub"]
+    
+    # Check if TIN is already on file — do not allow overwrite via this endpoint
+    profile_res = await db_execute(lambda: db.table("staff_profiles").select("id, tin").eq("admin_id", staff_id).execute())
+    existing_profile = profile_res.data[0] if profile_res.data else {}
+
+    if existing_profile.get("tin"):
+        raise HTTPException(status_code=400, detail="TIN is already on file. Contact HR to update it.")
+
+    if existing_profile:
+        await db_execute(lambda: db.table("staff_profiles").update({"tin": body.tin, "updated_at": datetime.utcnow().isoformat()}).eq("admin_id", staff_id).execute())
+    else:
+        await db_execute(lambda: db.table("staff_profiles").insert({
+            "admin_id": staff_id,
+            "tin": body.tin,
+            "updated_at": datetime.utcnow().isoformat()
+        }).execute())
+        
+    return {"message": "TIN updated successfully"}
 
 @router.patch("/profile/{staff_id}")
 async def update_staff_profile(staff_id: str, update: StaffProfileUpdate, current_admin: dict = Depends(verify_token)):
     """Update detailed staff profile. HR admins may edit all fields; line managers and staff may self-edit a restricted set."""
     db = get_db()
-    user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = _is_hr(current_admin)
     is_self = current_admin.get("sub") == staff_id
 
     # Check if the caller is the direct line manager of this staff member
@@ -326,14 +819,34 @@ async def update_staff_profile(staff_id: str, update: StaffProfileUpdate, curren
 
         profile_updates = update.dict(exclude={"full_name", "email", "department", "line_manager_id"}, exclude_unset=True)
     else:
-        # Staff members may update only personal profile fields.
-        allowed_self_fields = {"phone_number", "emergency_contact", "address", "bio"}
-        invalid_fields = set(update_data.keys()) - allowed_self_fields
-        if invalid_fields:
+        # Staff members may update personal profile fields and bank details — but
+        # bank details (bank_name, account_number, account_name) may only be set
+        # when they are currently empty. Once populated, only HR can change them.
+        bank_fields = {"bank_name", "account_number", "account_name"}
+        allowed_self_fields = {"phone_number", "emergency_contact", "address", "bio", "pension_pin"}
+        bank_fields_requested = set(update_data.keys()) & bank_fields
+        other_fields_requested = set(update_data.keys()) - allowed_self_fields - bank_fields
+
+        if other_fields_requested:
             raise HTTPException(
                 status_code=403,
-                detail=f"Cannot edit administrative fields: {', '.join(sorted(invalid_fields))}"
+                detail=f"Cannot edit administrative fields: {', '.join(sorted(other_fields_requested))}"
             )
+
+        if bank_fields_requested:
+            # Fetch current bank values; block update if any target field already has a value
+            profile_res = await db_execute(lambda: db.table("staff_profiles").select("bank_name, account_number, account_name").eq("admin_id", staff_id).execute())
+            current_profile = profile_res.data[0] if profile_res.data else {}
+            locked_fields = {
+                f for f in bank_fields_requested
+                if current_profile.get(f)  # already populated — locked
+            }
+            if locked_fields:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Bank detail(s) already on file: {', '.join(sorted(locked_fields))}. Contact HR to update."
+                )
+
         profile_updates = update_data
 
     if admin_updates:
@@ -347,12 +860,43 @@ async def update_staff_profile(staff_id: str, update: StaffProfileUpdate, curren
 
         profile_updates = {k: v for k, v in profile_updates.items() if v is not None}
         if profile_updates:
+            # Check if base_salary is being updated to log salary history
+            old_salary = None
+            if "base_salary" in profile_updates:
+                profile_res = await db_execute(lambda: db.table("staff_profiles").select("base_salary").eq("admin_id", staff_id).execute())
+                if profile_res.data:
+                    old_salary = profile_res.data[0].get("base_salary")
+            
             profile_exists = await db_execute(lambda: db.table("staff_profiles").select("id").eq("admin_id", staff_id).execute())
             if profile_exists.data:
                 await db_execute(lambda: db.table("staff_profiles").update(profile_updates).eq("admin_id", staff_id).execute())
             else:
                 profile_updates["admin_id"] = staff_id
                 await db_execute(lambda: db.table("staff_profiles").insert(profile_updates).execute())
+            
+            # Log salary change to history
+            if "base_salary" in profile_updates and is_hr:
+                new_salary = profile_updates.get("base_salary")
+                if old_salary != new_salary:
+                    try:
+                        await db_execute(lambda: db.table("salary_history").insert({
+                            "staff_id": staff_id,
+                            "old_salary": old_salary,
+                            "new_salary": new_salary,
+                            "effective_date": date.today().isoformat(),
+                            "changed_by": current_admin["sub"],
+                            "reason": "Salary adjustment via profile update",
+                            "created_at": datetime.utcnow().isoformat()
+                        }).execute())
+                        
+                        # Notify payroll admins
+                        await notify_hr_admins(
+                            "Salary Update",
+                            f"Salary for staff member {staff_id} has been updated from {old_salary} to {new_salary}. Payroll has been notified.",
+                            "salary_update"
+                        )
+                    except Exception as e:
+                        logger.warning(f"Could not log salary change to history: {e}")
 
     return {"message": "Profile updated successfully"}
 
@@ -424,7 +968,7 @@ async def set_staff_goal(goal: GoalCreate, current_admin: dict = Depends(verify_
     """HR or manager sets a KPI goal for a staff member or a department."""
     user_email = current_admin["email"]
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     
     if not goal.staff_id and not goal.department:
         raise HTTPException(status_code=400, detail="Either staff_id or department is required")
@@ -449,17 +993,33 @@ async def set_staff_goal(goal: GoalCreate, current_admin: dict = Depends(verify_
         "kpi_name": goal.kpi_name,
         "target_value": goal.target_value,
         "unit": goal.unit,
-        "weight": goal.weight,        "status": goal.status,        "month": goal.month.isoformat(),
+        "weight": goal.weight,
+        "status": goal.status,
+        "month": goal.month.isoformat(),
         "department": goal.department or None,
         "staff_id": goal.staff_id or None
     }
+
     if getattr(goal, "template_id", None):
         goal_data["kpi_template_id"] = goal.template_id
+        metadata = await _load_kpi_template_metadata(goal.template_id)
+        if metadata.get("measurement_source"):
+            goal_data["measurement_source"] = metadata["measurement_source"]
+        if metadata.get("default_unit") and not goal_data.get("unit"):
+            goal_data["unit"] = metadata["default_unit"]
 
     res = await db_execute(lambda: db.table("staff_goals").insert(goal_data).execute())
     
     if not res.data:
         raise HTTPException(status_code=400, detail="Failed to create goal")
+    # Notify the individual staff member if goal is targeted at them
+    if goal.staff_id:
+        await send_notification(
+            goal.staff_id,
+            "New KPI / Goal Assigned",
+            f"A new goal '{goal.kpi_name}' has been assigned to you. Check your Performance tab.",
+            "goal_assigned"
+        )
     return res.data[0]
 
 @router.patch("/goals/{goal_id}")
@@ -467,7 +1027,7 @@ async def update_goal(goal_id: str, update: GoalUpdate, current_admin: dict = De
     """Update an existing KPI goal when it is still editable."""
     user_email = current_admin["email"]
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
 
     db = get_db()
     existing = await db_execute(lambda: db.table("staff_goals").select("*").eq("id", goal_id).execute())
@@ -497,6 +1057,11 @@ async def update_goal(goal_id: str, update: GoalUpdate, current_admin: dict = De
 
     if "template_id" in update_data:
         update_data["kpi_template_id"] = update_data.pop("template_id")
+        metadata = await _load_kpi_template_metadata(update_data["kpi_template_id"])
+        if metadata.get("measurement_source"):
+            update_data["measurement_source"] = metadata["measurement_source"]
+        if metadata.get("default_unit") and not update_data.get("unit"):
+            update_data["unit"] = metadata["default_unit"]
 
     if update_data.get("staff_id") and update_data.get("department"):
         raise HTTPException(status_code=400, detail="Provide either staff_id or department, not both")
@@ -504,6 +1069,15 @@ async def update_goal(goal_id: str, update: GoalUpdate, current_admin: dict = De
     res = await db_execute(lambda: db.table("staff_goals").update(update_data).eq("id", goal_id).execute())
     if not res.data:
         raise HTTPException(status_code=400, detail="Failed to update goal")
+    # Notify the staff member that their goal was updated
+    staff_target = goal_record.get("staff_id")
+    if staff_target and staff_target != current_admin.get("sub"):
+        await send_notification(
+            staff_target,
+            "Goal / KPI Updated",
+            f"Your goal '{goal_record.get('kpi_name', 'KPI')}' has been updated by HR or your manager.",
+            "goal_updated"
+        )
     return res.data[0]
 
 @router.post("/goals/sync")
@@ -513,10 +1087,8 @@ async def trigger_goal_sync(month: Optional[str] = None, current_admin: dict = D
     if "admin" not in user_roles and "hr_admin" not in user_roles:
          raise HTTPException(status_code=403, detail="HR Admin only")
          
-    from scheduler import sync_goal_actuals
-    # Run as a background task to avoid timeout
     import asyncio
-    asyncio.create_task(sync_goal_actuals(month))
+    asyncio.create_task(sync_goal_actuals(month=month))
     
     return {"message": "Goal sync triggered successfully"}
 
@@ -577,7 +1149,11 @@ async def assign_company_asset(asset_id: str, assign_data: AssetAssign, current_
     
     if not res.data:
         raise HTTPException(status_code=404, detail="Asset not found")
-    return res.data[0]
+    asset = res.data[0]
+    if assign_data.staff_id:
+        asset_name = asset.get("name") or asset.get("asset_name") or "an asset"
+        await send_notification(assign_data.staff_id, "Asset Assigned", f"'{asset_name}' has been assigned to you.", "asset_assigned")
+    return asset
 
 @router.post("/leave", status_code=status.HTTP_201_CREATED)
 async def request_leave(req: LeaveRequestCreate, current_admin: dict = Depends(verify_token)):
@@ -586,7 +1162,7 @@ async def request_leave(req: LeaveRequestCreate, current_admin: dict = Depends(v
     staff_id = current_admin["sub"]
     
     # 1. Fetch User's Leave Quota
-    profile_res = await db_execute(lambda: db.table("staff_profiles").select("leave_quota").eq("staff_id", staff_id).execute())
+    profile_res = await db_execute(lambda: db.table("staff_profiles").select("leave_quota").eq("admin_id", staff_id).execute())
     leave_quota = 20
     if profile_res.data and profile_res.data[0].get("leave_quota") is not None:
         leave_quota = profile_res.data[0]["leave_quota"]
@@ -627,7 +1203,7 @@ async def get_pending_leave(staff_id: Optional[str] = None, current_admin: dict 
     """Fetch leave requests. HR sees all. Managers see their team. Staff see their own."""
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     
     # We must explicitly define the foreign key relationship for admins to avoid PGRST201
     query = db.table("leave_requests").select("*, admins!leave_requests_staff_id_fkey(full_name, department)")
@@ -661,7 +1237,7 @@ async def get_attendance(
     """Fetch attendance records. HR sees all. Staff see own. Supports single date or date range."""
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     
     query = db.table("attendance_records").select("*, admins(full_name, department)")
     
@@ -702,7 +1278,7 @@ async def get_absence_report(
     """
     from datetime import timedelta as td
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     
     # Staff can only see their own record
     target_id = staff_id if (is_hr and staff_id) else current_admin["sub"]
@@ -808,7 +1384,7 @@ async def get_global_absences(
     Only active staff are included. Weekends are excluded.
     """
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     if not is_hr:
          raise HTTPException(status_code=403, detail="Not authorized")
 
@@ -862,22 +1438,37 @@ async def get_global_absences(
     return sorted(absences, key=lambda x: (x["date"], x["staff_name"]), reverse=True)
 
 @router.post("/payroll/run")
-async def run_payroll(current_admin: dict = Depends(verify_token)):
-    """Generate payroll records for all active staff for the current month."""
+async def run_payroll(
+    body: dict = {},
+    current_admin: dict = Depends(verify_token)
+):
+    """
+    Generate payroll records for the current month.
+    Pass {} or omit body to run for ALL active staff.
+    Pass {"staff_ids": ["uuid1", "uuid2"]} to run for specific staff only.
+    """
     user_roles = current_admin.get("role", "").split(",")
-    if "admin" not in user_roles and "hr_admin" not in user_roles:
-         raise HTTPException(status_code=403, detail="HR Admin only")
-         
+    if not any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR Admin only")
+
     db = get_db()
-    
-    # 1. Fetch all active staff with their profiles
-    staff_res = await db_execute(lambda: db.table("admins").select("*, staff_profiles(*)").eq("is_active", True).execute())
+    selected_ids = (body or {}).get("staff_ids") or None  # None = run all
+
+    # 1. Fetch active staff with their profiles
+    staff_res = await db_execute(lambda: db.table("admins")
+        .select("*, staff_profiles(*)")
+        .eq("is_active", True)
+        .execute())
     staff_list = staff_res.data
-    
+
+    # Filter to selected staff if caller provided specific IDs
+    if selected_ids:
+        staff_list = [s for s in staff_list if s["id"] in selected_ids]
+
     records_created = 0
     now = datetime.now()
     month_start = date(now.year, now.month, 1).isoformat()
-    month_end = date(now.year, now.month, 28).isoformat() # Simplified month end
+    month_end = date(now.year, now.month, calendar.monthrange(now.year, now.month)[1]).isoformat()
     
     # 2. Fetch existing payroll records for this month in one go
     existing = await db_execute(lambda: db.table("payroll_records")
@@ -886,7 +1477,26 @@ async def run_payroll(current_admin: dict = Depends(verify_token)):
                                 .execute())
     existing_staff_ids = {r["staff_id"] for r in existing.data} if existing.data else set()
 
+    # 0. Fetch Global Tax Config
+    tax_config_res = await db_execute(lambda: db.table("hr_tax_config").select("*").limit(1).execute())
+    tax_config = tax_config_res.data[0] if tax_config_res.data else {
+        "paye_enabled": True,
+        "pension_employee_rate": 8.0,
+        "pension_employer_rate": 10.0,
+        "nhf_rate": 2.5,
+        "wht_default_rate": 5.0,
+        "wht_contractor_rate": 10.0
+    }
+
+    paye_enabled = bool(tax_config.get("paye_enabled", True))
+    p_rate = float(tax_config.get("pension_employee_rate") or 8.0) / 100.0
+    er_p_rate = float(tax_config.get("pension_employer_rate") or 10.0) / 100.0
+    nhf_rate = float(tax_config.get("nhf_rate") or 2.5) / 100.0
+    wht_default_rate = float(tax_config.get("wht_default_rate") or 5.0)
+    wht_contractor_rate = float(tax_config.get("wht_contractor_rate") or 10.0)
+
     payroll_inserts = []
+    warnings = []
     
     for s in staff_list:
         if s["id"] in existing_staff_ids:
@@ -894,70 +1504,103 @@ async def run_payroll(current_admin: dict = Depends(verify_token)):
 
         p = s.get("staff_profiles", [{}])[0] if s.get("staff_profiles") else {}
         base = float(p.get("base_salary") or 0)
-        
-        # Nigerian Tax Engine (PAYE / Pension)
-        monthly_tax = 0.0
-        monthly_pension = 0.0
-        monthly_cra = 0.0
-        
-        if base > 30000: # Minimum wage exemption
-            annual_gross = base * 12
-            annual_pension = annual_gross * 0.08
-            annual_cra = max(200000.0, annual_gross * 0.01) + (0.2 * annual_gross)
-            taxable_income = max(0.0, annual_gross - annual_pension - annual_cra)
-            
-            annual_tax = 0.0
-            brackets = [
-                (300000, 0.07),
-                (300000, 0.11),
-                (500000, 0.15),
-                (500000, 0.19),
-                (1600000, 0.21),
-                (float('inf'), 0.24)
+
+        if base <= 0:
+            warnings.append({
+                "staff_id": s["id"],
+                "staff_name": s.get("full_name"),
+                "reason": "Missing or zero base_salary"
+            })
+            continue
+
+        annual_gross = base * 12
+        annual_pension = annual_gross * p_rate
+        annual_nhf = annual_gross * nhf_rate
+        annual_er_pension = annual_gross * er_p_rate
+
+        annual_tax     = 0.0
+        taxable_income = 0.0
+
+        if paye_enabled and base > 66667:  # ₦800k/year threshold (NTA 2025)
+            # Employer PAYE obligation: tax on gross minus pension minus NHF.
+            # Rent relief is a personal claim the employee makes directly with
+            # FIRS/SIRS on their annual return — it is NOT the employer's
+            # responsibility to deduct it through payroll.
+            taxable_income = max(0.0, annual_gross - annual_pension - annual_nhf)
+
+            # NTA 2025 progressive bands (effective Jan 1 2026)
+            bands_2026 = [
+                (800_000,      0.00),
+                (2_200_000,    0.15),   # ₦800k – ₦3m
+                (9_000_000,    0.18),   # ₦3m   – ₦12m
+                (13_000_000,   0.21),   # ₦12m  – ₦25m
+                (25_000_000,   0.23),   # ₦25m  – ₦50m
+                (float("inf"), 0.25),   # above  ₦50m
             ]
-            
+
             rem_income = taxable_income
-            for limit, rate in brackets:
+            for limit, rate in bands_2026:
                 if rem_income <= 0:
                     break
-                taxable_amount = min(rem_income, limit)
-                annual_tax += taxable_amount * rate
-                rem_income -= taxable_amount
-                
-            if annual_tax == 0 and taxable_income <= 0:
-                 annual_tax = annual_gross * 0.01 # Minimum tax 1%
-                 
-            monthly_tax = round(annual_tax / 12, 2)
-            monthly_pension = round(annual_pension / 12, 2)
-            monthly_cra = round(annual_cra / 12, 2)
-            
-        net = round(base - monthly_tax - monthly_pension, 2)
-        
+                annual_tax += min(rem_income, limit) * rate
+                rem_income -= min(rem_income, limit)
+
+            if annual_tax == 0 and taxable_income > 0:
+                annual_tax = annual_gross * 0.01  # Minimum tax 1% fallback (NTA 2025)
+
+        monthly_tax        = round(annual_tax / 12, 2)
+        monthly_pension    = round(annual_pension / 12, 2)
+        monthly_nhf        = round(annual_nhf / 12, 2)
+        monthly_er_pension = round(annual_er_pension / 12, 2)
+        deductions         = round(monthly_tax + monthly_pension + monthly_nhf, 2)
+        net                = round(base - deductions, 2)
+
         payroll_inserts.append({
-            "staff_id": s["id"],
-            "period_start": month_start,
-            "period_end": month_end,
-            "gross_pay": base,
-            "tax": monthly_tax,
-            "pension": monthly_pension,
-            "cra": monthly_cra,
-            "net_pay": net,
-            "status": "pending",
-            "processed_by": current_admin["sub"]
+            "staff_id":        s["id"],
+            "period_start":    month_start,
+            "period_end":      month_end,
+            "gross_pay":       base,
+            "tax":             monthly_tax,
+            "pension":         monthly_pension,
+            "nhf":             monthly_nhf,
+            "employer_pension": monthly_er_pension,
+            "deductions":      deductions,
+            "net_pay":         net,
+            "status":          "pending",
+            "processed_by":    current_admin["sub"],
+            "net_pay_breakdown": {
+                "base_salary":          base,
+                "gross_annual":         annual_gross,
+                "monthly_tax":          monthly_tax,
+                "monthly_pension":      monthly_pension,
+                "monthly_nhf":          monthly_nhf,
+                "annual_taxable":       taxable_income,
+                "paye_enabled":         paye_enabled,
+                "pension_employee_rate": p_rate * 100,
+                "pension_employer_rate": er_p_rate * 100,
+                "nhf_rate":             nhf_rate * 100,
+                "wht_default_rate":     wht_default_rate,
+                "wht_contractor_rate":  wht_contractor_rate,
+                "tax_regime":           "NTA_2025",
+            }
         })
 
     # Bulk insert if there are records to create
     if payroll_inserts:
         await db_execute(lambda: db.table("payroll_records").insert(payroll_inserts).execute())
         records_created = len(payroll_inserts)
+        # Notify each staff member their payslip is ready
+        for rec in payroll_inserts:
+            await send_notification(rec["staff_id"], "Payslip Ready", f"Your payslip for {month_start[:7]} has been generated. Check your payroll tab.", "payroll_run")
             
-    return {"message": f"Payroll generation complete. {records_created} records created.", "count": records_created}
+    scope = f"{len(selected_ids)} selected staff" if selected_ids else "all active staff"
+    return {"message": f"Payroll run complete for {scope}. {records_created} record(s) created.", "count": records_created, "warnings": warnings}
 
 @router.post("/payroll/manual", status_code=status.HTTP_201_CREATED)
 async def create_manual_payroll(nf: ManualPayrollCreate, current_admin: dict = Depends(verify_token)):
     """Manually log a payroll record (bonus, contractor fee, etc). HR only."""
     user_roles = current_admin.get("role", "").split(",")
-    if "admin" not in user_roles and "hr_admin" not in user_roles:
+    if not any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles):
          raise HTTPException(status_code=403, detail="HR Admin only")
          
     db = get_db()
@@ -982,7 +1625,7 @@ class LeaveStatusUpdate(BaseModel):
 async def update_leave_status(leave_id: str, update: LeaveStatusUpdate, current_admin: dict = Depends(verify_token)):
     """Approve or reject a leave request (HR or Line Manager only)."""
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     
     db = get_db()
     
@@ -1005,13 +1648,95 @@ async def update_leave_status(leave_id: str, update: LeaveStatusUpdate, current_
         raise HTTPException(status_code=404, detail="Leave request not found or update failed")
     return {"message": f"Leave {status} successfully"}
 
+@router.get("/leave/{leave_id}/proof")
+async def get_leave_proof(leave_id: str, current_admin: dict = Depends(verify_token)):
+    """Get leave request details including proof. HR or requesting staff only."""
+    db = get_db()
+    user_roles = current_admin.get("role", "").split(",")
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
+    
+    # Fetch leave request
+    leave_res = await db_execute(lambda: db.table("leave_requests").select("*, admins!leave_requests_staff_id_fkey(full_name, department)").eq("id", leave_id).execute())
+    
+    if not leave_res.data:
+        raise HTTPException(status_code=404, detail="Leave request not found")
+    
+    leave_req = leave_res.data[0]
+    
+    # Authorization: HR or the staff member who requested it
+    if not is_hr and leave_req["staff_id"] != current_admin["sub"]:
+        raise HTTPException(status_code=403, detail="Not authorized to view this leave proof")
+    
+    # If proof_url exists, generate signed URL if it's a storage path
+    if leave_req.get("proof_url"):
+        try:
+            # If it looks like a storage path (not a full URL), create signed URL
+            if not leave_req["proof_url"].startswith("http"):
+                HR_BIODATA_BUCKET = "hr-documents"
+                url_res = db.storage.from_(HR_BIODATA_BUCKET).create_signed_url(leave_req["proof_url"], 3600)
+                if isinstance(url_res, dict):
+                    leave_req["proof_signed_url"] = url_res.get("signedURL") or url_res.get("signed_url")
+            else:
+                leave_req["proof_signed_url"] = leave_req["proof_url"]
+        except Exception as e:
+            logger.warning(f"Could not generate signed URL for leave proof: {e}")
+    
+    return leave_req
+
+@router.post("/leave/{leave_id}/upload-proof")
+async def upload_leave_proof(leave_id: str, file: UploadFile = File(...), current_admin: dict = Depends(verify_token)):
+    """Upload proof for a leave request (staff can upload, HR can also upload on behalf)."""
+    db = get_db()
+    
+    # Fetch leave request
+    leave_res = await db_execute(lambda: db.table("leave_requests").select("staff_id, status").eq("id", leave_id).execute())
+    
+    if not leave_res.data:
+        raise HTTPException(status_code=404, detail="Leave request not found")
+    
+    leave_req = leave_res.data[0]
+    staff_id = leave_req["staff_id"]
+    
+    # Authorization: staff member or HR
+    user_roles = current_admin.get("role", "").split(",")
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
+    
+    if current_admin["sub"] != staff_id and not is_hr:
+        raise HTTPException(status_code=403, detail="Can only upload proof for your own leave request")
+    
+    # Upload file to storage
+    try:
+        file_bytes = await file.read()
+        file_ext = file.filename.split(".")[-1] if "." in file.filename else "pdf"
+        file_name = f"leave_proof_{leave_id}_{uuid.uuid4().hex}.{file_ext}"
+        
+        HR_BIODATA_BUCKET = "hr-documents"
+        db.storage.from_(HR_BIODATA_BUCKET).upload(file_name, file_bytes, {"content-type": file.content_type})
+        
+        # Update leave request with proof URL
+        await db_execute(lambda: db.table("leave_requests").update({
+            "proof_url": file_name,
+            "proof_uploaded_at": datetime.utcnow().isoformat()
+        }).eq("id", leave_id).execute())
+        
+        # Notify HR admins that proof was uploaded
+        await notify_hr_admins(
+            "Leave Proof Uploaded",
+            f"Staff member {staff_id} has uploaded proof for leave request {leave_id}",
+            "leave_proof_uploaded"
+        )
+        
+        return {"message": "Proof uploaded successfully", "file_name": file_name}
+    except Exception as e:
+        logger.error(f"Error uploading leave proof: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to upload proof: {str(e)}")
 
 @router.post("/performance/review", status_code=status.HTTP_201_CREATED)
 async def submit_performance_review(review: PerformanceReviewCreate, current_admin: dict = Depends(verify_token)):
     """Line Manager or HR submits a formal performance review."""
     user_email = current_admin["email"]
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     
     db = get_db()
     
@@ -1034,6 +1759,7 @@ async def submit_performance_review(review: PerformanceReviewCreate, current_adm
         "reviewed_by": current_admin["sub"]
     }).execute())
     
+    await send_notification(review.staff_id, "Performance Review Submitted", "A new performance review has been submitted for you. Check your performance tab.", "performance_review")
     return {"message": "Review submitted successfully"}
 
 @router.get("/goals")
@@ -1042,7 +1768,7 @@ async def get_all_goals(staff_id: Optional[str] = None, current_admin: dict = De
     db = get_db()
     user_email = current_admin["email"]
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
 
     query = db.table("staff_goals").select("*, admins(full_name, department)")
     
@@ -1074,7 +1800,7 @@ async def get_hr_tasks(staff_id: Optional[str] = None, current_admin: dict = Dep
     """Fetch tasks for HR (all) or Staff (own)."""
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     
     query = db.table("staff_tasks").select("*, admins!staff_tasks_assigned_to_fkey(full_name)")
     if staff_id:
@@ -1084,7 +1810,6 @@ async def get_hr_tasks(staff_id: Optional[str] = None, current_admin: dict = Dep
         
     res = await db_execute(lambda: query.execute())
     return res.data
-
 @router.post("/tasks", status_code=status.HTTP_201_CREATED)
 async def create_hr_task(task: TaskCreate, current_admin: dict = Depends(verify_token)):
     """Assign a task. HR or Manager only."""
@@ -1097,6 +1822,10 @@ async def create_hr_task(task: TaskCreate, current_admin: dict = Depends(verify_
         "status": "pending",
         "created_by": current_admin["sub"]
     }).execute())
+    
+    if res.data:
+        await send_notification(task.assigned_to, "New Task Assigned", f"You have been assigned a new task: {task.title}", "task_assigned")
+        
     return res.data[0]
 
 class GoalCreate(BaseModel):
@@ -1112,7 +1841,7 @@ class GoalCreate(BaseModel):
 async def update_staff_goal(goal_id: str, goal: GoalUpdate, current_admin: dict = Depends(verify_token)):
     """Update a staff goal/KPI. HR or Manager only."""
     user_roles = current_admin.get("role", "").split(",")
-    is_privileged = any(r in ["admin", "hr_admin", "line_manager"] for r in user_roles)
+    is_privileged = any(r in ["admin", "super_admin", "hr_admin", "line_manager"] for r in user_roles)
     if not is_privileged:
         raise HTTPException(status_code=403, detail="Not authorized")
     
@@ -1128,18 +1857,6 @@ async def update_staff_goal(goal_id: str, goal: GoalUpdate, current_admin: dict 
     if not res.data:
         raise HTTPException(status_code=404, detail="Goal not found")
     return res.data[0]
-
-@router.get("/goals")
-async def get_hr_goals(staff_id: Optional[str] = None, current_admin: dict = Depends(verify_token)):
-    """Fetch goals/KPIs for HR (all) or Staff (own)."""
-    # This was a duplicate of get_all_goals, we just alias to keep it compiling if anything points here
-    return await get_all_goals(staff_id, current_admin)
-
-@router.post("/goals", status_code=status.HTTP_201_CREATED)
-async def create_hr_goal(goal: GoalCreate, current_admin: dict = Depends(verify_token)):
-    """Set a KPI goal for a staff member. HR or Manager only."""
-    # This was a duplicate of set_staff_goal
-    return await set_staff_goal(goal, current_admin)
 
 @router.get("/kpi-templates")
 async def list_kpi_templates(department: Optional[str] = None, active: Optional[bool] = True, current_admin: dict = Depends(verify_token)):
@@ -1157,7 +1874,7 @@ async def list_kpi_templates(department: Optional[str] = None, active: Optional[
 async def create_kpi_template(template: KPITemplateCreate, current_admin: dict = Depends(verify_token)):
     """Create a new KPI template. HR only."""
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     if not is_hr:
         raise HTTPException(status_code=403, detail="Admin only")
     db = get_db()
@@ -1179,7 +1896,7 @@ async def create_kpi_template(template: KPITemplateCreate, current_admin: dict =
 async def update_kpi_template(template_id: str, template: KPITemplateUpdate, current_admin: dict = Depends(verify_token)):
     """Update an existing KPI template. HR only."""
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     if not is_hr:
         raise HTTPException(status_code=403, detail="Admin only")
     update_data = template.dict(exclude_unset=True)
@@ -1195,7 +1912,7 @@ async def update_kpi_template(template_id: str, template: KPITemplateUpdate, cur
 async def delete_kpi_template(template_id: str, current_admin: dict = Depends(verify_token)):
     """Delete a KPI template. HR only."""
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="Admin only")
     db = get_db()
     
@@ -1213,11 +1930,11 @@ async def delete_kpi_template(template_id: str, current_admin: dict = Depends(ve
 async def create_performance_review(review: PerformanceReviewCreate, current_admin: dict = Depends(verify_token)):
     """Log a formal performance review. HR/Admin only (reviewers)."""
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin", "operations"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles):
         raise HTTPException(status_code=403, detail="Reviewer access only.")
     
     db = get_db()
-    data = review.dict()
+    data = serialize_dates(review.dict())
     data["reviewer_id"] = current_admin["sub"]
     data["created_at"] = datetime.utcnow().isoformat()
     
@@ -1231,7 +1948,7 @@ async def get_performance_reviews(staff_id: Optional[str] = None, current_admin:
     """Fetch performance reviews. HR sees all. Staff sees own."""
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     
     query = db.table("performance_reviews").select("*, reviewer:admins!performance_reviews_reviewer_id_fkey(full_name), staff:admins!performance_reviews_staff_id_fkey(full_name)")
     
@@ -1257,7 +1974,7 @@ async def get_hr_incidents(staff_id: Optional[str] = None, current_admin: dict =
     """Fetch logged incidents. HR sees all. Staff see own."""
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     
     query = db.table("disciplinary_records").select("*, admins!disciplinary_records_staff_id_fkey(full_name, department)")
     if staff_id:
@@ -1287,6 +2004,9 @@ async def log_hr_incident(inc: IncidentCreate, current_admin: dict = Depends(ver
         "notes": inc.notes,
         "logged_by": current_admin["sub"]
     }).execute())
+    if res.data:
+        await send_notification(inc.staff_id, "Conduct Record Updated", f"A {inc.severity or ''} {inc.incident_type or 'conduct'} record has been logged on your profile. Please check your flags.", "disciplinary")
+        await notify_hr_admins("Disciplinary Record Logged", f"A {inc.severity or ''} {inc.incident_type or 'incident'} has been logged for a staff member.", "disciplinary")
     return res.data[0]
 
 @router.get("/payroll/payslips")
@@ -1294,9 +2014,9 @@ async def get_payslips(staff_id: Optional[str] = None, current_admin: dict = Dep
     """Fetch payslips. HR sees all. Staff see own."""
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     
-    query = db.table("payroll_records").select("*, admins!payroll_records_staff_id_fkey(full_name, department)")
+    query = db.table("payroll_records").select("*, admins!payroll_records_staff_id_fkey(full_name, department, email, staff_profiles(bank_name, account_number, account_name, job_title, staff_type, tin, pension_pin))")
     if staff_id:
         query = query.eq("staff_id", staff_id)
     elif not is_hr:
@@ -1305,11 +2025,306 @@ async def get_payslips(staff_id: Optional[str] = None, current_admin: dict = Dep
     res = await db_execute(lambda: query.execute())
     return res.data
 
+class PayrollUpdate(BaseModel):
+    gross_pay: Optional[float] = None
+    tax: Optional[float] = None
+    pension: Optional[float] = None
+    nhf: Optional[float] = None
+    net_pay: Optional[float] = None
+    status: Optional[str] = None
+    notes: Optional[str] = None
+
+@router.patch("/payroll/{record_id}")
+async def update_payroll_record(record_id: str, update: PayrollUpdate, current_admin: dict = Depends(verify_token)):
+    """Update a payroll record's figures or status. HR only."""
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR Admin only")
+
+    db = get_db()
+    update_data = {k: v for k, v in update.dict().items() if v is not None}
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    # Recalculate net_pay if financial fields changed but net_pay not explicitly provided
+    if "net_pay" not in update_data and any(k in update_data for k in ["gross_pay", "tax", "pension", "nhf"]):
+        # Fetch existing record to compute net
+        existing = await db_execute(lambda: db.table("payroll_records").select("gross_pay,tax,pension,nhf").eq("id", record_id).single().execute())
+        if existing.data:
+            gross = update_data.get("gross_pay", existing.data.get("gross_pay", 0) or 0)
+            tax = update_data.get("tax", existing.data.get("tax", 0) or 0)
+            pension = update_data.get("pension", existing.data.get("pension", 0) or 0)
+            nhf = update_data.get("nhf", existing.data.get("nhf", 0) or 0)
+            update_data["net_pay"] = round(float(gross) - float(tax) - float(pension) - float(nhf), 2)
+
+    update_data["updated_at"] = datetime.utcnow().isoformat()
+    res = await db_execute(lambda: db.table("payroll_records").update(update_data).eq("id", record_id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Payroll record not found")
+    return res.data[0]
+
+@router.delete("/payroll/{record_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_payroll_record(record_id: str, current_admin: dict = Depends(verify_token)):
+    """Delete a payroll record. HR only. Cannot delete already-paid records."""
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR Admin only")
+
+    db = get_db()
+    # Safety check: do not allow deletion of paid records without explicit override
+    existing = await db_execute(lambda: db.table("payroll_records").select("id, status").eq("id", record_id).single().execute())
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Payroll record not found")
+    if existing.data.get("status") == "paid":
+        raise HTTPException(status_code=400, detail="Cannot delete a record with status 'paid'. Change the status first.")
+
+    await db_execute(lambda: db.table("payroll_records").delete().eq("id", record_id).execute())
+
+
+@router.post("/payroll/{record_id}/send-payslip", status_code=200)
+async def send_payslip(record_id: str, current_admin: dict = Depends(verify_token)):
+    """Email a payslip PDF to the staff member. HR admin only."""
+    from email_service import send_payslip_email
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR Admin only")
+
+    db = get_db()
+    pr = await db_execute(lambda: db.table("payroll_records")
+        .select("*, admins!payroll_records_staff_id_fkey(*, staff_profiles(*))")
+        .eq("id", record_id).single().execute())
+    if not pr.data:
+        raise HTTPException(status_code=404, detail="Payroll record not found")
+
+    payroll  = pr.data
+    staff    = payroll.pop("admins", {}) or {}
+    staff_id = payroll.get("staff_id")
+
+    if not staff.get("email"):
+        raise HTTPException(status_code=422, detail="Staff member has no email address on record.")
+
+    period_start = payroll.get("period_start", "")
+    period_end   = payroll.get("period_end", period_start)
+
+    # Fetch commissions for this staff/period
+    commissions = []
+    try:
+        rep_res = await db_execute(lambda: db.table("sales_reps").select("id")
+            .eq("email", staff.get("email", "")).limit(1).execute())
+        if rep_res.data:
+            rep_id   = rep_res.data[0]["id"]
+            comm_res = await db_execute(lambda: db.table("commission_earnings")
+                .select("*, clients(full_name)").eq("rep_id", rep_id).eq("is_voided", False)
+                .gte("created_at", period_start).lte("created_at", period_end + "T23:59:59").execute())
+            commissions = comm_res.data or []
+    except Exception as e:
+        print(f"[send-payslip] Commission fetch error (non-critical): {e}")
+
+    # Fetch bonuses for this staff/period
+    bonuses = []
+    try:
+        bonus_res = await db_execute(lambda: db.table("bonuses").select("*")
+            .eq("staff_id", staff_id)
+            .gte("created_at", period_start).lte("created_at", period_end + "T23:59:59").execute())
+        bonuses = bonus_res.data or []
+    except Exception as e:
+        print(f"[send-payslip] Bonus fetch error (non-critical): {e}")
+
+    result = await send_payslip_email(
+        staff=staff, payroll=payroll, commissions=commissions,
+        bonuses=bonuses, sent_by=current_admin.get("sub", "hr"),
+    )
+    if result is None:
+        raise HTTPException(status_code=500, detail="Failed to send payslip email. Check server logs.")
+
+    # Stamp the record so HR can see it was sent
+    try:
+        await db_execute(lambda: db.table("payroll_records")
+            .update({"payslip_sent_at": datetime.utcnow().isoformat()})
+            .eq("id", record_id).execute())
+    except Exception:
+        pass  # Non-critical — email already sent
+
+    return {
+        "message":  f"Payslip emailed to {staff['email']} for period {period_start[:7]}.",
+        "period":   period_start[:7],
+        "staff":    staff.get("full_name"),
+        "email":    staff.get("email"),
+        "sent_at":  datetime.utcnow().isoformat(),
+    }
+
+
+@router.post("/payroll/send-payslips", status_code=status.HTTP_202_ACCEPTED)
+async def send_payslips(
+    body: dict,
+    background_tasks: BackgroundTasks,
+    current_admin: dict = Depends(verify_token)
+):
+    """Bulk email payslips to selected, department, or all staff."""
+    if not _is_hr(current_admin):
+        raise HTTPException(status_code=403, detail="HR Admin only")
+
+    db = get_db()
+    record_ids = await _resolve_payroll_record_ids(body, db)
+    if not record_ids:
+        raise HTTPException(status_code=404, detail="No payroll records found for the selected scope.")
+
+    background_tasks.add_task(_send_bulk_payslips_task, current_admin, record_ids)
+    return {
+        "message": f"Queued {len(record_ids)} payslip(s) for email delivery.",
+        "count": len(record_ids),
+        "scope": {
+            "ids": bool(body.get("ids")),
+            "department": body.get("department"),
+            "all": bool(body.get("all")),
+            "period_start": body.get("period_start")
+        }
+    }
+
+
+@router.patch("/payroll/{record_id}/bank-details", status_code=200)
+async def update_payroll_bank_details(
+    record_id: str,
+    body: dict,
+    current_admin: dict = Depends(verify_token)
+):
+    """
+    Update bank details for the staff member linked to a payroll record.
+    HR can correct bank info directly from the payroll edit modal without
+    navigating to the staff profile page.
+    """
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR Admin only")
+
+    db = get_db()
+
+    # Resolve staff_id from the payroll record
+    pr = await db_execute(lambda: db.table("payroll_records")
+        .select("staff_id")
+        .eq("id", record_id)
+        .single()
+        .execute())
+    if not pr.data:
+        raise HTTPException(status_code=404, detail="Payroll record not found")
+
+    staff_id = pr.data["staff_id"]
+
+    allowed = {"bank_name", "account_number", "account_name"}
+    update_data = {k: v for k, v in body.items() if k in allowed and v is not None}
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No valid bank detail fields provided")
+
+    update_data["updated_at"] = datetime.utcnow().isoformat()
+
+    res = await db_execute(lambda: db.table("staff_profiles")
+        .update(update_data)
+        .eq("admin_id", staff_id)
+        .execute())
+
+    return {"message": "Bank details updated successfully", "updated": update_data}
+
+
+@router.post("/payroll/bulk-status", status_code=200)
+async def bulk_update_payroll_status(
+    body: dict,
+    background_tasks: BackgroundTasks,
+    current_admin: dict = Depends(verify_token)
+):
+    """Mark multiple payroll records as paid/pending at once. HR only."""
+    if not _is_hr(current_admin):
+        raise HTTPException(status_code=403, detail="HR Admin only")
+
+    new_status = body.get("status", "paid")
+    if new_status not in ("paid", "pending", "cancelled"):
+        raise HTTPException(status_code=400, detail="Invalid status value.")
+
+    db = get_db()
+    record_ids = await _resolve_payroll_record_ids(body, db)
+    if not record_ids:
+        raise HTTPException(status_code=404, detail="No payroll records found for the selected scope.")
+
+    res = await db_execute(lambda: db.table("payroll_records")
+        .update({"status": new_status, "updated_at": datetime.utcnow().isoformat()})
+        .in_("id", record_ids).execute())
+
+    if new_status == "paid" and body.get("send_email"):
+        background_tasks.add_task(_send_bulk_payslips_task, current_admin, record_ids)
+
+    return {"updated": len(res.data or []), "status": new_status, "ids": len(record_ids)}
+
+
+@router.get("/salary-history/{staff_id}")
+async def get_salary_history(staff_id: str, current_admin: dict = Depends(verify_token)):
+    """Fetch salary change history for a staff member. HR or the staff member themselves."""
+    db = get_db()
+    user_roles = current_admin.get("role", "").split(",")
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
+    
+    # Authorization: HR or self
+    if current_admin["sub"] != staff_id and not is_hr:
+        raise HTTPException(status_code=403, detail="Not authorized to view this salary history")
+    
+    try:
+        res = await db_execute(lambda: db.table("salary_history")
+            .select("*, changed_by:admins!salary_history_changed_by_fkey(full_name)")
+            .eq("staff_id", staff_id)
+            .order("effective_date", desc=True)
+            .execute())
+        return res.data or []
+    except Exception as e:
+        # Table might not exist yet, return empty
+        logger.warning(f"Salary history table not available: {e}")
+        return []
+
+@router.post("/salary-history", status_code=status.HTTP_201_CREATED)
+async def create_salary_history(staff_id: str, new_salary: float, reason: Optional[str] = None, current_admin: dict = Depends(verify_token)):
+    """Manually log a salary change. HR only."""
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR Admin only")
+    
+    db = get_db()
+    
+    # Fetch current salary
+    profile_res = await db_execute(lambda: db.table("staff_profiles").select("base_salary").eq("admin_id", staff_id).execute())
+    old_salary = profile_res.data[0].get("base_salary") if profile_res.data else None
+    
+    # Update staff profile with new salary
+    await db_execute(lambda: db.table("staff_profiles").update({
+        "base_salary": new_salary,
+        "updated_at": datetime.utcnow().isoformat()
+    }).eq("admin_id", staff_id).execute())
+    
+    # Log to salary history
+    try:
+        res = await db_execute(lambda: db.table("salary_history").insert({
+            "staff_id": staff_id,
+            "old_salary": old_salary,
+            "new_salary": new_salary,
+            "effective_date": date.today().isoformat(),
+            "changed_by": current_admin["sub"],
+            "reason": reason or "Salary adjustment by HR",
+            "created_at": datetime.utcnow().isoformat()
+        }).execute())
+        
+        # Notify payroll
+        await notify_hr_admins(
+            "Salary Update",
+            f"Salary for staff member {staff_id} has been updated to {new_salary}. Effective date: {date.today().isoformat()}",
+            "salary_update"
+        )
+        
+        return res.data[0] if res.data else {"message": "Salary updated successfully"}
+    except Exception as e:
+        logger.warning(f"Could not log salary to history table: {e}")
+        return {"message": "Salary updated successfully (history logging not available)"}
+
 @router.get("/dashboard/stats")
 async def get_dashboard_stats(current_admin: dict = Depends(verify_token)):
     """Fetch all necessary data for the HR dashboard in a single optimized call."""
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     if not is_hr:
          raise HTTPException(status_code=403, detail="Not authorized for HR Dashboard")
     
@@ -1431,15 +2446,6 @@ async def get_dashboard_stats(current_admin: dict = Depends(verify_token)):
             "upcoming_anniversaries": upcoming_anniversaries
         }
     }
-
-"""
-Paste this block into routers/hr.py
-
-Place the Pydantic models near the top with your other models.
-Place the two route handlers alongside your other attendance routes.
-
-Requires: pip install httpx  (already likely installed)
-"""
 
 # ── ADD TO MODELS SECTION ────────────────────────────────────────────────────
 
@@ -1672,7 +2678,7 @@ async def get_suspicious_attendance(current_admin: dict = Depends(verify_token))
     Reads from the suspicious_attendance view created in the migration.
     """
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR Admin only.")
 
     db  = get_db()
@@ -1685,7 +2691,7 @@ async def get_suspicious_attendance(current_admin: dict = Depends(verify_token))
 async def seed_kpi_library(current_admin: dict = Depends(verify_token)):
     """Temporary endpoint to seed professional KPI templates."""
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="Admin access required.")
         
     db = get_db()
@@ -1714,15 +2720,16 @@ async def seed_kpi_library(current_admin: dict = Depends(verify_token)):
 async def request_leave(req: LeaveRequestCreate, current_admin: dict = Depends(verify_token)):
     """Submit a new leave request."""
     db = get_db()
-    data = req.dict()
+    data = serialize_dates(req.dict())
     data["staff_id"] = current_admin["sub"]
     data["status"] = "pending"
     data["created_at"] = datetime.utcnow().isoformat()
-    # Ensure proof_url is present (req.dict() already has it if it's in the model)
-    
+
     res = await db_execute(lambda: db.table("leave_requests").insert(data).execute())
     if not res.data:
         raise HTTPException(status_code=500, detail="Failed to submit leave request.")
+    
+    await notify_hr_admins("New Leave Request", f"A new leave request has been submitted by {current_admin.get('name', 'Staff')}.", "request_update")
     return res.data[0]
 
 @router.get("/leave-requests", tags=["HR Suite"])
@@ -1730,7 +2737,7 @@ async def get_leave_requests(staff_id: Optional[str] = None, current_admin: dict
     """Fetch leave requests. HR sees all. Staff see own."""
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     
     query = db.table("leave_requests").select("*, staff:admins!leave_requests_staff_id_fkey(full_name, department)")
     
@@ -1748,7 +2755,7 @@ async def get_leave_requests(staff_id: Optional[str] = None, current_admin: dict
 async def update_leave_status(req_id: str, up: LeaveRequestUpdate, current_admin: dict = Depends(verify_token)):
     """Approve or reject a leave request. HR only."""
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin", "operations"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles):
         raise HTTPException(status_code=403, detail="Admin only.")
     
     db = get_db()
@@ -1770,17 +2777,31 @@ async def update_leave_status(req_id: str, up: LeaveRequestUpdate, current_admin
             "p_staff_id": req["staff_id"],
             "p_days": req["days_count"]
         }).execute())
+    
+    if res.data:
+        await send_notification(req["staff_id"], "Leave Request Update", f"Your leave request has been {up.status}.", "request_update")
         
     return res.data[0]
 
 # ─── DOCUMENTS & QUALIFICATIONS ──────────────────────────────────────────────
+
+@router.get("/documents", tags=["HR Suite"])
+async def get_all_documents(current_admin: dict = Depends(verify_token)):
+    """HR-only: Fetch all staff documents."""
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR Admin only.")
+    
+    db = get_db()
+    res = await db_execute(lambda: db.table("staff_documents").select("*").order("created_at", desc=True).execute())
+    return res.data
 
 @router.post("/documents", tags=["HR Suite"])
 async def upload_staff_document(doc: StaffDocumentCreate, current_admin: dict = Depends(verify_token)):
     """Link an uploaded document to a staff profile. HR can upload anything; Staff can only self-upload uniquely per type."""
     user_id = current_admin["sub"]
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles)
     is_self = doc.staff_id == user_id
     
     if not (is_hr or is_self):
@@ -1788,14 +2809,20 @@ async def upload_staff_document(doc: StaffDocumentCreate, current_admin: dict = 
     
     db = get_db()
     
-    # Duplicate check for non-HR
-    if not is_hr:
-        existing = await db_execute(lambda: db.table("staff_documents").select("id").eq("staff_id", doc.staff_id).eq("doc_type", doc.doc_type).execute())
-        if existing.data:
-            raise HTTPException(status_code=403, detail=f"You have already uploaded a document of type '{doc.doc_type}'. Please contact HR to update it.")
-    
     db = get_db()
-    data = doc.dict()
+    
+    # Robust duplicate check: same staff, same type, same title
+    existing = await db_execute(lambda: db.table("staff_documents")
+        .select("id")
+        .eq("staff_id", doc.staff_id)
+        .eq("doc_type", doc.doc_type)
+        .eq("title", doc.title)
+        .execute())
+    
+    if existing.data:
+        raise HTTPException(status_code=400, detail=f"A document with this title and type already exists for this staff member.")
+    
+    data = serialize_dates(doc.dict())
     data["uploaded_by"] = current_admin["sub"]
     data["created_at"] = datetime.utcnow().isoformat()
     
@@ -1806,7 +2833,7 @@ async def upload_staff_document(doc: StaffDocumentCreate, current_admin: dict = 
 async def delete_staff_document(doc_id: str, current_admin: dict = Depends(verify_token)):
     """HR-only: Delete a staff document."""
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR Admin only.")
     
     db = get_db()
@@ -1824,7 +2851,7 @@ async def get_staff_documents(staff_id: str, current_admin: dict = Depends(verif
 async def add_qualification(staff_id: str, q: StaffQualificationCreate, current_admin: dict = Depends(verify_token)):
     """Add education or certification to a profile."""
     db = get_db()
-    data = q.dict()
+    data = serialize_dates(q.dict())
     data["staff_id"] = staff_id
     res = await db_execute(lambda: db.table("staff_qualifications").insert(data).execute())
     return res.data[0]
@@ -1901,11 +2928,11 @@ def compute_composite_score(goals: List[dict], reviews: List[dict]) -> dict:
 async def create_performance_review(staff_id: str, rev: PerformanceReviewCreate, current_admin: dict = Depends(verify_token)):
     """Managers or HR submit a qualitative performance review."""
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin", "line_manager"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin", "line_manager"] for r in user_roles):
         raise HTTPException(status_code=403, detail="Managerial access only.")
         
     db = get_db()
-    data = rev.dict()
+    data = serialize_dates(rev.dict())
     data["staff_id"] = staff_id
     data["reviewer_id"] = current_admin["sub"]
     data["review_period"] = rev.review_period.isoformat()
@@ -1987,11 +3014,11 @@ async def get_performance_history(staff_id: str, current_admin: dict = Depends(v
 async def log_incident(inc: IncidentCreate, current_admin: dict = Depends(verify_token)):
     """Log a management/disciplinary incident."""
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin", "line_manager"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin", "line_manager"] for r in user_roles):
         raise HTTPException(status_code=403, detail="Managerial access only.")
         
     db = get_db()
-    data = inc.dict()
+    data = serialize_dates(inc.dict())
     data["created_at"] = datetime.utcnow().isoformat()
     # Default incident_date to today if not provided (disciplinary_records requires it)
     if not data.get("incident_date"):
@@ -2006,7 +3033,7 @@ async def get_all_incidents(staff_id: Optional[str] = None, current_admin: dict 
     """Fetch incidents. HR sees all. Staff see own."""
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     
     query = db.table("disciplinary_records").select("*, staff:admins!disciplinary_records_staff_id_fkey(full_name, department)")
     
@@ -2054,12 +3081,18 @@ class JobRequisitionCreate(BaseModel):
     employment_type: str
     location: Optional[str] = None
     status: str = "Pending Approval"
+    is_internal: bool = False
     description: Optional[str] = None # About the Role
     requirements: Optional[str] = None
     responsibilities: Optional[str] = None
     salary_range: Optional[str] = None
     headcount: int = 1
     justification: Optional[str] = None
+    closing_date: Optional[str] = None  # Application deadline date (YYYY-MM-DD)
+
+class OfferResponse(BaseModel):
+    action: str # "accept" or "decline"
+    reason: Optional[str] = None
 
 class JobApplicationCreate(BaseModel):
     job_id: Optional[str] = None
@@ -2071,13 +3104,27 @@ class JobApplicationCreate(BaseModel):
 
 class InterviewCreate(BaseModel):
     application_id: str
-    interviewer_id: str
+    interviewer_id: Optional[str] = None
     scheduled_at: datetime
+    interview_type: Optional[str] = "Technical"
+    location: Optional[str] = None
+    notes: Optional[str] = None
+
+class InterviewUpdate(BaseModel):
+    scheduled_at: Optional[datetime] = None
+    interview_type: Optional[str] = None
+    location: Optional[str] = None
+    notes: Optional[str] = None
+    status: Optional[str] = None # scheduled, completed, cancelled, no-show
+    outcome: Optional[str] = None
 
 @router.get("/recruitment/jobs")
-async def get_jobs():
+async def get_jobs(is_internal: Optional[bool] = None):
     db = get_db()
-    res = await db_execute(lambda: db.table("job_requisitions").select("*").order("created_at", desc=True).execute())
+    query = db.table("job_requisitions").select("*").order("created_at", desc=True)
+    if is_internal is not None:
+        query = query.eq("is_internal", is_internal)
+    res = await db_execute(lambda: query.execute())
     return res.data
 
 @router.post("/recruitment/jobs", status_code=status.HTTP_201_CREATED)
@@ -2111,16 +3158,60 @@ async def create_application(app: JobApplicationCreate):
     # Could be public, no token required natively, but keeping simple
     db = get_db()
     res = await db_execute(lambda: db.table("job_applications").insert(app.dict(exclude_unset=True)).execute())
+    if res.data:
+        await notify_hr_admins("New Job Application", f"New application received from {app.candidate_name}", "request_update")
     return res.data[0]
 
 @router.patch("/recruitment/applications/{app_id}")
-async def update_application_status(app_id: str, status_update: dict, current_admin: dict = Depends(verify_token)):
+async def update_application_status(app_id: str, update_data: dict, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
     if "admin" not in user_roles and "hr_admin" not in user_roles:
          raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
-    res = await db_execute(lambda: db.table("job_applications").update({"status": status_update.get("status")}).eq("id", app_id).execute())
-    return res.data[0] if res.data else None
+    
+    # 1. Update the application record
+    # Filter allowed fields to prevent arbitrary column updates
+    allowed_fields = ["status", "offered_salary", "start_date", "notes"]
+    filtered_update = {k: v for k, v in update_data.items() if k in allowed_fields}
+    
+    res = await db_execute(lambda: db.table("job_applications").update(filtered_update).eq("id", app_id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    app_record = res.data[0]
+    
+    # 2. If status is "Offered", send the offer email
+    if update_data.get("status") == "Offered":
+        try:
+            from email_service import send_employment_offer_email
+            
+            # Fetch job title
+            job_title = "the role"
+            job_res = await db_execute(lambda: db.table("job_requisitions").select("title").eq("id", app_record["job_id"]).execute())
+            if job_res.data:
+                job_title = job_res.data[0].get("title", "the role")
+            
+            await send_employment_offer_email(
+                candidate_email=app_record.get("candidate_email", ""),
+                candidate_name=app_record.get("candidate_name", "Candidate"),
+                job_title=job_title,
+                salary=update_data.get("offered_salary", app_record.get("offered_salary", "0")),
+                start_date=update_data.get("start_date", app_record.get("start_date", "")),
+                notes=update_data.get("notes", app_record.get("notes", "")),
+                app_id=app_id
+            )
+        except Exception as email_err:
+            logger.warning(f"Failed to send offer email (non-fatal): {email_err}")
+
+    # Notify HR of status update
+    new_status = update_data.get("status")
+    if new_status:
+        await notify_hr_admins(
+            f"Application Status Updated: {new_status}",
+            f"An application has been moved to '{new_status}'. Check the Recruitment tab.",
+            "recruitment_update"
+        )
+    return app_record
 
 @router.post("/recruitment/applications/{app_id}/hire")
 async def hire_applicant(app_id: str, current_admin: dict = Depends(verify_token)):
@@ -2162,6 +3253,19 @@ async def hire_applicant(app_id: str, current_admin: dict = Depends(verify_token
             raise HTTPException(status_code=500, detail="Failed to create admin account")
         admin_id = adm_res.data[0]["id"]
 
+        # ── Send onboarding email ─────────────────────────────────────────────
+        try:
+            from email_service import send_staff_onboarding_email
+            await send_staff_onboarding_email(
+                name=app["candidate_name"],
+                email=app["candidate_email"],
+                password=default_pwd,
+                job_title=job.get("title", "Staff Member"),
+                department=job.get("department", "Unassigned")
+            )
+        except Exception as onboarding_err:
+            logger.warning(f"Onboarding email failed (non-fatal): {onboarding_err}")
+
     # 4. Create/Update Staff Profile
     profile_data = {
         "admin_id": admin_id,
@@ -2191,7 +3295,25 @@ async def hire_applicant(app_id: str, current_admin: dict = Depends(verify_token
     # 6. Update Application Status to Hired
     await db_execute(lambda: db.table("job_applications").update({"status": "Hired"}).eq("id", app_id).execute())
     
+    await notify_hr_admins(
+        "Applicant Hired & Onboarded 🎉",
+        f"{app['candidate_name']} has been successfully hired and onboarded. A staff account has been created.",
+        "recruitment_update"
+    )
     return {"message": "Applicant successfully hired and onboarded", "admin_id": admin_id}
+
+@router.get("/recruitment/interviews")
+async def get_interviews(
+    application_id: Optional[str] = None,
+    current_admin: dict = Depends(verify_token)
+):
+    """Fetch scheduled interviews. Optionally filter by application_id."""
+    db = get_db()
+    query = db.table("job_interviews").select("*").order("scheduled_at", desc=True)
+    if application_id:
+        query = query.eq("application_id", application_id)
+    res = await db_execute(lambda: query.execute())
+    return res.data
 
 @router.post("/recruitment/interviews", status_code=status.HTTP_201_CREATED)
 async def schedule_interview(interview: InterviewCreate, current_admin: dict = Depends(verify_token)):
@@ -2199,17 +3321,188 @@ async def schedule_interview(interview: InterviewCreate, current_admin: dict = D
     if "admin" not in user_roles and "hr_admin" not in user_roles:
          raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
-    
-    # Must also move application status to "Interview"
-    await db_execute(lambda: db.table("job_applications").update({"status": "Interview"}).eq("id", interview.application_id).execute())
-    
-    # Needs isoformat for datetime
-    idata = interview.dict()
-    idata["scheduled_at"] = idata["scheduled_at"].isoformat()
-    
-    res = await db_execute(lambda: db.table("job_interviews").insert(idata).execute())
-    return res.data[0]
 
+    # Move application status to "Interview"
+    await db_execute(lambda: db.table("job_applications").update({"status": "Interview"}).eq("id", interview.application_id).execute())
+
+    # Build insert data — exclude None values to avoid FK issues
+    idata = {k: v for k, v in interview.dict().items() if v is not None}
+    idata["scheduled_at"] = interview.scheduled_at.isoformat()
+
+    res = await db_execute(lambda: db.table("job_interviews").insert(idata).execute())
+    record = res.data[0]
+
+    # ── Send interview invitation email to candidate ──────────────────────────
+    try:
+        from email_service import send_interview_invitation_email
+        # Fetch application + job details
+        app_res = await db_execute(lambda: db.table("job_applications").select("candidate_name, candidate_email, job_id").eq("id", interview.application_id).execute())
+        if app_res.data:
+            app = app_res.data[0]
+            job_title = "the role"
+            job_res = await db_execute(lambda: db.table("job_requisitions").select("title").eq("id", app["job_id"]).execute())
+            if job_res.data:
+                job_title = job_res.data[0].get("title", "the role")
+
+            # Fetch interviewer name if provided
+            interviewer_name = ""
+            if interview.interviewer_id:
+                iv_res = await db_execute(lambda: db.table("admins").select("full_name").eq("id", interview.interviewer_id).execute())
+                if iv_res.data:
+                    interviewer_name = iv_res.data[0].get("full_name", "")
+
+            formatted_dt = interview.scheduled_at.strftime("%A, %d %B %Y at %I:%M %p")
+            await send_interview_invitation_email(
+                candidate_email=app.get("candidate_email", ""),
+                candidate_name=app.get("candidate_name", "Candidate"),
+                job_title=job_title,
+                interview_type=interview.interview_type or "Technical",
+                scheduled_at_str=formatted_dt,
+                location=interview.location or "",
+                interviewer_name=interviewer_name,
+                notes=interview.notes or ""
+            )
+    except Exception as email_err:
+        logger.warning(f"Interview invite email failed (non-fatal): {email_err}")
+
+    await notify_hr_admins(
+        "Interview Scheduled",
+        f"A new interview has been scheduled. Check the Recruitment tab for details.",
+        "recruitment_update"
+    )
+    return record
+
+@router.patch("/recruitment/interviews/{iv_id}")
+async def update_interview(iv_id: str, update: InterviewUpdate, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if "admin" not in user_roles and "hr_admin" not in user_roles:
+         raise HTTPException(status_code=403, detail="HR only")
+    db = get_db()
+    
+    # 1. Fetch existing interview to detect changes
+    old_res = await db_execute(lambda: db.table("job_interviews").select("*").eq("id", iv_id).execute())
+    if not old_res.data:
+        raise HTTPException(status_code=404, detail="Interview not found")
+    old_iv = old_res.data[0]
+
+    # 2. Perform the update
+    idata = {k: v for k, v in update.dict().items() if v is not None}
+    if "scheduled_at" in idata:
+        idata["scheduled_at"] = idata["scheduled_at"].isoformat()
+        
+    res = await db_execute(lambda: db.table("job_interviews").update(idata).eq("id", iv_id).execute())
+    new_iv = res.data[0]
+
+    # 3. Handle Email Notifications (Cancellation or Rescheduling)
+    try:
+        from email_service import send_interview_cancellation_email, send_interview_reschedule_email
+        
+        # Fetch application + job details for the email
+        app_res = await db_execute(lambda: db.table("job_applications").select("candidate_name, candidate_email, job_id").eq("id", old_iv["application_id"]).execute())
+        if app_res.data:
+            app = app_res.data[0]
+            job_title = "the role"
+            job_res = await db_execute(lambda: db.table("job_requisitions").select("title").eq("id", app["job_id"]).execute())
+            if job_res.data:
+                job_title = job_res.data[0].get("title", "the role")
+
+            # A. If status changed to 'cancelled'
+            if idata.get("status") == "cancelled" and old_iv.get("status") != "cancelled":
+                await send_interview_cancellation_email(
+                    candidate_email=app.get("candidate_email", ""),
+                    candidate_name=app.get("candidate_name", "Candidate"),
+                    job_title=job_title
+                )
+            
+            # B. If date or location changed (Reschedule)
+            elif (idata.get("scheduled_at") or idata.get("location")) and idata.get("status") != "cancelled":
+                # Only send if it's actually different from before
+                is_time_changed = idata.get("scheduled_at") and idata["scheduled_at"] != old_iv.get("scheduled_at")
+                is_loc_changed = idata.get("location") and idata["location"] != old_iv.get("location")
+                
+                if is_time_changed or is_loc_changed:
+                    # Fetch interviewer name
+                    interviewer_name = ""
+                    iv_id_to_check = idata.get("interviewer_id") or old_iv.get("interviewer_id")
+                    if iv_id_to_check:
+                        iv_res = await db_execute(lambda: db.table("admins").select("full_name").eq("id", iv_id_to_check).execute())
+                        if iv_res.data:
+                            interviewer_name = iv_res.data[0].get("full_name", "")
+
+                    formatted_dt = datetime.fromisoformat(new_iv["scheduled_at"]).strftime("%A, %d %B %Y at %I:%M %p")
+                    await send_interview_reschedule_email(
+                        candidate_email=app.get("candidate_email", ""),
+                        candidate_name=app.get("candidate_name", "Candidate"),
+                        job_title=job_title,
+                        interview_type=new_iv.get("interview_type", "Technical"),
+                        scheduled_at_str=formatted_dt,
+                        location=new_iv.get("location", ""),
+                        interviewer_name=interviewer_name,
+                        notes=new_iv.get("notes", "")
+                    )
+
+    except Exception as email_err:
+        logger.warning(f"Follow-up interview email failed (non-fatal): {email_err}")
+
+    # In-app notification for reschedule / cancel
+    changed_status = idata.get("status")
+    if changed_status == "cancelled":
+        await notify_hr_admins("Interview Cancelled", "An interview has been cancelled. Check Recruitment tab.", "recruitment_update")
+    elif idata.get("scheduled_at") or idata.get("location"):
+        await notify_hr_admins("Interview Rescheduled", "An interview has been rescheduled. Check Recruitment tab.", "recruitment_update")
+    return new_iv
+
+
+
+# ─── PUBLIC ENDPOINTS: OFFERS ────────────────────────────────────────────────
+
+@router.get("/public/offers/{app_id}")
+async def get_public_offer(app_id: str):
+    db = get_db()
+    res = await db_execute(lambda: db.table("job_applications").select("candidate_name, job_id, offered_salary, start_date, notes, status").eq("id", app_id).execute())
+    if not res.data: raise HTTPException(status_code=404, detail="Offer not found")
+    app = res.data[0]
+    
+    job_res = await db_execute(lambda: db.table("job_requisitions").select("title, department").eq("id", app["job_id"]).execute())
+    job = job_res.data[0] if job_res.data else {}
+    
+    return {
+        "candidate_name": app.get("candidate_name"),
+        "job_title": job.get("title", "the role"),
+        "department": job.get("department", ""),
+        "offered_salary": app.get("offered_salary"),
+        "start_date": app.get("start_date"),
+        "status": app.get("status"),
+        "notes": app.get("notes")
+    }
+
+@router.post("/public/offers/{app_id}/respond")
+async def respond_to_offer(app_id: str, payload: OfferResponse):
+    db = get_db()
+    res = await db_execute(lambda: db.table("job_applications").select("status, notes").eq("id", app_id).execute())
+    if not res.data: raise HTTPException(status_code=404, detail="Offer not found")
+    app = res.data[0]
+    
+    if app.get("status") not in ["Offered", "Offer Accepted", "Offer Declined"]:
+        raise HTTPException(status_code=400, detail="Offer is no longer active or has already been processed.")
+        
+    new_status = "Offer Accepted" if payload.action == "accept" else "Offer Declined"
+    
+    update_data = {"status": new_status}
+    if payload.reason and payload.action == "decline":
+        old_notes = app.get("notes") or ""
+        update_data["notes"] = f"{old_notes}\n\n[Candidate Decline Reason/Counter-Offer]: {payload.reason}".strip()
+        
+    res2 = await db_execute(lambda: db.table("job_applications").update(update_data).eq("id", app_id).execute())
+    # Notify HR team of offer response
+    try:
+        app_full = await db_execute(lambda: db.table("job_applications").select("candidate_name").eq("id", app_id).execute())
+        cname = app_full.data[0].get("candidate_name", "A candidate") if app_full.data else "A candidate"
+        emoji = "🎉" if payload.action == "accept" else "❌"
+        await notify_hr_admins(f"{emoji} Offer {new_status}", f"{cname} has {payload.action}ed their offer. Check the Offers tab.", "offer_response")
+    except Exception:
+        pass
+    return {"message": "Response recorded successfully", "status": new_status}
 
 
 # ─── ENGAGEMENT & CULTURE ─────────────────────────────────────────────────────
@@ -2232,7 +3525,7 @@ async def get_surveys(current_admin: dict = Depends(verify_token)):
     
     # 2. Fetch responses if HR to calculate completion rates
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     
     if is_hr:
         responses = await db_execute(lambda: db.table("survey_responses").select("survey_id, answers").execute())
@@ -2292,8 +3585,8 @@ class TaskStatusUpdate(BaseModel):
 
 @router.patch("/tasks/{task_id}")
 async def update_task_status(task_id: str, update: TaskStatusUpdate, current_admin: dict = Depends(verify_token)):
-    """Update task status to pending | in_progress | completed."""
-    if update.status not in ["pending", "in_progress", "completed"]:
+    """Update task status to pending | in_progress | pending_approval | completed."""
+    if update.status not in ["pending", "in_progress", "pending_approval", "completed"]:
         raise HTTPException(status_code=400, detail="Invalid status")
     db = get_db()
     task_res = await db_execute(lambda: db.table("staff_tasks").select("*").eq("id", task_id).execute())
@@ -2301,7 +3594,7 @@ async def update_task_status(task_id: str, update: TaskStatusUpdate, current_adm
         raise HTTPException(status_code=404, detail="Task not found")
     task = task_res.data[0]
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     is_assignee = task.get("assigned_to") == current_admin.get("sub")
     is_creator = task.get("created_by") == current_admin.get("sub")
     if not (is_hr or is_assignee or is_creator):
@@ -2312,6 +3605,28 @@ async def update_task_status(task_id: str, update: TaskStatusUpdate, current_adm
     if update.notes:
         update_data["completion_notes"] = update.notes
     res = await db_execute(lambda: db.table("staff_tasks").update(update_data).eq("id", task_id).execute())
+    # Notify reviewer when employee submits for approval
+    if update.status == "pending_approval":
+        assigner_id = task.get("assigned_by") or task.get("created_by")
+        employee_name = current_admin.get("full_name", "A staff member")
+        task_title = task.get("title", "a task")
+        if assigner_id and assigner_id != current_admin.get("sub"):
+            await send_notification(
+                assigner_id,
+                "Task Awaiting Approval ⏳",
+                f"{employee_name} has marked \"{task_title}\" as done — please review and approve or send back.",
+                "task_assigned_hr"
+            )
+    # Notify task creator if task is completed (and creator != current user)
+    if update.status == "completed":
+        creator_id = task.get("created_by")
+        if creator_id and creator_id != current_admin.get("sub"):
+            await send_notification(
+                creator_id,
+                "Task Marked Completed ✅",
+                f"The task '{task.get('title', 'a task')}' has been marked as completed.",
+                "task_completed"
+            )
     return res.data[0] if res.data else {"message": "Updated"}
 
 # ─── INCIDENT STATUS FIX ─────────────────────────────────────
@@ -2323,7 +3638,7 @@ class IncidentStatusUpdate(BaseModel):
 async def update_incident(incident_id: str, update: IncidentStatusUpdate, current_admin: dict = Depends(verify_token)):
     """HR only: update incident status to open|under_review|resolved|dismissed."""
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin", "operations"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR Admin only")
     valid = ["open", "under_review", "resolved", "dismissed"]
     if update.status not in valid:
@@ -2357,7 +3672,7 @@ class TimesheetApproval(BaseModel):
 async def get_timesheets(staff_id: Optional[str] = None, current_admin: dict = Depends(verify_token)):
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     query = db.table("timesheets").select("*, admins!timesheets_staff_id_fkey(full_name, department)")
     if staff_id:
         query = query.eq("staff_id", staff_id)
@@ -2376,6 +3691,11 @@ async def submit_timesheet(ts: TimesheetCreate, current_admin: dict = Depends(ve
         "thu_hrs": ts.thu_hrs, "fri_hrs": ts.fri_hrs, "total_hrs": total,
         "notes": ts.notes, "status": "pending", "created_at": datetime.utcnow().isoformat()
     }).execute())
+    await notify_hr_admins(
+        "Timesheet Submitted",
+        f"A staff member has submitted a timesheet for the week of {ts.week_start}. Review it in the Timesheets tab.",
+        "timesheet_submitted"
+    )
     return res.data[0]
 
 @router.patch("/timesheets/{ts_id}")
@@ -2388,6 +3708,10 @@ async def approve_timesheet(ts_id: str, approval: TimesheetApproval, current_adm
         "status": approval.status, "reviewer_id": current_admin["sub"],
         "reviewer_notes": approval.reviewer_notes, "reviewed_at": datetime.utcnow().isoformat()
     }).eq("id", ts_id).execute())
+    if res.data:
+        ts = res.data[0]
+        status_label = approval.status.capitalize()
+        await send_notification(ts["staff_id"], f"Timesheet {status_label}", f"Your timesheet has been {approval.status}." + (f" Note: {approval.reviewer_notes}" if approval.reviewer_notes else ""), "timesheet_update")
     return res.data[0] if res.data else {"message": "Updated"}
 
 # ─── SHIFT SCHEDULING ─────────────────────────────────────────
@@ -2419,6 +3743,9 @@ async def create_shift(shift: ShiftCreate, current_admin: dict = Depends(verify_
         "shift_type": shift.shift_type, "notes": shift.notes,
         "created_by": current_admin["sub"]
     }).execute())
+    
+    await send_notification(shift.staff_id, "New Shift Assigned", f"You have been assigned a shift on {shift.shift_date}.")
+    
     return res.data[0]
 
 @router.delete("/shifts/{shift_id}")
@@ -2440,7 +3767,7 @@ async def get_holidays(current_admin: dict = Depends(verify_token)):
 @router.post("/holidays", status_code=201)
 async def add_holiday(h: HolidayCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR Admin only")
     db = get_db()
     res = await db_execute(lambda: db.table("public_holidays").insert({
@@ -2462,19 +3789,47 @@ async def get_leave_policies(current_admin: dict = Depends(verify_token)):
 @router.post("/leave-policies", status_code=201)
 async def create_leave_policy(p: LeavePolicyCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR Admin only")
     db = get_db()
-    res = await db_execute(lambda: db.table("leave_policies").insert(p.dict()).execute())
+    res = await db_execute(lambda: db.table("leave_policies").insert(serialize_dates(p.dict())).execute())
     return res.data[0]
+
+@router.patch("/leave-policies/{policy_id}")
+async def update_leave_policy(policy_id: str, p: LeavePolicyCreate, current_admin: dict = Depends(verify_token)):
+    """HR only: update an existing leave policy."""
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR Admin only")
+    db = get_db()
+    res = await db_execute(lambda: db.table("leave_policies").update({
+        "leave_type": p.leave_type,
+        "days_per_year": p.days_per_year,
+        "carry_over": p.carry_over,
+        "requires_proof": p.requires_proof,
+        "description": p.description
+    }).eq("id", policy_id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Policy not found")
+    return res.data[0]
+
+@router.delete("/leave-policies/{policy_id}", status_code=204)
+async def delete_leave_policy(policy_id: str, current_admin: dict = Depends(verify_token)):
+    """HR only: delete a leave policy."""
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR Admin only")
+    db = get_db()
+    await db_execute(lambda: db.table("leave_policies").delete().eq("id", policy_id).execute())
+    return
 
 @router.get("/leave-balances")
 async def get_leave_balances(staff_id: Optional[str] = None, current_admin: dict = Depends(verify_token)):
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     target = staff_id if (is_hr and staff_id) else current_admin["sub"]
-    profile = await db_execute(lambda: db.table("staff_profiles").select("leave_quota, leave_taken").eq("admin_id", target).execute())
+    profile = await db_execute(lambda: db.table("staff_profiles").select("leave_quota").eq("admin_id", target).execute())
     leaves = await db_execute(lambda: db.table("leave_requests").select("days_count, leave_type").eq("staff_id", target).eq("status", "approved").execute())
     quota = profile.data[0].get("leave_quota", 20) if profile.data else 20
     used = sum(l.get("days_count", 0) for l in leaves.data)
@@ -2501,14 +3856,19 @@ async def get_pips(staff_id: Optional[str] = None, current_admin: dict = Depends
 @router.post("/pip", status_code=201)
 async def create_pip(pip: PIPCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin", "line_manager"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin", "line_manager"] for r in user_roles):
         raise HTTPException(status_code=403, detail="Manager or HR only")
     db = get_db()
     res = await db_execute(lambda: db.table("performance_improvement_plans").insert({
-        **pip.dict(), "start_date": pip.start_date.isoformat(),
-        "review_date": pip.review_date.isoformat(), "status": "active",
+        **serialize_dates(pip.dict()), "status": "active",
         "created_by": current_admin["sub"]
     }).execute())
+    await send_notification(
+        pip.staff_id,
+        "Performance Improvement Plan (PIP) Created",
+        "A Performance Improvement Plan has been created for you. Please check your Performance tab and speak with HR.",
+        "pip_created"
+    )
     return res.data[0]
 
 # ─── LEARNING & GROWTH ────────────────────────────────────────
@@ -2529,10 +3889,10 @@ async def get_trainings(current_admin: dict = Depends(verify_token)):
 @router.post("/trainings", status_code=201)
 async def create_training(t: TrainingCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
-    data = t.dict()
+    data = serialize_dates(t.dict())
     data["start_date"] = t.start_date.isoformat()
     if t.end_date: data["end_date"] = t.end_date.isoformat()
     data["created_by"] = current_admin["sub"]
@@ -2546,6 +3906,15 @@ async def enroll_in_training(training_id: str, staff_id: Optional[str] = None, c
     res = await db_execute(lambda: db.table("training_enrollments").insert({
         "training_id": training_id, "staff_id": target, "enrolled_at": datetime.utcnow().isoformat()
     }).execute())
+    # Fetch training name for notification
+    training_res = await db_execute(lambda: db.table("trainings").select("title").eq("id", training_id).execute())
+    training_title = training_res.data[0].get("title", "a training") if training_res.data else "a training"
+    await send_notification(
+        target,
+        "Training Enrollment Confirmed 📚",
+        f"Your enrollment in '{training_title}' has been confirmed. Check your Learning tab for details.",
+        "training_enrolled"
+    )
     return res.data[0]
 
 @router.get("/onboarding/{staff_id}")
@@ -2565,6 +3934,13 @@ async def create_onboarding_checklist(oc: OnboardingChecklistCreate, current_adm
 async def update_onboarding_item(item_id: str, current_admin: dict = Depends(verify_token)):
     db = get_db()
     res = await db_execute(lambda: db.table("onboarding_checklists").update({"completed": True, "completed_at": datetime.utcnow().isoformat()}).eq("id", item_id).execute())
+    if res.data:
+        item = res.data[0]
+        await notify_hr_admins(
+            "Onboarding Checklist Item Completed",
+            f"A staff onboarding checklist item has been marked as complete. Review progress in the Onboarding tab.",
+            "onboarding_update"
+        )
     return res.data[0] if res.data else {"message": "Updated"}
 
 # ─── PROBATION TRACKING ───────────────────────────────────────
@@ -2581,7 +3957,7 @@ async def get_probation_reviews(current_admin: dict = Depends(verify_token)):
 async def create_probation_review(pr: ProbationReviewCreate, current_admin: dict = Depends(verify_token)):
     db = get_db()
     res = await db_execute(lambda: db.table("probation_reviews").insert({
-        **pr.dict(), "review_date": pr.review_date.isoformat(), "reviewed_by": current_admin["sub"]
+        **serialize_dates(pr.dict()), "reviewed_by": current_admin["sub"]
     }).execute())
     return res.data[0]
 
@@ -2603,17 +3979,17 @@ async def get_comp_bands(current_admin: dict = Depends(verify_token)):
 @router.post("/comp-bands", status_code=201)
 async def create_comp_band(cb: CompBandCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
-    res = await db_execute(lambda: db.table("compensation_bands").insert(cb.dict()).execute())
+    res = await db_execute(lambda: db.table("compensation_bands").insert(serialize_dates(cb.dict())).execute())
     return res.data[0]
 
 @router.get("/bonuses")
 async def get_bonuses(staff_id: Optional[str] = None, current_admin: dict = Depends(verify_token)):
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles)
     query = db.table("bonuses").select("*, admins!bonuses_staff_id_fkey(full_name)")
     if staff_id:
         query = query.eq("staff_id", staff_id)
@@ -2625,10 +4001,15 @@ async def get_bonuses(staff_id: Optional[str] = None, current_admin: dict = Depe
 @router.post("/bonuses", status_code=201)
 async def create_bonus(b: BonusCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
-    res = await db_execute(lambda: db.table("bonuses").insert({**b.dict(), "created_by": current_admin["sub"]}).execute())
+    res = await db_execute(lambda: db.table("bonuses").insert({**serialize_dates(b.dict()), "created_by": current_admin["sub"]}).execute())
+    if res.data:
+        bonus_data = res.data[0]
+        amount = bonus_data.get("amount", "")
+        bonus_type = bonus_data.get("bonus_type") or bonus_data.get("type") or "Bonus"
+        await send_notification(b.staff_id, "Bonus Awarded 🎁", f"You have been awarded a {bonus_type}{f' of ₦{float(amount):,.0f}' if amount else ''}. Check your bonuses tab.", "bonus_awarded")
     return res.data[0]
 
 # ─── ANNOUNCEMENTS ────────────────────────────────────────────
@@ -2645,12 +4026,19 @@ async def get_announcements(current_admin: dict = Depends(verify_token)):
 @router.post("/announcements", status_code=201)
 async def create_announcement(a: AnnouncementCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin", "operations"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
     res = await db_execute(lambda: db.table("announcements").insert({
-        **a.dict(), "created_by": current_admin["sub"], "created_at": datetime.utcnow().isoformat()
+        **serialize_dates(a.dict()), "created_by": current_admin["sub"], "created_at": datetime.utcnow().isoformat()
     }).execute())
+    
+    if res.data:
+        staff_res = await db_execute(lambda: db.table("admins").select("id").eq("is_active", True).execute())
+        if staff_res.data:
+            for s in staff_res.data:
+                await send_notification(s["id"], f"New Announcement: {a.title}", a.body[:100] + "...", "announcement")
+
     return res.data[0]
 
 # ─── RECOGNITION (KUDOS) ──────────────────────────────────────
@@ -2667,8 +4055,11 @@ async def get_recognition(current_admin: dict = Depends(verify_token)):
 async def give_recognition(r: RecognitionCreate, current_admin: dict = Depends(verify_token)):
     db = get_db()
     res = await db_execute(lambda: db.table("recognition").insert({
-        **r.dict(), "giver_id": current_admin["sub"], "created_at": datetime.utcnow().isoformat()
+        **serialize_dates(r.dict()), "giver_id": current_admin["sub"], "created_at": datetime.utcnow().isoformat()
     }).execute())
+    if res.data:
+        giver_name = current_admin.get("full_name") or current_admin.get("name") or "A colleague"
+        await send_notification(r.recipient_id, f"🏆 {r.badge_type} from {giver_name}", r.message[:120], "recognition")
     return res.data[0]
 
 # ─── SURVEYS ──────────────────────────────────────────────────
@@ -2688,12 +4079,25 @@ async def list_surveys(current_admin: dict = Depends(verify_token)):
 @router.post("/culture/surveys", status_code=201)
 async def create_survey(s: SurveyCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
     res = await db_execute(lambda: db.table("surveys").insert({
-        **s.dict(), "is_active": True, "created_by": current_admin["sub"]
+        **serialize_dates(s.dict()), "is_active": True, "created_by": current_admin["sub"]
     }).execute())
+    # Notify all active staff about the new survey
+    try:
+        db2 = get_db()
+        staff_res = await db_execute(lambda: db2.table("admins").select("id").eq("is_active", True).execute())
+        for staff in (staff_res.data or []):
+            await send_notification(
+                staff["id"],
+                f"New Survey: {s.title} 📋",
+                "A new survey has been published. Your feedback is valuable — check the Engagement tab.",
+                "survey_published"
+            )
+    except Exception as e:
+        print(f"Survey notification error: {e}")
     return res.data[0]
 
 @router.post("/culture/surveys/{survey_id}/respond", status_code=201)
@@ -2725,10 +4129,10 @@ async def get_work_permits(staff_id: Optional[str] = None, current_admin: dict =
 @router.post("/work-permits", status_code=201)
 async def create_work_permit(wp: WorkPermitCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
-    data = wp.dict()
+    data = serialize_dates(wp.dict())
     data["issue_date"] = wp.issue_date.isoformat()
     data["expiry_date"] = wp.expiry_date.isoformat()
     today = date.today()
@@ -2744,7 +4148,7 @@ class HRLetterCreate(BaseModel):
 async def get_hr_letters(staff_id: Optional[str] = None, current_admin: dict = Depends(verify_token)):
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles)
     query = db.table("hr_letters").select("*, admins!hr_letters_staff_id_fkey(full_name)")
     if staff_id:
         query = query.eq("staff_id", staff_id)
@@ -2756,12 +4160,16 @@ async def get_hr_letters(staff_id: Optional[str] = None, current_admin: dict = D
 @router.post("/hr-letters", status_code=201)
 async def create_hr_letter(l: HRLetterCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
     res = await db_execute(lambda: db.table("hr_letters").insert({
-        **l.dict(), "date_issued": l.date_issued.isoformat(), "issued_by": current_admin["sub"]
+        **serialize_dates(l.dict()), "issued_by": current_admin["sub"]
     }).execute())
+    
+    if res.data:
+        await send_notification(l.staff_id, "New HR Letter Issued", f"A new {l.letter_type} has been uploaded to your profile.", "letter_issued")
+        
     return res.data[0]
 
 # ─── GRIEVANCES ───────────────────────────────────────────────
@@ -2772,7 +4180,7 @@ class GrievanceCreate(BaseModel):
 @router.get("/grievances")
 async def get_grievances(current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
     res = await db_execute(lambda: db.table("grievances").select("*").order("created_at", desc=True).execute())
@@ -2782,17 +4190,19 @@ async def get_grievances(current_admin: dict = Depends(verify_token)):
 async def submit_grievance(g: GrievanceCreate, current_admin: dict = Depends(verify_token)):
     db = get_db()
     res = await db_execute(lambda: db.table("grievances").insert({
-        **g.dict(),
+        **serialize_dates(g.dict()),
         "filed_by": None if g.is_anonymous else current_admin["sub"],
         "status": "open",
         "created_at": datetime.utcnow().isoformat()
     }).execute())
+    
+    await notify_hr_admins("New Grievance Filed", f"A new grievance has been filed: {g.subject}", "grievance_update")
     return {"message": "Grievance submitted successfully"}
 
 @router.patch("/grievances/{grievance_id}")
 async def update_grievance_status(grievance_id: str, request: Request, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
     data = await request.json()
@@ -2800,6 +4210,10 @@ async def update_grievance_status(grievance_id: str, request: Request, current_a
         "status": data.get("status"),
         "resolved_by": current_admin["sub"]
     }).eq("id", grievance_id).execute())
+    
+    if res.data and res.data[0].get("filed_by"):
+        await send_notification(res.data[0]["filed_by"], "Grievance Status Update", f"Your grievance status has been updated to: {data.get('status')}", "grievance_update")
+
     return res.data[0] if res.data else {"message": "Updated"}
 
 # ─── AUDIT LOGS ───────────────────────────────────────────────
@@ -2901,58 +4315,461 @@ async def send_candidate_email(request: Request, current_admin: dict = Depends(v
     if not all([candidate_email, subject, message]):
         raise HTTPException(status_code=400, detail="Missing email, subject, or message")
 
-    # In a real system, you would integrate with SendGrid/SMTP here.
-    # For now, we log it to the system's email_logs to ensure it's tracked.
+    # Build professional HTML email body
+    html_body = f"""
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+      <div style="background:#1A1A1A;padding:24px;text-align:center;">
+        <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp &amp; Cloves" style="max-height:48px;display:block;margin:0 auto;">
+      </div>
+      <div style="background:#C47D0A;padding:12px 24px;">
+        <h2 style="color:#1A1A1A;margin:0;font-size:16px;">Message from Eximp &amp; Cloves HR</h2>
+      </div>
+      <div style="padding:32px 24px;background:#fff;border:1px solid #eee;">
+        <div style="font-size:14px;color:#333;line-height:1.8;white-space:pre-line;">{message}</div>
+        <hr style="border:none;border-top:1px solid #eee;margin:28px 0;">
+        <p style="color:#999;font-size:12px;margin:0;">
+          Eximp &amp; Cloves Infrastructure Limited | RC 8311800<br>
+          57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383<br>
+          <a href="https://www.eximps-cloves.com" style="color:#999;text-decoration:none;">www.eximps-cloves.com</a>
+        </p>
+      </div>
+    </div>"""
+
+    # Send via Resend
+    from email_service import async_resend, HR_CC
+    try:
+        await async_resend({
+            "from": "Eximp & Cloves HR <hr@mail.eximps-cloves.com>",
+            "to": [candidate_email],
+            "reply_to": "hr@eximps-cloves.com",
+            "cc": HR_CC,
+            "subject": subject,
+            "html": html_body
+        })
+        email_status = "sent"
+    except Exception as send_err:
+        logger.error(f"Failed to send talent pool email to {candidate_email}: {send_err}")
+        raise HTTPException(status_code=500, detail=f"Email delivery failed: {str(send_err)}")
+
+    # Log the sent email
     await db_execute(lambda: db.table("email_logs").insert({
         "recipient_email": candidate_email,
         "subject": subject,
         "email_type": "recruitment",
-        "status": "sent",
+        "status": email_status,
         "sent_at": datetime.utcnow().isoformat()
     }).execute())
 
-    return {"message": f"Email queued for {candidate_email}"}
+    return {"message": f"Email sent to {candidate_email}"}
 
 @router.get("/calendar-events")
 async def get_calendar_events(current_admin: dict = Depends(verify_token)):
-    db = get_db()
-    res = await db_execute(lambda: db.table("calendar_events").select("*").execute())
-    return res.data if res.data else []
+    try:
+        db = get_db()
+        res = await db_execute(lambda: db.table("calendar_events").select("*").execute())
+        data = res.data if res.data else []
+        
+        user_roles = current_admin.get("role", "").split(",")
+        is_hr = "admin" in user_roles or "hr_admin" in user_roles
+        user_dept = current_admin.get("department", "")
+
+        if not is_hr:
+            # Filter events: Staff only see "All" company events or events for their own department
+            data = [e for e in data if e.get("department") in ["All", "Company", user_dept]]
+            
+        return data
+    except Exception as e:
+        print(f"Error fetching calendar events: {e}")
+        return []
 
 @router.post("/calendar-events", status_code=status.HTTP_201_CREATED)
 async def create_calendar_event(request: Request, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if "admin" not in user_roles and "hr_admin" not in user_roles:
-        raise HTTPException(status_code=403, detail="HR only")
-    db = get_db()
-    data = await request.json()
-    res = await db_execute(lambda: db.table("calendar_events").insert(data).execute())
-    return res.data[0] if res.data else None
+    is_hr = "admin" in user_roles or "hr_admin" in user_roles
+    
+    try:
+        db = get_db()
+        data = await request.json()
+        
+        if not is_hr:
+            # Enforce department scoping for staff
+            data["department"] = current_admin.get("department", "Unknown")
+            # Restrict event types for staff
+            if data.get("event_type") not in ["Meeting", "Focus Time", "Leave", "Team Sync"]:
+                data["event_type"] = "Meeting"
+                
+        res = await db_execute(lambda: db.table("calendar_events").insert(data).execute())
+        return res.data[0] if res.data else None
+    except Exception as e:
+        print(f"Error creating calendar event: {e}")
+        return None
 
 @router.get("/expenses")
 async def get_expenses(current_admin: dict = Depends(verify_token)):
+    """
+    Returns all staff expenditure/reimbursement records.
+    Matches the payout dashboard Staff Claims filter exactly:
+      vendors.type = 'staff'  (same as: data.filter(r => r.vendors?.type === 'staff'))
+    This captures all payout_methods for staff (reimbursement, direct_pay, disbursement)
+    without hard-coding categories that may drift over time.
+    """
     db = get_db()
-    res = await db_execute(lambda: db.table("expenses").select("*, staff:admins(full_name, department)").execute())
-    return res.data if res.data else []
+    # Step 1: get all staff vendor IDs
+    staff_vendors_res = await db_execute(lambda: db.table("vendors")
+        .select("id")
+        .eq("type", "staff")
+        .execute()
+    )
+    staff_vendor_ids = [v["id"] for v in (staff_vendors_res.data or [])]
+
+    if not staff_vendor_ids:
+        return []
+
+    # Step 2: fetch expenditure_requests for those vendors
+    res = await db_execute(lambda: db.table("expenditure_requests")
+        .select("*, vendors(*), admins!requester_id(full_name, department), expenditure_payments(*)")
+        .in_("vendor_id", staff_vendor_ids)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    rows = res.data if res.data else []
+
+    normalised = []
+    for r in rows:
+        vendor   = r.get("vendors") or {}
+        requester = r.get("admins") or {}
+        normalised.append({
+            "id": r["id"],
+            "staff_id": r.get("requester_id"),
+            "staff": {
+                "full_name": vendor.get("name") or requester.get("full_name") or "—",
+                "department": requester.get("department"),
+            },
+            "vendor": vendor,
+            "category": r.get("category") or "General",
+            "description": r.get("title") or r.get("description") or "—",
+            "amount": r.get("amount_gross") or 0,
+            "amount_gross": r.get("amount_gross") or 0,
+            "net": r.get("net_payout_amount") or r.get("amount_gross") or 0,
+            "amount_paid": r.get("amount_paid") or 0,
+            "currency": "NGN",
+            "date": r.get("created_at"),
+            "created_at": r.get("created_at"),
+            "status": r.get("status") or "pending",
+            "payout_method": r.get("payout_method"),
+            "receipt_url": r.get("receipt_url"),
+            "proforma_url": r.get("proforma_url"),
+            "remarks": r.get("remarks"),
+            "rejection_reason": r.get("rejection_reason"),
+            "is_disputed": r.get("is_disputed") or False,
+            "dispute_reason": r.get("dispute_reason"),
+            "risk_notes": r.get("risk_notes"),
+            "source_platform": r.get("source_platform") or "internal",
+            "hr_verified": r.get("hr_verified") or False,
+            "hr_note": r.get("hr_note"),
+            "payments": r.get("expenditure_payments") or [],
+        })
+    return normalised
 
 @router.post("/expenses", status_code=status.HTTP_201_CREATED)
 async def submit_expense(request: Request, current_admin: dict = Depends(verify_token)):
+    """
+    HR submits an internal expense on behalf of a staff member.
+    Creates (or reuses) a vendor record for the staff member, then
+    inserts into expenditure_requests with payout_method='reimbursement'.
+    """
     db = get_db()
     data = await request.json()
-    if "staff_id" not in data or not data["staff_id"]:
-        data["staff_id"] = current_admin.get("id")
-    res = await db_execute(lambda: db.table("expenses").insert(data).execute())
+
+    staff_id = data.get("staff_id") or current_admin.get("id")
+
+    # Resolve or create a vendor record for this staff member
+    vendor_id = None
+    if staff_id:
+        staff_res = await db_execute(lambda: db.table("admins")
+            .select("id, full_name, email, department")
+            .eq("id", staff_id).limit(1).execute()
+        )
+        if staff_res.data:
+            staff = staff_res.data[0]
+            # Check if a vendor already exists for this email
+            v_res = await db_execute(lambda: db.table("vendors")
+                .select("id, type").eq("email", staff.get("email", "")).execute()
+            )
+            if v_res.data:
+                vendor_id = v_res.data[0]["id"]
+                # CRITICAL FIX: If vendor exists but is not 'staff', update it.
+                # Otherwise it stays 'company' or 'individual' and is hidden from HR Portal.
+                if v_res.data[0].get("type") != "staff":
+                    await db_execute(lambda: db.table("vendors").update({
+                        "type": "staff",
+                        "admin_id": staff_id,
+                        "name": staff.get("full_name") or "Staff Member"
+                    }).eq("id", vendor_id).execute())
+            else:
+                # Create a minimal vendor record so the expenditure_requests FK is satisfied
+                new_v = await db_execute(lambda: db.table("vendors").insert({
+                    "type": "staff",
+                    "name": staff.get("full_name") or "Staff Member",
+                    "email": staff.get("email") or f"staff_{staff_id}@internal",
+                    "admin_id": staff_id,
+                }).execute())
+                if new_v.data:
+                    vendor_id = new_v.data[0]["id"]
+
+    payload = {
+        "title": data.get("description") or data.get("title") or "Staff Expense",
+        "description": data.get("description"),
+        "category": data.get("category") or "Office Expenditure",
+        "amount_gross": float(data.get("amount") or data.get("amount_gross") or 0),
+        "wht_rate": 0,
+        "wht_amount": 0,
+        "net_payout_amount": float(data.get("amount") or data.get("amount_gross") or 0),
+        "payout_method": "reimbursement",
+        "status": "pending_verification",
+        "source_platform": "hrm_portal",
+        "requester_id": staff_id,
+        "vendor_id": vendor_id,
+        "remarks": data.get("remarks") or data.get("notes"),
+        "receipt_url": data.get("receipt_url"),
+        "is_wht_applicable": False,
+        "wht_exemption_reason": "Staff expense reimbursement",
+    }
+
+    res = await db_execute(lambda: db.table("expenditure_requests").insert(payload).execute())
+    await notify_hr_admins(
+        "Expense Claim Submitted",
+        f"A new expense claim has been submitted and is awaiting review. Check the Expenses tab.",
+        "expense_submitted"
+    )
     return res.data[0] if res.data else None
 
 @router.patch("/expenses/{expense_id}")
 async def update_expense(expense_id: str, request: Request, current_admin: dict = Depends(verify_token)):
+    """
+    HR approves / rejects / marks paid an expense (expenditure_request row).
+    Maps legacy status strings ('Approved', 'Rejected', 'Paid') to the
+    canonical expenditure_requests statuses.
+    """
     user_roles = current_admin.get("role", "").split(",")
     if "admin" not in user_roles and "hr_admin" not in user_roles and "manager" not in user_roles:
         raise HTTPException(status_code=403, detail="HR/Managers only")
     db = get_db()
     data = await request.json()
-    res = await db_execute(lambda: db.table("expenses").update({"status": data.get("status")}).eq("id", expense_id).execute())
+
+    # Map frontend status strings → expenditure_requests canonical status values
+    # The DB CHECK constraint allows: 'pending', 'awaiting_vendor_data', 'approved',
+    # 'paid', 'rejected', 'pending_verification', 'partially_paid', 'voided'
+    status_map = {
+        "Approved":       "approved",
+        "approved":       "approved",
+        "Rejected":       "rejected",
+        "rejected":       "rejected",
+        "Paid":           "paid",
+        "paid":           "paid",
+        "partially_paid": "partially_paid",
+        "Pending":        "pending_verification",
+        "pending":        "pending_verification",
+    }
+    raw_status = data.get("status", "")
+    new_status = status_map.get(raw_status, raw_status)
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    # Only write columns that actually exist on expenditure_requests
+    update_payload = {"status": new_status}
+
+    if new_status in ("approved", "rejected"):
+        update_payload["reviewed_by"] = current_admin["sub"]
+        update_payload["reviewed_at"] = now_iso
+
+    if new_status in ("paid", "partially_paid"):
+        # Record the actual amount sent by HR (supports partial reimbursements)
+        amount_paid = data.get("amount_paid")
+        if amount_paid is not None:
+            update_payload["amount_paid"] = float(amount_paid)
+        payout_reference = data.get("payout_reference")
+        if payout_reference:
+            update_payload["payout_reference"] = payout_reference
+
+    if new_status == "paid":
+        update_payload["paid_at"] = now_iso
+
+    # HR note: stored in hr_note (after migration_hr_columns.sql is run).
+    # Fallback for pre-migration: also write rejection_reason for rejections so
+    # the payout dashboard always shows the reason.
+    hr_note = data.get("hr_note") or data.get("note") or data.get("reason")
+    if hr_note:
+        update_payload["hr_note"] = hr_note
+        if new_status == "rejected":
+            update_payload["rejection_reason"] = hr_note
+
+    update_payload["hr_verified"] = True
+
+    try:
+        res = await db_execute(lambda: db.table("expenditure_requests")
+            .update(update_payload).eq("id", expense_id).execute()
+        )
+    except Exception as e:
+        err_str = str(e)
+        # If hr_note or hr_verified columns don't exist yet (pre-migration),
+        # retry without them. Run migration_hr_columns.sql to fix permanently.
+        if "hr_note" in err_str or "hr_verified" in err_str:
+            update_payload.pop("hr_note", None)
+            update_payload.pop("hr_verified", None)
+            res = await db_execute(lambda: db.table("expenditure_requests")
+                .update(update_payload).eq("id", expense_id).execute()
+            )
+        else:
+            raise
+
+    if res.data:
+        exp = res.data[0]
+        requester_id = exp.get("requester_id") or exp.get("staff_id")
+        if requester_id:
+            # Rich, human-readable bell notification
+            raw_category = exp.get("category") or ""
+            is_commission = "commission" in raw_category.lower() or "commission" in (exp.get("title") or "").lower()
+            category_label = "Commission Claim" if is_commission else "Reimbursement Claim"
+            
+            amount     = exp.get("amount_gross") or exp.get("net_payout_amount") or exp.get("amount") or 0
+            approver   = current_admin.get("name") or current_admin.get("sub") or "HR"
+            
+            # Base messages
+            status_msgs = {
+                "approved":       f"✅ Your {category_label} of ₦{float(amount):,.0f} has been approved by {approver}. Payment will be processed soon.",
+                "rejected":       f"❌ Your {category_label} of ₦{float(amount):,.0f} was declined by {approver}.",
+                "paid":           f"💸 Your {category_label} of ₦{float(exp.get('amount_paid') or amount):,.0f} has been paid out.",
+                "partially_paid": f"💳 A partial payment of ₦{float(exp.get('amount_paid') or 0):,.0f} has been made on your {category_label}.",
+            }
+            
+            status_msg = status_msgs.get(new_status, f"Your {category_label.lower()} status was updated to {new_status}.")
+            
+            # Append HR Note/Reason if provided, especially for rejections
+            if hr_note:
+                status_msg += f" Note: {hr_note}"
+            elif new_status == "rejected":
+                status_msg += " Please check with HR for details."
+
+            await send_notification(
+                requester_id,
+                "Claim Status Update",
+                status_msg,
+                "expense_update"
+            )
+
+            # Optional email — only triggered when frontend sends send_email: true
+            if data.get("send_email") and new_status in ("approved", "paid", "partially_paid"):
+                try:
+                    # Re-fetch with vendors(*) join so bank/account fields are present for PDF
+                    full_res = await db_execute(lambda: db.table("expenditure_requests")
+                        .select("*, vendors(*)").eq("id", expense_id).maybe_single().execute()
+                    )
+                    if full_res.data:
+                        full_exp = full_res.data
+                        vendor = full_exp.get("vendors") or {}
+                        if vendor.get("email"):
+                            if new_status == "approved":
+                                from email_service import send_expense_approval_email
+                                await send_expense_approval_email(full_exp, vendor, current_admin["sub"])
+                            elif new_status in ("paid", "partially_paid"):
+                                from email_service import send_payout_receipt_email
+                                await send_payout_receipt_email(full_exp, vendor, current_admin["sub"])
+                        else:
+                            print(f"[EXPENSE EMAIL] No vendor email for expense {expense_id}")
+                except Exception as email_err:
+                    # Non-blocking — email failure must never break the approval flow
+                    print(f"[EXPENSE EMAIL] non-blocking error: {email_err}")
+
     return res.data[0] if res.data else None
+
+# ─── EXPENSE RECEIPT ENDPOINTS ──────────────────────────────────────────────
+
+@router.get("/expenses/{expense_id}/view-receipt")
+async def view_expense_receipt(
+    expense_id: str,
+    file_index: int = 0,
+    current_admin: dict = Depends(resolve_admin_token),
+):
+    """
+    Securely serves an expense receipt/proof document via a Supabase signed URL.
+    Mirrors the payout dashboard /view-document endpoint so HR staff can view
+    proof files uploaded by staff without them being 404'd by the static server.
+
+    receipt_url may be:
+      - A plain storage path:  "portal_claims/abc.jpeg"
+      - A JSON array of paths: '["portal_claims/a.jpeg","portal_claims/b.pdf"]'
+      - A full https:// URL (external — redirect directly)
+    """
+    import json
+    from fastapi.responses import RedirectResponse
+    from storage_service import generate_signed_url
+
+    db = get_db()
+    res = await db_execute(
+        lambda: db.table("expenditure_requests")
+        .select("receipt_url, proforma_url")
+        .eq("id", expense_id)
+        .maybe_single()
+        .execute()
+    )
+    if not res or not res.data:
+        raise HTTPException(status_code=404, detail="Expense record not found")
+
+    raw = res.data.get("receipt_url") or res.data.get("proforma_url")
+    if not raw:
+        raise HTTPException(status_code=404, detail="No receipt document attached to this expense")
+
+    # Resolve single path vs JSON array
+    path = raw
+    if raw.startswith("["):
+        try:
+            paths = json.loads(raw)
+            if isinstance(paths, list) and paths:
+                idx = max(0, min(file_index, len(paths) - 1))
+                path = paths[idx]
+        except (ValueError, json.JSONDecodeError):
+            pass  # fall through — treat as plain string
+
+    # External URL → redirect directly
+    if path.startswith("http"):
+        return RedirectResponse(url=path)
+
+    # Private Supabase storage → generate signed URL
+    signed_url = generate_signed_url("Cloud Infrastructure", path)
+    if not signed_url:
+        raise HTTPException(status_code=500, detail="Failed to generate secure access link for receipt")
+
+    return RedirectResponse(url=signed_url)
+
+
+@router.post("/expenses/upload-receipt")
+async def upload_expense_receipt(
+    file: UploadFile = File(...),
+    current_admin: dict = Depends(verify_token),
+):
+    """
+    Uploads a proof/receipt file for an expense claim to Supabase private storage
+    (same bucket as payout portal: 'Cloud Infrastructure').
+    Returns the storage path so the frontend can POST it as receipt_url when
+    submitting a new expense, or PATCH it onto an existing one.
+    """
+    from storage_service import upload_portal_file
+
+    if not file or not file.filename:
+        raise HTTPException(status_code=400, detail="No file provided")
+
+    file_ext = file.filename.rsplit(".", 1)[-1] if "." in file.filename else "bin"
+    # Namespace under portal_claims/ to match payout dashboard convention
+    file_path = f"portal_claims/{uuid.uuid4().hex}.{file_ext}"
+    file_bytes = await file.read()
+
+    ok = upload_portal_file(file_path, file_bytes, file.content_type)
+    if not ok:
+        raise HTTPException(status_code=500, detail="Failed to upload receipt file. Please retry.")
+
+    return {"path": file_path}
+
 
 @router.get("/peer-reviews")
 async def get_peer_reviews(current_admin: dict = Depends(verify_token)):
@@ -2968,7 +4785,34 @@ async def launch_peer_review(request: Request, current_admin: dict = Depends(ver
     db = get_db()
     data = await request.json()
     res = await db_execute(lambda: db.table("peer_reviews").insert(data).execute())
+    if res.data:
+        review = res.data[0]
+        reviewee_id = review.get("reviewee_id") or data.get("reviewee_id")
+        if reviewee_id:
+            await send_notification(
+                reviewee_id,
+                "Peer Review Assigned",
+                "A peer review has been assigned to you. Check your Performance tab to view details.",
+                "peer_review_assigned"
+            )
     return res.data[0] if res.data else None
+
+@router.get("/peer-reviews/my-assignments")
+async def get_my_peer_assignments(staff_id: str, current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    # Find reviews where staff_id is in the reviewer_ids array AND status is not cancelled
+    res = await db_execute(lambda: db.table("peer_reviews").select("*").contains("reviewer_ids", [staff_id]).neq("status", "cancelled").execute())
+    data = res.data if res.data else []
+    
+    # Add a flag for frontend to easily identify completed reviews
+    my_id = str(current_admin.get("sub", ""))
+    for r in data:
+        responses = r.get("responses") or []
+        if not isinstance(responses, list):
+            responses = []
+        r["submitted_by_me"] = any(str(resp.get("reviewer_id")) == my_id for resp in responses)
+        
+    return data
 
 @router.patch("/peer-reviews/{review_id}")
 async def update_peer_review(review_id: str, request: Request, current_admin: dict = Depends(verify_token)):
@@ -2976,6 +4820,46 @@ async def update_peer_review(review_id: str, request: Request, current_admin: di
     data = await request.json()
     res = await db_execute(lambda: db.table("peer_reviews").update({"status": data.get("status")}).eq("id", review_id).execute())
     return res.data[0] if res.data else None
+
+@router.post("/peer-reviews/{review_id}/respond")
+async def respond_peer_review(review_id: str, request: Request, current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    data = await request.json()
+    
+    # Get current review to fetch existing responses
+    res = await db_execute(lambda: db.table("peer_reviews").select("*").eq("id", review_id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Review not found")
+    
+    review = res.data[0]
+    responses = review.get("responses") or []
+    if not isinstance(responses, list):
+        responses = []
+        
+    # Add new response with reviewer_id and timestamp
+    # Note: We ALWAYS store reviewer_id for HR tracking purposes.
+    # The frontend is responsible for hiding it if is_anonymous is true.
+    new_response = {
+        "answers": data.get("answers"),
+        "submitted_at": datetime.now().isoformat(),
+        "reviewer_id": current_admin["sub"]
+    }
+    responses.append(new_response)
+    
+    # Update the review status to 'in-progress' if it was 'pending'
+    update_data = {"responses": responses}
+    if review.get("status") == "pending":
+        update_data["status"] = "in-progress"
+        
+    try:
+        res_update = await db_execute(lambda: db.table("peer_reviews").update(update_data).eq("id", review_id).execute())
+        if not res_update or not res_update.data:
+            print(f"❌ Peer Review Update Failed: No data returned for ID {review_id}")
+            raise HTTPException(status_code=500, detail="Failed to save response to database")
+        return res_update.data[0]
+    except Exception as e:
+        print(f"❌ Peer Review POST Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ─── NOTIFICATIONS ───────────────────────────────────────────
 @router.get("/notifications")
@@ -2985,12 +4869,12 @@ async def get_notifications(staff_id: Optional[str] = None, limit: int = 30, cur
     # Only HR or self can see notifications
     if target != current_admin["sub"]:
         user_roles = current_admin.get("role", "").split(",")
-        if not any(r in ["admin", "hr_admin"] for r in user_roles):
+        if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
              raise HTTPException(status_code=403, detail="Permission denied")
              
     res = await db_execute(lambda: db.table("notifications")
         .select("*")
-        .eq("staff_id", target)
+        .eq("admin_id", target)
         .order("created_at", desc=True)
         .limit(limit)
         .execute())
@@ -2999,13 +4883,13 @@ async def get_notifications(staff_id: Optional[str] = None, limit: int = 30, cur
 @router.patch("/notifications/{notif_id}/read")
 async def mark_notification_read(notif_id: str, current_admin: dict = Depends(verify_token)):
     db = get_db()
-    res = await db_execute(lambda: db.table("notifications").update({"is_read": True}).eq("id", notif_id).eq("staff_id", current_admin["sub"]).execute())
+    res = await db_execute(lambda: db.table("notifications").update({"is_read": True}).eq("id", notif_id).eq("admin_id", current_admin["sub"]).execute())
     return {"success": True}
 
-@router.post("/notifications/read-all")
+@router.patch("/notifications/read-all")
 async def mark_all_notifications_read(current_admin: dict = Depends(verify_token)):
     db = get_db()
-    res = await db_execute(lambda: db.table("notifications").update({"is_read": True}).eq("staff_id", current_admin["sub"]).execute())
+    res = await db_execute(lambda: db.table("notifications").update({"is_read": True}).eq("admin_id", current_admin["sub"]).execute())
     return {"success": True}
 
 # ─── SUCCESSION PLANNING ─────────────────────────────────────
@@ -3021,10 +4905,10 @@ async def get_succession_plans(current_admin: dict = Depends(verify_token)):
 @router.post("/succession-plans", status_code=201)
 async def create_succession_plan(plan: SuccessionPlanCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
          raise HTTPException(status_code=403, detail="HR Admin only")
     db = get_db()
-    res = await db_execute(lambda: db.table("succession_plans").insert(plan.dict()).execute())
+    res = await db_execute(lambda: db.table("succession_plans").insert(serialize_dates(plan.dict())).execute())
     return res.data[0]
 
 # ─── TAX CONFIGURATION ───────────────────────────────────────
@@ -3043,7 +4927,7 @@ async def get_tax_config(current_admin: dict = Depends(verify_token)):
 @router.patch("/tax-config")
 async def update_tax_config(update: TaxConfigUpdate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
          raise HTTPException(status_code=403, detail="HR Admin only")
     db = get_db()
     # Always update the first record
@@ -3055,8 +4939,8 @@ async def update_tax_config(update: TaxConfigUpdate, current_admin: dict = Depen
 async def get_remote_work(staff_id: Optional[str] = None, current_admin: dict = Depends(verify_token)):
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin"] for r in user_roles)
-    query = db.table("remote_work_requests").select("*, admins(full_name, department)")
+    is_hr = any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles)
+    query = db.table("remote_work_requests").select("*, admins!remote_work_requests_staff_id_fkey(full_name, department)")
     if staff_id:
         query = query.eq("staff_id", staff_id)
     elif not is_hr:
@@ -3068,19 +4952,28 @@ async def get_remote_work(staff_id: Optional[str] = None, current_admin: dict = 
 async def request_remote_work(req: RemoteWorkCreate, current_admin: dict = Depends(verify_token)):
     db = get_db()
     res = await db_execute(lambda: db.table("remote_work_requests").insert({
-        **req.dict(), "staff_id": current_admin["sub"], "work_date": req.work_date.isoformat(), "status": "pending"
+        **serialize_dates(req.dict()), "staff_id": current_admin["sub"], "status": "pending"
     }).execute())
+    
+    if res.data:
+        await notify_hr_admins("New Remote Work Request", f"New remote work request from {current_admin.get('full_name', 'staff')}.", "remote_work_update")
+        
     return res.data[0]
 
 @router.patch("/remote-work/{req_id}/status")
 async def approve_remote_work(req_id: str, status_update: dict, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin", "line_manager"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin", "line_manager"] for r in user_roles):
          raise HTTPException(status_code=403, detail="Manager or HR only")
     db = get_db()
     res = await db_execute(lambda: db.table("remote_work_requests").update({
         "status": status_update.get("status"), "approved_by": current_admin["sub"]
     }).eq("id", req_id).execute())
+    
+    if res.data:
+        req_data = res.data[0]
+        await send_notification(req_data["staff_id"], "Remote Work Update", f"Your remote work request status has been updated to: {status_update.get('status')}", "remote_work_update")
+
     return res.data[0] if res.data else {"message": "Updated"}
 
 # ─── POLICY LIBRARY ──────────────────────────────────────────
@@ -3093,10 +4986,10 @@ async def get_policies(current_admin: dict = Depends(verify_token)):
 @router.post("/policies", status_code=201)
 async def create_policy(p: PolicyCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
          raise HTTPException(status_code=403, detail="HR Admin only")
     db = get_db()
-    data = p.dict()
+    data = serialize_dates(p.dict())
     if p.effective_date: data["effective_date"] = p.effective_date.isoformat()
     data["created_by"] = current_admin["sub"]
     res = await db_execute(lambda: db.table("hr_policies").insert(data).execute())
@@ -3106,19 +4999,19 @@ async def create_policy(p: PolicyCreate, current_admin: dict = Depends(verify_to
 @router.get("/exit-interviews")
 async def get_exit_interviews(current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
          raise HTTPException(status_code=403, detail="HR Admin only")
     db = get_db()
-    res = await db_execute(lambda: db.table("exit_interviews").select("*, admins(full_name, department)").execute())
+    res = await db_execute(lambda: db.table("exit_interviews").select("*, admins!exit_interviews_staff_id_fkey(full_name, department)").execute())
     return res.data
 
 @router.post("/exit-interviews", status_code=201)
 async def create_exit_interview(interview: ExitInterviewCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
          raise HTTPException(status_code=403, detail="HR Admin only")
     db = get_db()
-    data = interview.dict()
+    data = serialize_dates(interview.dict())
     data["exit_date"] = interview.exit_date.isoformat()
     res = await db_execute(lambda: db.table("exit_interviews").insert(data).execute())
     return res.data[0]
@@ -3128,8 +5021,8 @@ async def create_exit_interview(interview: ExitInterviewCreate, current_admin: d
 async def get_hr_requests(staff_id: Optional[str] = None, current_admin: dict = Depends(verify_token)):
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin"] for r in user_roles)
-    query = db.table("hr_requests").select("*, admins(full_name, department)")
+    is_hr = any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles)
+    query = db.table("hr_requests").select("*, admins!hr_requests_staff_id_fkey(full_name, department)")
     if staff_id:
         query = query.eq("staff_id", staff_id)
     elif not is_hr:
@@ -3141,17 +5034,107 @@ async def get_hr_requests(staff_id: Optional[str] = None, current_admin: dict = 
 async def create_hr_request(req: HRRequestCreate, current_admin: dict = Depends(verify_token)):
     db = get_db()
     res = await db_execute(lambda: db.table("hr_requests").insert({
-        **req.dict(), "staff_id": current_admin["sub"], "status": "pending"
+        **serialize_dates(req.dict()), "staff_id": current_admin["sub"], "status": "pending"
     }).execute())
+    
+    if (res.data):
+        await notify_hr_admins("New HR Request", f"New {req.request_type} request submitted.", "request_update")
+        
     return res.data[0]
+
+@router.patch("/requests/{req_id}")
+async def update_request(req_id: str, request: Request, current_admin: dict = Depends(verify_token)):
+    """Update an HR request — accepts { status } from the frontend."""
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR Admin only")
+    db = get_db()
+    data = await request.json()
+    res = await db_execute(lambda: db.table("hr_requests").update({
+        "status": data.get("status"), "resolved_by": current_admin["sub"]
+    }).eq("id", req_id).execute())
+    if res.data:
+        req_data = res.data[0]
+        await send_notification(req_data["staff_id"], "HR Request Update", f"Your {req_data.get('request_type', 'request')} status has been updated to: {data.get('status')}", "request_update")
+    return res.data[0] if res.data else {"message": "Updated"}
 
 @router.patch("/requests/{req_id}/status")
 async def update_request_status(req_id: str, status_update: dict, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
          raise HTTPException(status_code=403, detail="HR Admin only")
     db = get_db()
     res = await db_execute(lambda: db.table("hr_requests").update({
         "status": status_update.get("status"), "resolved_by": current_admin["sub"]
     }).eq("id", req_id).execute())
+    
+    if res.data:
+        req_data = res.data[0]
+        await send_notification(req_data["staff_id"], "HR Request Update", f"Your {req_data.get('request_type', 'request')} status has been updated to: {status_update.get('status')}", "request_update")
+
     return res.data[0] if res.data else {"message": "Updated"}
+
+# ─── POLICY LIBRARY ENDPOINTS ──────────────────────────────────────────────────
+
+@router.get("/policies")
+async def get_policies(current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    res = await db_execute(lambda: db.table("company_policies").select("*").order("category").execute())
+    return res.data
+
+@router.post("/policies")
+async def create_policy(policy: PolicyCreate, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if "admin" not in user_roles and "hr_admin" not in user_roles:
+         raise HTTPException(status_code=403, detail="HR only")
+    db = get_db()
+    res = await db_execute(lambda: db.table("company_policies").insert(policy.dict(exclude_unset=True)).execute())
+    return res.data[0] if res.data else None
+
+@router.patch("/policies/{policy_id}")
+async def update_policy(policy_id: str, policy: PolicyUpdate, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if "admin" not in user_roles and "hr_admin" not in user_roles:
+         raise HTTPException(status_code=403, detail="HR only")
+    db = get_db()
+    
+    update_data = policy.dict(exclude_unset=True)
+    update_data["updated_at"] = datetime.utcnow().isoformat()
+    
+    res = await db_execute(lambda: db.table("company_policies").update(update_data).eq("id", policy_id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Policy not found")
+    return res.data[0]
+
+@router.delete("/policies/{policy_id}")
+async def delete_policy(policy_id: str, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if "admin" not in user_roles and "hr_admin" not in user_roles:
+         raise HTTPException(status_code=403, detail="HR only")
+    db = get_db()
+    
+    # Optional: fetch policy to delete file from storage if document_url exists
+    # For now, just delete the database record
+    res = await db_execute(lambda: db.table("company_policies").delete().eq("id", policy_id).execute())
+    return {"message": "Policy deleted"}
+
+@router.post("/policies/upload")
+async def upload_policy_document(file: UploadFile = File(...), current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if "admin" not in user_roles and "hr_admin" not in user_roles:
+         raise HTTPException(status_code=403, detail="HR only")
+         
+    db = get_db()
+    file_bytes = await file.read()
+    file_ext = file.filename.split(".")[-1] if "." in file.filename else "pdf"
+    file_name = f"policy_{uuid.uuid4().hex}.{file_ext}"
+    
+    try:
+        # Uploading to the 'hr-documents' bucket specified by the user
+        db.storage.from_("hr-documents").upload(file_name, file_bytes, {"content-type": file.content_type})
+        from config import SUPABASE_URL
+        public_url = f"{SUPABASE_URL}/storage/v1/object/public/hr-documents/{file_name}"
+        return {"url": public_url}
+    except Exception as e:
+        logger.error(f"Policy upload failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to upload document to Supabase storage. Ensure bucket 'hr-documents' exists.")

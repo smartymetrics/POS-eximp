@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException, Depends, Query, BackgroundTasks, File, UploadFile, Form, Body
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, HTTPException, Depends, Query, BackgroundTasks, File, UploadFile, Form, Body, Request
+from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from database import get_db, db_execute
 from models import ExpenditureRequestCreate, PayoutReview, AssetCreate, VendorCreate, VoidExpenditureRequest, PayoutPaymentData
-from routers.auth import verify_token, has_any_role, require_roles
+from routers.auth import verify_token, has_any_role, require_roles, resolve_admin_token
 from email_service import send_payout_receipt_email, send_portal_invite_email, send_report_email, send_receipt_email
 from commission_service import sync_invoice_commissions
 from report_service import ReportService
@@ -18,6 +19,27 @@ import logging
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+templates = Jinja2Templates(directory="templates")
+
+@router.get("/procurement-dashboard", response_class=HTMLResponse)
+async def procurement_dashboard(
+    request: Request, 
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_admin=Depends(require_roles(["super_admin"]))
+):
+    """
+    Estate Development & Procurement Dashboard.
+    Only accessible by Super Admins.
+    """
+    analytics = await ReportService.get_procurement_analytics(start_date, end_date)
+    return templates.TemplateResponse("procurement_dashboard.html", {
+        "request": request,
+        "admin": current_admin,
+        "analytics": analytics
+    })
+
+
 
 # ─── WHT 2025 HELPER ──────────────────────────────────────────
 def calculate_wht_2025(amount: Decimal, category: str, has_tin: bool = True, is_resident: bool = True) -> dict:
@@ -143,6 +165,8 @@ async def submit_payout_request(data: ExpenditureRequestCreate, current_admin=De
         "proforma_url": data.proforma_url,
         "receipt_url": data.receipt_url,
         "category": data.category or "General",
+        "property_id": data.property_id,
+        "development_category": data.development_category,
         "status": "pending_verification"
     }
     
@@ -150,7 +174,7 @@ async def submit_payout_request(data: ExpenditureRequestCreate, current_admin=De
     return res.data[0]
 
 @router.get("/requests")
-async def list_expenditure_requests(status: Optional[str] = None, show_voided: bool = False, current_admin=Depends(require_roles(["admin", "super_admin"]))):
+async def list_expenditure_requests(status: Optional[str] = None, show_voided: bool = False, vendor_type: Optional[str] = None, payout_method: Optional[str] = None, payment_type: Optional[str] = None, current_admin=Depends(require_roles(["admin", "super_admin"]))):
     db = get_db()
     query = db.table("expenditure_requests").select("*, vendors(*), admins!requester_id(full_name), expenditure_payments(*), company_assets(*)")
     
@@ -159,9 +183,21 @@ async def list_expenditure_requests(status: Optional[str] = None, show_voided: b
     
     if not show_voided:
         query = query.neq("status", "voided")
+
+    if payout_method:
+        query = query.eq("payout_method", payout_method)
+
+    if payment_type:
+        query = query.eq("payment_type", payment_type)
         
     res = await db_execute(lambda: query.order("created_at", desc=True).execute())
-    return res.data
+    data = res.data
+
+    # Filter by vendor type in Python (vendors is a joined object, not a direct column)
+    if vendor_type:
+        data = [r for r in data if (r.get("vendors") or {}).get("type") == vendor_type]
+
+    return data
 
 @router.post("/requests/{request_id}/payments")
 async def record_payout_payment(request_id: str, data: PayoutPaymentData, bg_tasks: BackgroundTasks, current_admin=Depends(require_roles(["admin", "super_admin"]))):
@@ -240,63 +276,110 @@ async def verify_bill_request(
     action = data.action  # 'pending' or 'rejected'
     
     if action == 'pending':
-        # --- BI-DIRECTIONAL SYNC (Revenue CRM) ---
+        # --- UNIFIED VERIFICATION WORKFLOW ---
         if req.get("invoice_id"):
             inv_id = req["invoice_id"]
-            # Fetch Invoice and Client for receipting
-            inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", inv_id).execute())
-            if inv_res.data:
-                invoice = inv_res.data[0]
-                client = invoice.get("clients")
-                # 1. Update Invoice Balance
-                # Note: We need the client's payment amount, not the commission (gross).
-                # The commission_base is what we want. We'll try to extract it from the claim or metadata.
-                # For now, if it's a commission claim, we reverse-calc the payment amount from the gross commission.
-                is_commission = req.get("payment_type") in ["initial_deposit", "instalment"]
-                client_payment_amount = float(req["amount_gross"])
-                if is_commission:
-                    # gross = payment * rate -> payment = gross / rate
-                    # BUG FIX: Handle wht_rate as a decimal (0.05) or percentage (5.0)
-                    rate = float(req.get("wht_rate", 0.1))
-                    if rate > 1.0: rate = rate / 100.0
+            
+            # 1. Resolve or Create the Client Payment record
+            payment_id = req.get("payment_id")
+            client_payment_amount = 0
+            
+            # Scenario A: Claiming on a new payment reported via portal
+            if not payment_id and req.get("pending_verification_id"):
+                p_verif_id = req["pending_verification_id"]
+                # Confirm the verification record (mirrors verifications.py logic)
+                verif_res = await db_execute(lambda: db.table("pending_verifications").select("*").eq("id", p_verif_id).execute())
+                if verif_res.data:
+                    verif = verif_res.data[0]
+                    client_payment_amount = float(verif.get("deposit_amount", 0))
                     
-                    if rate > 0:
-                        client_payment_amount = float(req["amount_gross"]) / rate
-                    else:
-                        client_payment_amount = float(req["amount_gross"])
-                    # Actually, let's use the property_price if initial_deposit, else try to find the payment amount
-                    # I'll update the portal submit to store the payment_amount in metadata
-                    client_payment_amount = float(req.get("description", "").split("Amt: ")[-1].split()[0]) if "Amt: " in req.get("description", "") else float(req["amount_gross"])
-                
-                new_paid = float(invoice.get("amount_paid", 0)) + client_payment_amount
-                await db_execute(lambda: db.table("invoices").update({"amount_paid": new_paid, "status": "paid" if new_paid >= float(invoice["amount"]) else "partial"}).eq("id", inv_id).execute())
+                    # Create the payments record
+                    pay_res = await db_execute(lambda: db.table("payments").insert({
+                        "invoice_id": inv_id,
+                        "client_id": verif["client_id"],
+                        "amount": client_payment_amount,
+                        "payment_method": "portal_reported",
+                        "reference": f"CONF-{p_verif_id[:8]}",
+                        "payment_date": verif.get("payment_date") or datetime.now(timezone.utc).isoformat(),
+                        "recorded_by": current_admin['sub']
+                    }).execute())
+                    
+                    if pay_res.data:
+                        payment_id = pay_res.data[0]["id"]
+                        # Mark verification as confirmed
+                        await db_execute(lambda: db.table("pending_verifications").update({
+                            "status": "confirmed",
+                            "reviewed_by": current_admin['sub'],
+                            "reviewed_at": datetime.now(timezone.utc).isoformat()
+                        }).eq("id", p_verif_id).execute())
+            
+            # Scenario B: Claiming on an already confirmed payment
+            elif payment_id:
+                p_res = await db_execute(lambda: db.table("payments").select("amount").eq("id", payment_id).execute())
+                if p_res.data:
+                    client_payment_amount = float(p_res.data[0]["amount"])
+            
+            # Scenario C: Fallback (Legacy parsing)
+            else:
+                desc = req.get("description", "")
+                if "Payment ID: " in desc:
+                    legacy_pid = desc.split("Payment ID: ")[-1].split("\n")[0].strip()
+                    if legacy_pid and len(legacy_pid) > 30: # Check if it looks like a UUID
+                        payment_id = legacy_pid
+                        p_res = await db_execute(lambda: db.table("payments").select("amount").eq("id", payment_id).execute())
+                        if p_res.data:
+                            client_payment_amount = float(p_res.data[0]["amount"])
 
-                # 2. Assign Rep if missing
-                if not invoice.get("sales_rep_id"):
-                    vendor = req.get("vendors")
-                    if vendor and vendor.get("email"):
-                        rep_res = await db_execute(lambda: db.table("sales_reps").select("id").eq("email", vendor["email"]).execute())
-                        if rep_res.data:
-                            await db_execute(lambda: db.table("invoices").update({"sales_rep_id": rep_res.data[0]["id"]}).eq("id", inv_id).execute())
-
-                # 3. Log CRM Payment
-                payment_payload = {
-                    "client_id": invoice["client_id"],
-                    "invoice_id": inv_id,
-                    "amount": client_payment_amount,
-                    "payment_method": "portal_reported",
-                    "reference": f"CLAIM-{req['id'][:8]}",
-                    "payment_date": datetime.now(timezone.utc).isoformat(),
-                }
-                await db_execute(lambda: db.table("payments").insert(payment_payload).execute())
-
-                # 4. Sync Commission Ledger (Option A)
-                # This will create the commission_earnings record for the rep
+            # 2. Update Invoice and Ledger if we have a valid payment
+            if payment_id:
+                # Sync Invoice Balance (if it wasn't already synced by payment trigger)
+                from commission_service import sync_invoice_commissions
                 bg_tasks.add_task(sync_invoice_commissions, inv_id, db, current_admin['sub'])
+                
+                # 3. Create structural Commission Ledger entry
+                if vendor.get("id"):
+                    # Check if already exists to prevent duplicates
+                    existing_ce = await db_execute(lambda: db.table("commission_earnings")
+                        .select("id")
+                        .eq("payment_id", payment_id)
+                        .or_(f"vendor_id.eq.{vendor['id']},sales_rep_id.not.is.null") # Basic check
+                        .execute())
+                    
+                    if not existing_ce.data:
+                        # Look for sales rep first if email exists
+                        sales_rep_id = None
+                        if payee_email:
+                            rep_res = await db_execute(lambda: db.table("sales_reps").select("id").eq("email", payee_email).execute())
+                            sales_rep_id = rep_res.data[0]["id"] if (rep_res.data and len(rep_res.data) > 0) else None
+                        
+                        # Create the earnings record
+                        earning_payload = {
+                            "invoice_id": inv_id,
+                            "payment_id": payment_id,
+                            "client_id": req["client_id"] if req.get("client_id") else None, 
+                            "estate_name": req.get("title", "").split(": ")[-1], # Fallback
+                            "payment_amount": client_payment_amount,
+                            "commission_rate": float(req.get("wht_rate") or 5.0) * 2, # Rough estimate
+                            "commission_amount": float(req["net_payout_amount"]),
+                            "gross_commission": float(req["amount_gross"]),
+                            "wht_amount": float(req.get("wht_amount") or 0),
+                            "net_commission": float(req["net_payout_amount"]),
+                            "is_paid": False,
+                        }
+                        
+                        if sales_rep_id:
+                            earning_payload["sales_rep_id"] = sales_rep_id
+                        else:
+                            earning_payload["vendor_id"] = vendor.get("id")
+                        
+                        # Try to fetch missing client_id/estate from invoice
+                        inv_meta = await db_execute(lambda: db.table("invoices").select("client_id, property_name").eq("id", inv_id).execute())
+                        if inv_meta.data:
+                            earning_payload["client_id"] = inv_meta.data[0]["client_id"]
+                            earning_payload["estate_name"] = inv_meta.data[0]["property_name"]
 
-                # 5. Notify Client (Automated Receipt)
-                if client and client.get("email"):
-                    bg_tasks.add_task(send_receipt_email, invoice, client, current_admin['sub'])
+                        # INSERT
+                        await db_execute(lambda: db.table("commission_earnings").insert(earning_payload).execute())
 
     # Update Expenditure Status
     update_payload = {
@@ -376,13 +459,12 @@ async def review_payout_request(request_id: str, data: PayoutReview, bg_tasks: B
             print(f"⚠️ Warning: Payout approved but Asset logging failed: {asset_err}")
             # We don't fail the whole payout if asset logging hits a snag, but we log it.
 
-    # ─── TRIGGER AUTOMATED RECEIPT EMAIL ──────────────────────
+    # ─── TRIGGER APPROVAL NOTIFICATION EMAIL ──────────────────────
+    # On approve: send an approval notification (not a payment receipt — no money has moved yet).
+    # The payment receipt is sent separately when /payments is called.
     if data.status == 'approved' and updated_req.get('vendor_id'):
-        # Re-fetch with vendor join AFTER the update so the email/PDF carries:
-        #   1. Correct bank_name/account_number from the vendors table — req.get('vendors')
-        #      was populated from the original select(*) which has no join and returns None
-        #      for nested vendor fields, causing the email to show no bank details.
-        #   2. Post-approval net_payout_amount / wht_amount (from the DB, not stale req).
+        # Re-fetch with vendor join AFTER the update so net_payout_amount / wht_amount
+        # reflect the post-approval values (WHT overrides applied above).
         receipt_res = await db_execute(
             lambda: db.table('expenditure_requests').select('*, vendors(*)').eq('id', request_id).execute()
         )
@@ -390,7 +472,8 @@ async def review_payout_request(request_id: str, data: PayoutReview, bg_tasks: B
             full_req = receipt_res.data[0]
             vendor = full_req.get('vendors')
             if vendor and vendor.get('email'):
-                bg_tasks.add_task(send_payout_receipt_email, full_req, vendor, current_admin['sub'])
+                from email_service import send_expense_approval_email
+                bg_tasks.add_task(send_expense_approval_email, full_req, vendor, current_admin['sub'])
 
     return updated_req
 
@@ -513,16 +596,16 @@ async def view_secure_payout_document(
         except (ValueError, json.JSONDecodeError):
             pass  # Fall through — treat raw_path as a plain string
 
-    # Redirect to external URLs directly
+    # For external URLs return directly
     if path.startswith("http"):
-        return RedirectResponse(url=path)
+        return {"url": path, "path": path}
 
     # Generate signed URL for private Supabase bucket 'Cloud Infrastructure'
     signed_url = generate_signed_url("Cloud Infrastructure", path)
     if not signed_url:
         raise HTTPException(status_code=500, detail="Failed to generate secure access link")
 
-    return RedirectResponse(url=signed_url)
+    return {"url": signed_url, "path": path}
 
 
 @router.get("/requests/{request_id}/proof-files")
@@ -647,39 +730,132 @@ async def portal_lookup_invoice(invoice_number: str, claimant_email: Optional[st
     inv = res.data[0]
     invoice_id = inv["id"]
 
-    # 2. Commission History — Detect if an 'Initial Deposit Commission' has been claimed
-    #    We check expenditure_requests for this invoice to see if anyone has already triggered the deal commission.
-    claims_res = await db_execute(lambda: db.table("expenditure_requests")
-        .select("id")
-        .eq("vendor_invoice_number", invoice_number)
-        .eq("payment_type", "initial_deposit")
-        .neq("status", "rejected")
-        .execute()
-    )
-    has_initial_claim = len(claims_res.data or []) > 0
-    payment_type = "initial_deposit" if not has_initial_claim else "instalment"
-    
-    # Also fetch client payments for the history list
+    # 2. Fetch ALL actual confirmed client payments for this invoice (oldest first).
+    #    This is the ground truth — we use real payments, not portal claims, to decide
+    #    what has and hasn't been claimed yet.
+    #    EXCLUDE voided payments (is_voided = true).
     payments_res = await db_execute(lambda: db.table("payments")
         .select("id, amount, created_at, payment_method")
         .eq("invoice_id", invoice_id)
+        .eq("is_voided", False)
         .order("created_at")
         .execute()
     )
-    prior_payments = payments_res.data or []
-    payment_count = len(prior_payments)
-    payment_sequence = payment_count + 1
+    all_payments = payments_res.data or []
+    payment_count = len(all_payments)
 
-    property_price = float(inv.get("amount") or 0)
+    property_price     = float(inv.get("amount") or 0)
     amount_paid_so_far = float(inv.get("amount_paid") or 0)
-    balance = max(0.0, property_price - amount_paid_so_far)
+    balance            = max(0.0, property_price - amount_paid_so_far)
 
-    # Commission base:
-    #   Initial deposit → commission on full property value (the deal is triggered)
-    #   Instalment      → commission on the instalment amount the rep reports
-    commission_base = property_price if payment_type == "initial_deposit" else None  # None = use claim_amount
-    commission_rate = 0.05   # 5% gross (10% less 50% WHT effectively; matches existing 10%/5WHT)
-    commission_preview = round(property_price * commission_rate, 2) if payment_type == "initial_deposit" else None
+    # 3. Find which payments have already been claimed.
+    #    Source A: commission_earnings ledger (dashboard-verified commissions).
+    #    Source B: expenditure_requests portal claims (self-reported, pending approval).
+    commission_earnings_res = await db_execute(lambda: db.table("commission_earnings")
+        .select("payment_id")
+        .eq("invoice_id", invoice_id)
+        .execute()
+    )
+    ledger_claimed_payment_ids = {
+        e["payment_id"] for e in (commission_earnings_res.data or []) if e.get("payment_id")
+    }
+
+    portal_claims_res = await db_execute(lambda: db.table("expenditure_requests")
+        .select("id, payment_type, status")
+        .eq("vendor_invoice_number", invoice_number)
+        .neq("status", "rejected")
+        .execute()
+    )
+    portal_claims = portal_claims_res.data or []
+    # Count how many initial_deposit and instalment claims already exist in the portal
+    portal_initial_count    = len([c for c in portal_claims if c.get("payment_type") == "initial_deposit"])
+    portal_instalment_count = len([c for c in portal_claims if c.get("payment_type") == "instalment"])
+
+    # 4. Build the unclaimed payments list.
+    #    payment index 0 = initial deposit, 1+ = instalments.
+    unclaimed_payments = []
+    instalment_portal_used = 0
+    for i, p in enumerate(all_payments):
+        ptype = "initial_deposit" if i == 0 else "instalment"
+
+        # Check ledger first (most authoritative)
+        if p["id"] in ledger_claimed_payment_ids:
+            continue
+
+        # Check portal claims by type+sequence
+        if ptype == "initial_deposit" and portal_initial_count > 0:
+            continue
+        if ptype == "instalment":
+            if instalment_portal_used < portal_instalment_count:
+                instalment_portal_used += 1
+                continue
+
+        comm_base = property_price if ptype == "initial_deposit" else float(p.get("amount") or 0)
+        unclaimed_payments.append({
+            "seq":            i + 1,
+            "payment_id":     p["id"],
+            "amount":         float(p.get("amount") or 0),
+            "date":           (p.get("created_at") or "")[:10],
+            "method":         p.get("payment_method") or "—",
+            "payment_type":   ptype,
+            "commission_base": comm_base,
+        })
+
+    # 5. Determine what to present to the claimant.
+    #    - If unclaimed payments exist, point them at the OLDEST unclaimed one first.
+    #    - payment_sequence reflects the NEXT UNCLAIMED payment position, not total count.
+    if unclaimed_payments:
+        next_unclaimed   = unclaimed_payments[0]
+        payment_type     = next_unclaimed["payment_type"]
+        commission_base  = next_unclaimed["commission_base"]
+        payment_sequence = next_unclaimed["seq"]  # actual position in payment history
+    else:
+        # All confirmed payments are already claimed
+        payment_type     = "instalment"
+        commission_base  = None
+        payment_sequence = payment_count + 1
+
+    # ── Resolve display commission rate for the preview card ──
+    # Read global defaults from system_settings so the preview matches what submit will calculate.
+    _prev_sys_res = await db_execute(lambda: db.table("system_settings")
+        .select("key, value")
+        .in_("key", ["default_commission_rate", "default_partner_commission_rate", "default_wht_rate"])
+        .execute()
+    )
+    _prev_sys = {s["key"]: s["value"] for s in (_prev_sys_res.data or [])}
+
+    # Check vendor-specific rate first
+    _prev_vrate_res = await db_execute(lambda: db.table("vendors")
+        .select("gross_commission_rate, wht_rate, is_commission_partner")
+        .eq("email", claimant_email)
+        .execute()
+    )
+    _prev_vdata = ((_prev_vrate_res.data or [None])[0]) or {}
+    _is_partner = bool(_prev_vdata.get("is_commission_partner"))
+
+    def _pct(val, fallback):
+        try:
+            v = float(val)
+            return v / 100 if v > 1 else v
+        except Exception:
+            return fallback
+
+    if _prev_vdata.get("gross_commission_rate"):
+        _display_gross_rate = _pct(_prev_vdata["gross_commission_rate"], 0.15 if _is_partner else 0.10)
+        _display_wht_rate   = _pct(_prev_vdata.get("wht_rate") or 5, 0.05)
+    elif _is_partner and _prev_sys.get("default_partner_commission_rate"):
+        _display_gross_rate = _pct(_prev_sys["default_partner_commission_rate"], 0.15)
+        _display_wht_rate   = _pct(_prev_sys.get("default_wht_rate") or 5, 0.05)
+    elif not _is_partner and _prev_sys.get("default_commission_rate"):
+        _display_gross_rate = _pct(_prev_sys["default_commission_rate"], 0.10)
+        _display_wht_rate   = _pct(_prev_sys.get("default_wht_rate") or 5, 0.05)
+    else:
+        _display_gross_rate = 0.15 if _is_partner else 0.10
+        _display_wht_rate   = 0.05
+
+    commission_rate    = round(_display_gross_rate, 4)
+    commission_wht     = round(_display_wht_rate, 4)
+    commission_preview = round(commission_base * commission_rate, 2) if (payment_type == "initial_deposit" and commission_base) else None
 
     # 3. Sales rep conflict detection
     rep_status = "unassigned"
@@ -731,26 +907,61 @@ async def portal_lookup_invoice(invoice_number: str, claimant_email: Optional[st
         "balance": balance,
         # ── Payment type intelligence ──
         "payment_type": payment_type,            # "initial_deposit" | "instalment"
-        "payment_sequence": payment_sequence,    # 1, 2, 3 …
-        "payment_count": payment_count,          # how many prior payments exist
+        "payment_sequence": payment_sequence,    # total payments + 1
+        "payment_count": payment_count,          # how many confirmed client payments exist
         # ── Commission preview ──
-        "commission_rate": commission_rate,
-        "commission_base": commission_base,      # None → use reported claim_amount
-        "commission_preview": commission_preview,# pre-calc for deposit; null for instalment
+        "commission_rate": commission_rate,       # gross rate as decimal e.g. 0.15
+        "commission_wht":  commission_wht,        # WHT rate as decimal e.g. 0.05
+        "commission_net_rate": round(commission_rate * (1 - commission_wht), 6),
+        "commission_rate_pct": f"{round(commission_rate * 100, 2):.4g}%",  # display e.g. "15%"
+        "commission_base": commission_base,       # None → use reported claim_amount
+        "commission_preview": commission_preview, # pre-calc for deposit; null for instalment
         # ── Rep assignment ──
         "rep_status": rep_status,                # "unassigned" | "yours" | "conflict"
         "assigned_rep_name": assigned_rep_name,
-        # ── History ──
-        "previous_payments": [
+        # ── Unclaimed payments ──
+        # Full list of confirmed client payments that have no commission claim yet.
+        # Frontend uses this to warn the claimant about missed commissions.
+        "unclaimed_payments": unclaimed_payments,
+        "unclaimed_count": len(unclaimed_payments),
+        # Portal claims that are pending verification/approval (not yet paid, not rejected)
+        # Frontend shows these so the claimant knows what's already in the queue.
+        "pending_portal_claims": [
             {
-                "seq": i + 1,
-                "amount": float(p.get("amount") or 0),
-                "date": (p.get("created_at") or "")[:10],
-                "method": p.get("payment_method") or "—"
+                "payment_type": c.get("payment_type"),
+                "status": c.get("status"),
             }
-            for i, p in enumerate(prior_payments)
-        ]
+            for c in portal_claims
+            if c.get("status") not in ("rejected", "paid")
+        ],
+        # ── Full payment history with per-payment commission status ──
+        "previous_payments": _build_previous_payments(all_payments, ledger_claimed_payment_ids, unclaimed_payments, inv),
     }
+
+
+def _build_previous_payments(all_payments, ledger_claimed_ids, unclaimed_payments, inv):
+    """Build per-payment history list with commission_status for the portal table."""
+    _unclaimed_ids = {u["payment_id"] for u in unclaimed_payments}
+    result = []
+    for i, p in enumerate(all_payments):
+        result.append({
+            "seq": i + 1,
+            "payment_id": p["id"],
+            "amount": float(p.get("amount") or 0),
+            "date": (p.get("created_at") or "")[:10],
+            "method": p.get("payment_method") or "—",
+            "payment_type": "initial_deposit" if i == 0 else "instalment",
+            "commission_status": (
+                "paid"      if p["id"] in ledger_claimed_ids else
+                "unclaimed" if p["id"] in _unclaimed_ids else
+                "pending"
+            ),
+            "commission_base": (
+                float(inv.get("amount") or 0) if i == 0
+                else float(p.get("amount") or 0)
+            ),
+        })
+    return result
 
 @router.get("/portal/fetch-vendor")
 async def portal_fetch_vendor(email: str):
@@ -796,6 +1007,10 @@ async def submit_payout_claim_from_portal(
     property_price: Optional[float] = Form(None),    # full property value (for deposit commission)
     is_dispute: bool = Form(False),                  # True when another rep is already assigned
     dispute_reason: Optional[str] = Form(None),      # required when is_dispute=True
+    # ── Portal payment verification field ──
+    # Only sent when the invoice has no existing unpaid commission claim.
+    # Represents the actual amount the client paid (not the commission).
+    client_paid_amount: Optional[float] = Form(None),
     files: List[UploadFile] = File(default=[])  # Accepts one or many proof uploads
 ):
     """
@@ -804,13 +1019,35 @@ async def submit_payout_claim_from_portal(
     Now supports initial deposit vs instalment differentiation and rep dispute escalation.
     """
     db = get_db()
+    
+    # Default status logic
+    final_status = "paid" if is_already_paid else "pending_verification"
 
     # ── Validate dispute submission ──
     if is_dispute and not dispute_reason:
         raise HTTPException(status_code=400, detail="A reason is required when raising a rep ownership dispute.")
 
-    # 1. Vendor / Payee Resolution
-    existing_vendor = await db_execute(lambda: db.table("vendors").select("id").eq("email", payee_email).execute())
+    # 1a. Check if this payee is a known staff member (admin) FIRST — before vendor
+    #     resolution. This lets us set vendor.type='staff' correctly for ALL submission
+    #     types (office, disbursement, staff_commission), fixing the mismatch where
+    #     office expenditures from known staff were being stored as vendor.type='company',
+    #     making them invisible to the HR expenses tab which filters on vendors.type='staff'.
+    staff_check = await db_execute(lambda: db.table("admins").select("id").eq("email", payee_email).execute())
+    is_known_staff = bool(staff_check.data)
+    requester_id = staff_check.data[0]['id'] if is_known_staff else None
+
+    # Resolve the correct vendor type up front
+    def resolve_vendor_type(submission_type: str, known_staff: bool) -> str:
+        if known_staff or submission_type == "staff_commission":
+            return "staff"
+        if submission_type == "partner":
+            return "individual"
+        return "company"
+
+    correct_vendor_type = resolve_vendor_type(type, is_known_staff)
+
+    # 1b. Vendor / Payee Resolution
+    existing_vendor = await db_execute(lambda: db.table("vendors").select("id, type").eq("email", payee_email).execute())
     if existing_vendor.data:
         vendor_id = existing_vendor.data[0]['id']
         vendor_update = {
@@ -826,10 +1063,16 @@ async def submit_payout_claim_from_portal(
                 "account_number": acc_number,
                 "account_name": acc_name
             })
+        # Correct the vendor type if it was previously wrong (e.g. 'company' for a staff member).
+        # This retroactively fixes existing vendors so their past records become visible in HR tab.
+        if existing_vendor.data[0].get('type') != correct_vendor_type and correct_vendor_type == "staff":
+            vendor_update["type"] = "staff"
+            if requester_id:
+                vendor_update["admin_id"] = requester_id
         await db_execute(lambda: db.table("vendors").update(vendor_update).eq("id", vendor_id).execute())
     else:
         vendor_data = {
-            "type": "staff" if type == "staff_commission" else ("individual" if type == "partner" else "company"),
+            "type": correct_vendor_type,
             "name": payee_name,
             "email": payee_email,
             "phone": payee_phone,
@@ -842,26 +1085,25 @@ async def submit_payout_claim_from_portal(
         v_res = await db_execute(lambda: db.table("vendors").insert(vendor_data).execute())
         vendor_id = v_res.data[0]['id']
 
-    # 1b. Requester Resolution (Identify staff member from email or invite)
-    requester_id = None
-    # Priority 1: Check if payee is an admin themselves
-    staff_res = await db_execute(lambda: db.table("admins").select("id").eq("email", payee_email).execute())
-    if staff_res.data:
-        requester_id = staff_res.data[0]['id']
-    
-    # Priority 2: Check if payee is a staff-vendor with linked admin_id
+    # 1c. Requester Resolution — admin check already done above (staff_check).
+    #     Fall back to vendor admin_id link or invite record if not found.
     if not requester_id:
         v_link = await db_execute(lambda: db.table("vendors").select("admin_id").eq("email", payee_email).not_.is_("admin_id", "null").execute())
         if v_link.data:
             requester_id = v_link.data[0]['admin_id']
+    
+    # Final safety check: if we still don't have requester_id, try a direct email lookup on admins table one last time
+    if not requester_id:
+        final_staff_check = await db_execute(lambda: db.table("admins").select("id").eq("email", payee_email).execute())
+        if final_staff_check.data:
+            requester_id = final_staff_check.data[0]['id']
 
-    # Priority 3: Check if there was an invitation for this email
     if not requester_id:
         inv_res = await db_execute(lambda: db.table("portal_invites").select("invited_by").eq("email", payee_email).execute())
         if inv_res.data:
             requester_id = inv_res.data[0]['invited_by']
 
-    # 1c. Category Mapping
+    # 1d. Category Mapping
     category_map = {
         "office": "Office Expenditure",
         "staff_commission": "Sales Commission",
@@ -887,6 +1129,40 @@ async def submit_payout_claim_from_portal(
             inv = inv_res.data[0]
             linked_invoice_id = inv["id"]
 
+            # --- SMART ANALYSIS: Flagging instead of Blocking to avoid 'Glitches' ---
+            
+            # 1. Check Dashboard for existing verified payments
+            check_earn = await db_execute(lambda: db.table("commission_earnings")
+                .select("id, created_at, is_paid")
+                .eq("invoice_id", linked_invoice_id)
+                .eq("payment_amount", claim_amount)
+                .execute())
+            
+            if check_earn.data:
+                match = check_earn.data[0]
+                is_high_risk = True # Mark for attention
+                verified_date = match["created_at"][:10]
+                status_label = "PAID" if match["is_paid"] else "VERIFIED/UNPAID"
+                risk_notes.append(
+                    f"🔍 SYSTEM MATCH: A dashboard record for this amount (₦{claim_amount:,.0f}) was already {status_label} on {verified_date}. "
+                    "HR should verify if this is a duplicate or a new instalment."
+                )
+
+            # 2. Check Portal for existing claims (Pending/Approved)
+            check_portal = await db_execute(lambda: db.table("expenditure_requests")
+                .select("id, status, created_at")
+                .eq("invoice_id", linked_invoice_id)
+                .eq("category", "Sales Commission")
+                .neq("status", "rejected")
+                .execute())
+            
+            if check_portal.data:
+                is_high_risk = True
+                risk_notes.append(
+                    f"🚩 POTENTIAL DUPLICATE: {len(check_portal.data)} other claim(s) exist in the portal for this invoice. "
+                    "Please cross-check before approving."
+                )
+
             # ── Rep dispute escalation ──
             if is_dispute:
                 is_high_risk = True
@@ -910,11 +1186,58 @@ async def submit_payout_claim_from_portal(
                     is_high_risk = True
                     risk_notes.append("🚩 ANONYMOUS INVOICE: Not yet linked to a verified client record.")
 
-        # ── Commission calculation by payment type ──
-        #   Initial Deposit → commission on FULL property value (deal trigger)
-        #   Instalment      → commission on the reported instalment amount only
-        COMMISSION_RATE = Decimal("0.10")
-        WHT_RATE = Decimal("0.05")
+        # ── Commission rate resolution (3-tier waterfall) ──
+        #
+        # Tier 1 — Vendor's own rate (per-partner override set in dashboard)
+        # Tier 2 — system_settings global defaults
+        #           · default_partner_commission_rate  (partners)
+        #           · default_commission_rate          (staff)
+        #           · default_wht_rate                 (both)
+        # Tier 3 — hardcoded fallback: Partners = 15%, Staff = 10%, WHT = 5%
+
+        # Fetch global settings once (used as Tier 2 fallback)
+        _sys_res = await db_execute(lambda: db.table("system_settings")
+            .select("key, value")
+            .in_("key", ["default_commission_rate", "default_partner_commission_rate", "default_wht_rate"])
+            .execute()
+        )
+        _sys = {s["key"]: s["value"] for s in (_sys_res.data or [])}
+
+        def _to_dec(pct_str, fallback):
+            """Convert a stored percentage string e.g. '15' or '0.15' to a Decimal fraction."""
+            try:
+                v = Decimal(str(pct_str))
+                return v / 100 if v > 1 else v
+            except Exception:
+                return Decimal(str(fallback))
+
+        if type == "partner":
+            # Tier 1: vendor's own rate
+            _vrate_res = await db_execute(lambda: db.table("vendors")
+                .select("gross_commission_rate, wht_rate")
+                .eq("email", payee_email)
+                .execute()
+            )
+            _vdata = (_vrate_res.data or [None])[0] or {}
+            if _vdata.get("gross_commission_rate"):
+                COMMISSION_RATE = _to_dec(_vdata["gross_commission_rate"], 0.15)
+                WHT_RATE        = _to_dec(_vdata.get("wht_rate") or 5, 0.05)
+            elif _sys.get("default_partner_commission_rate"):
+                # Tier 2: global partner default from system_settings
+                COMMISSION_RATE = _to_dec(_sys["default_partner_commission_rate"], 0.15)
+                WHT_RATE        = _to_dec(_sys.get("default_wht_rate") or 5, 0.05)
+            else:
+                # Tier 3: hardcoded
+                COMMISSION_RATE = Decimal("0.15")
+                WHT_RATE        = Decimal("0.05")
+        else:
+            # Staff: no per-vendor override — use global setting or hardcoded
+            if _sys.get("default_commission_rate"):
+                COMMISSION_RATE = _to_dec(_sys["default_commission_rate"], 0.10)
+                WHT_RATE        = _to_dec(_sys.get("default_wht_rate") or 5, 0.05)
+            else:
+                COMMISSION_RATE = Decimal("0.10")
+                WHT_RATE        = Decimal("0.05")
 
         if payment_type == "initial_deposit" and property_price and property_price > 0:
             commission_base = Decimal(str(property_price))
@@ -968,6 +1291,33 @@ async def submit_payout_claim_from_portal(
         elif len(uploaded_paths) > 1:
             file_url = json.dumps(uploaded_paths)  # JSON array for multi-file
 
+    # ── Portal Payment Verification ──
+    # When the claimant supplies a client_paid_amount (only shown when the invoice
+    # has no existing unpaid commission claim), create a pending_verifications row
+    # so Finance can confirm it in the Verifications tab — badged as "Portal".
+    pending_verif_id = None
+    if client_paid_amount and client_paid_amount > 0 and linked_invoice_id and type in ("partner", "staff_commission"):
+        try:
+            inv_for_verif = await db_execute(lambda: db.table("invoices").select("client_id").eq("id", linked_invoice_id).execute())
+            verif_client_id = inv_for_verif.data[0]["client_id"] if inv_for_verif.data else None
+            if verif_client_id:
+                verif_payload = {
+                    "invoice_id": linked_invoice_id,
+                    "client_id": verif_client_id,
+                    "deposit_amount": float(client_paid_amount),
+                    "payment_proof_url": file_url,
+                    "payment_date": datetime.now(timezone.utc).date().isoformat(),
+                    "sales_rep_name": payee_name,
+                    "status": "pending",
+                    "source": "portal",
+                    "submission_type": type,  # "partner" or "staff_commission"
+                }
+                v_res = await db_execute(lambda: db.table("pending_verifications").insert(verif_payload).execute())
+                if v_res.data:
+                    pending_verif_id = v_res.data[0]["id"]
+        except Exception as verif_err:
+            print(f"[WARN] Failed to create pending_verifications row for portal submission: {verif_err}")
+
     # 4. Create Record
     payload = {
         "title": title,
@@ -980,8 +1330,8 @@ async def submit_payout_claim_from_portal(
         "wht_amount": float(wht),
         "net_payout_amount": float(net),
         "receipt_url": file_url,
-        "status": "paid" if is_already_paid else "pending_verification",
-        "payout_reference": payout_reference if is_already_paid else None,
+        "status": final_status,
+        "payout_reference": payout_reference if final_status == "paid" else None,
         "paid_at": datetime.now(timezone.utc).isoformat() if is_already_paid else None,
         "is_high_risk": is_high_risk,
         "risk_notes": "\n".join(risk_notes) if risk_notes else None,
@@ -993,9 +1343,26 @@ async def submit_payout_claim_from_portal(
         "is_disputed": is_dispute,
         "dispute_reason": dispute_reason if is_dispute else None,
         "vendor_invoice_number": invoice_number,
+        "pending_verification_id": pending_verif_id, # Structural link for unified workflow
     }
 
     await db_execute(lambda: db.table("expenditure_requests").insert(payload).execute())
+
+    # Notify all HRM admins of new payout/commission submission
+    try:
+        from routers.hr import notify_hr_admins
+        is_commission_req = (type == "staff_commission")
+        notif_type = "payout_commission_request" if is_commission_req else "payout_reimbursement_request"
+        amount_str = f"₦{float(claim_amount):,.0f}" if claim_amount else "an amount"
+        if is_commission_req:
+            notif_title = "Commission Request Submitted"
+            notif_message = f"💼 Commission request: {payee_name} submitted a claim for {amount_str}. Review in Commissions."
+        else:
+            notif_title = "Reimbursement Request Submitted"
+            notif_message = f"🧾 Reimbursement request: {payee_name} submitted a claim for {amount_str}. Review in Expenses."
+        await notify_hr_admins(title=notif_title, message=notif_message, notification_type=notif_type)
+    except Exception as notif_err:
+        print(f"[WARN] Payout notification dispatch failed: {notif_err}")
 
     # 5. Auto-assign rep on uncontested claims (rep_status was "unassigned")
     #    Only assign if this is NOT a dispute and NOT already assigned.
@@ -1021,6 +1388,393 @@ async def submit_payout_claim_from_portal(
         else "Record submitted successfully."
     )
     return {"status": "success", "message": status_message, "is_dispute": is_dispute}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PORTAL BULK SUBMIT  — multiple commission claims from the payment history table
+# ─────────────────────────────────────────────────────────────────────────────
+class BulkClaimItem(BaseModel):
+    payment_id: str
+    payment_type: str           # "initial_deposit" | "instalment"
+    amount: float               # the actual payment amount (instalment) or 0 (deposit uses property_price)
+    commission_base: float      # resolved by frontend from lookup-invoice data
+
+
+class BulkSubmitPayload(BaseModel):
+    # Claimant identity
+    type: str                   # "staff_commission" | "partner"
+    payee_name: str
+    payee_email: str
+    payee_phone: str = ""
+    payee_id: str = ""
+    payee_tin: str = ""
+    bank_name: Optional[str] = None
+    acc_number: Optional[str] = None
+    acc_name: Optional[str] = None
+    # Invoice context
+    invoice_number: str
+    invoice_id: str
+    property_price: float
+    is_dispute: bool = False
+    dispute_reason: Optional[str] = None
+    remarks: str = ""
+    # Selections from the payment history table
+    claims: List[BulkClaimItem]
+    # Optional new-payment log
+    new_payment_amount: Optional[float] = None
+    claim_on_new_payment: bool = False
+
+
+@router.post("/portal/submit-bulk")
+async def submit_payout_claims_bulk(
+    # ── Identity fields (Form) ──
+    type: str = Form(...),
+    payee_name: str = Form(...),
+    payee_email: str = Form(...),
+    payee_phone: str = Form(""),
+    payee_id: str = Form(""),
+    payee_tin: str = Form(""),
+    bank_name: Optional[str] = Form(None),
+    acc_number: Optional[str] = Form(None),
+    acc_name: Optional[str] = Form(None),
+    invoice_number: str = Form(...),
+    invoice_id: str = Form(...),
+    property_price: float = Form(0),
+    is_dispute: bool = Form(False),
+    dispute_reason: Optional[str] = Form(None),
+    remarks: str = Form(""),
+    claims_json: str = Form("[]"),
+    new_payment_amount: Optional[float] = Form(None),
+    claim_on_new_payment: bool = Form(False),
+    files: List[UploadFile] = File(default=[]),
+):
+    """
+    Bulk commission claim endpoint for the portal payment history table.
+    Creates one expenditure_request per selected payment row so Finance can
+    approve each one individually. Also optionally creates a pending_verifications
+    row for a new client payment not yet in the system.
+    Accepts multipart/form-data so proof-of-payment files can be attached.
+    """
+    import types as _types
+    payload = _types.SimpleNamespace(
+        type=type,
+        payee_name=payee_name,
+        payee_email=payee_email,
+        payee_phone=payee_phone,
+        payee_id=payee_id,
+        payee_tin=payee_tin,
+        bank_name=bank_name,
+        acc_number=acc_number,
+        acc_name=acc_name,
+        invoice_number=invoice_number,
+        invoice_id=invoice_id,
+        property_price=property_price,
+        is_dispute=is_dispute,
+        dispute_reason=dispute_reason,
+        remarks=remarks,
+        new_payment_amount=new_payment_amount,
+        claim_on_new_payment=claim_on_new_payment,
+        claims=[BulkClaimItem(**c) for c in json.loads(claims_json)],
+    )
+    db = get_db()
+
+    if not payload.claims and not payload.new_payment_amount:
+        raise HTTPException(status_code=400, detail="No claims selected.")
+
+    if payload.is_dispute and not payload.dispute_reason:
+        raise HTTPException(status_code=400, detail="A reason is required for a dispute claim.")
+
+    # ── Vendor / Requester resolution (same logic as portal/submit) ──
+    staff_check = await db_execute(lambda: db.table("admins").select("id").eq("email", payload.payee_email).execute())
+    is_known_staff = bool(staff_check.data)
+    requester_id = staff_check.data[0]["id"] if is_known_staff else None
+
+    correct_vendor_type = "staff" if (is_known_staff or payload.type == "staff_commission") else "individual"
+
+    existing_vendor = await db_execute(lambda: db.table("vendors").select("id, type").eq("email", payload.payee_email).execute())
+    if existing_vendor.data:
+        vendor_id = existing_vendor.data[0]["id"]
+        upd: dict = {"name": payload.payee_name, "phone": payload.payee_phone, "updated_at": datetime.now(timezone.utc).isoformat()}
+        if payload.bank_name and payload.acc_number:
+            upd.update({"bank_name": payload.bank_name, "account_number": payload.acc_number, "account_name": payload.acc_name})
+        if existing_vendor.data[0].get("type") != correct_vendor_type and correct_vendor_type == "staff":
+            upd["type"] = "staff"
+            if requester_id:
+                upd["admin_id"] = requester_id
+        await db_execute(lambda: db.table("vendors").update(upd).eq("id", vendor_id).execute())
+    else:
+        vd = {
+            "type": correct_vendor_type, "name": payload.payee_name, "email": payload.payee_email,
+            "phone": payload.payee_phone, "rc_number": payload.payee_id, "tin": payload.payee_tin,
+            "bank_name": payload.bank_name, "account_number": payload.acc_number, "account_name": payload.acc_name,
+        }
+        v_res = await db_execute(lambda: db.table("vendors").insert(vd).execute())
+        vendor_id = v_res.data[0]["id"]
+
+    if not requester_id:
+        v_link = await db_execute(lambda: db.table("vendors").select("admin_id").eq("email", payload.payee_email).not_.is_("admin_id", "null").execute())
+        if v_link.data:
+            requester_id = v_link.data[0]["admin_id"]
+
+    # ── Commission rate resolution (same 3-tier waterfall) ──
+    _sys_res = await db_execute(lambda: db.table("system_settings")
+        .select("key, value")
+        .in_("key", ["default_commission_rate", "default_partner_commission_rate", "default_wht_rate"])
+        .execute()
+    )
+    _sys = {s["key"]: s["value"] for s in (_sys_res.data or [])}
+
+    def _to_dec(pct_str, fallback):
+        try:
+            v = Decimal(str(pct_str))
+            return v / 100 if v > 1 else v
+        except Exception:
+            return Decimal(str(fallback))
+
+    if payload.type == "partner":
+        _vrate_res = await db_execute(lambda: db.table("vendors").select("gross_commission_rate, wht_rate").eq("email", payload.payee_email).execute())
+        _vdata = ((_vrate_res.data or [None])[0]) or {}
+        if _vdata.get("gross_commission_rate"):
+            COMMISSION_RATE = _to_dec(_vdata["gross_commission_rate"], 0.15)
+            WHT_RATE = _to_dec(_vdata.get("wht_rate") or 5, 0.05)
+        elif _sys.get("default_partner_commission_rate"):
+            COMMISSION_RATE = _to_dec(_sys["default_partner_commission_rate"], 0.15)
+            WHT_RATE = _to_dec(_sys.get("default_wht_rate") or 5, 0.05)
+        else:
+            COMMISSION_RATE = Decimal("0.15")
+            WHT_RATE = Decimal("0.05")
+    else:
+        if _sys.get("default_commission_rate"):
+            COMMISSION_RATE = _to_dec(_sys["default_commission_rate"], 0.10)
+            WHT_RATE = _to_dec(_sys.get("default_wht_rate") or 5, 0.05)
+        else:
+            COMMISSION_RATE = Decimal("0.10")
+            WHT_RATE = Decimal("0.05")
+
+    category = "Partner Payout" if payload.type == "partner" else "Sales Commission"
+    created_ids = []
+
+    # ── Resolve sales_rep_id for commission_earnings ──
+    # We need it to write the ledger entry. Look up via vendor email → sales_reps table.
+    _rep_res = await db_execute(lambda: db.table("sales_reps").select("id").eq("email", payload.payee_email).execute())
+    _rep_id = _rep_res.data[0]["id"] if _rep_res.data else None
+
+    # Fetch invoice client_id once — used in commission_earnings and pending_verifications
+    _inv_meta = await db_execute(lambda: db.table("invoices").select("client_id, property_name").eq("id", payload.invoice_id).execute())
+    _client_id     = _inv_meta.data[0]["client_id"]    if _inv_meta.data else None
+    _property_name = _inv_meta.data[0]["property_name"] if _inv_meta.data else ""
+
+    # ── Create one expenditure_request per selected claim ──
+    # For payments already confirmed in the system, also write commission_earnings
+    # immediately so the ledger is up to date without Finance needing a second action.
+    for claim in payload.claims:
+        base = Decimal(str(claim.commission_base))
+        gross = base * COMMISSION_RATE
+        wht = gross * WHT_RATE
+        net = gross - wht
+        ptype_label = "Initial Deposit Commission" if claim.payment_type == "initial_deposit" else "Instalment Commission"
+        title = f"{'Partner' if payload.type == 'partner' else 'Staff'} {ptype_label}: {payload.invoice_number}"
+
+        row = {
+            "title": title,
+            "description": f"Bulk portal submission via {payload.type}\nPayment ID: {claim.payment_id}",
+            "remarks": payload.remarks or None,
+            "vendor_id": vendor_id,
+            "invoice_id": payload.invoice_id,
+            "amount_gross": float(gross),
+            "wht_rate": 5,
+            "wht_amount": float(wht),
+            "net_payout_amount": float(net),
+            "status": "pending_verification",
+            "source_platform": "payout_portal",
+            "requester_id": requester_id,
+            "category": category,
+            "payment_type": claim.payment_type,
+            "is_disputed": payload.is_dispute,
+            "dispute_reason": payload.dispute_reason if payload.is_dispute else None,
+            "vendor_invoice_number": payload.invoice_number,
+        }
+        res = await db_execute(lambda: db.table("expenditure_requests").insert(row).execute())
+        if res.data:
+            created_ids.append(res.data[0]["id"])
+
+        # Write commission_earnings for already-confirmed payments.
+        # claim.payment_id is the real payments.id — the money is confirmed in the system.
+        # This populates the Commissions tab in the payouts dashboard immediately.
+        if _rep_id and _client_id and claim.payment_id and not payload.is_dispute:
+            try:
+                # Guard: skip if already in ledger for this payment
+                existing = await db_execute(lambda: db.table("commission_earnings")
+                    .select("id").eq("payment_id", claim.payment_id).eq("sales_rep_id", _rep_id).execute()
+                )
+                if not existing.data:
+                    await db_execute(lambda: db.table("commission_earnings").insert({
+                        "sales_rep_id":    _rep_id,
+                        "invoice_id":      payload.invoice_id,
+                        "payment_id":      claim.payment_id,
+                        "client_id":       _client_id,
+                        "estate_name":     _property_name,
+                        "payment_amount":  claim.amount,
+                        "commission_rate": float(COMMISSION_RATE * 100),
+                        "commission_amount": float(net),
+                        "gross_commission":  float(gross),
+                        "wht_amount":        float(wht),
+                        "net_commission":    float(net),
+                        "is_paid": False,
+                    }).execute())
+            except Exception as ce:
+                print(f"[WARN] commission_earnings insert failed for payment {claim.payment_id}: {ce}")
+
+    # ── Upload proof-of-payment files (now supported in bulk submit) ──
+    file_url = None
+    if files:
+        uploaded_paths = []
+        upload_errors = []
+        for f in files:
+            if f and f.filename:
+                file_ext = f.filename.rsplit('.', 1)[-1] if '.' in f.filename else 'bin'
+                file_path = f"portal_claims/{payload.payee_email.replace('@','_')}_{uuid.uuid4().hex}.{file_ext}"
+                file_bytes = await f.read()
+                ok = upload_portal_file(file_path, file_bytes, f.content_type)
+                if ok:
+                    uploaded_paths.append(file_path)
+                else:
+                    upload_errors.append(f.filename)
+        if upload_errors:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to upload proof file(s): {', '.join(upload_errors)}. Please retry."
+            )
+        if len(uploaded_paths) == 1:
+            file_url = uploaded_paths[0]
+        elif len(uploaded_paths) > 1:
+            file_url = json.dumps(uploaded_paths)
+
+    # Back-fill receipt_url on all expenditure_requests created above
+    if file_url and created_ids:
+        try:
+            await db_execute(lambda: db.table("expenditure_requests")
+                .update({"receipt_url": file_url})
+                .in_("id", created_ids)
+                .execute())
+        except Exception as _fu_err:
+            print(f"[WARN] Could not backfill receipt_url on bulk claims: {_fu_err}")
+
+    # ── Optional: new client payment log ──
+    if payload.new_payment_amount and payload.new_payment_amount > 0:
+        try:
+            inv_for_verif = await db_execute(lambda: db.table("invoices").select("client_id").eq("id", payload.invoice_id).execute())
+            verif_client_id = inv_for_verif.data[0]["client_id"] if inv_for_verif.data else None
+            if verif_client_id:
+                verif_payload = {
+                    "invoice_id": payload.invoice_id,
+                    "client_id": verif_client_id,
+                    "deposit_amount": float(payload.new_payment_amount),
+                    "payment_date": datetime.now(timezone.utc).date().isoformat(),
+                    "sales_rep_name": payload.payee_name,
+                    "status": "pending",
+                    "source": "portal",
+                    "submission_type": payload.type,
+                    "payment_proof_url": file_url,
+                }
+                await db_execute(lambda: db.table("pending_verifications").insert(verif_payload).execute())
+
+                # If rep also wants to claim commission on the new payment, create one more request
+                if payload.claim_on_new_payment:
+                    base = Decimal(str(payload.new_payment_amount))
+                    gross = base * COMMISSION_RATE
+                    wht = gross * WHT_RATE
+                    net = gross - wht
+                    row = {
+                        "title": f"{'Partner' if payload.type == 'partner' else 'Staff'} Commission (Pending Payment): {payload.invoice_number}",
+                        "description": f"Commission claim on portal-reported payment of ₦{payload.new_payment_amount:,.0f}. Held pending Finance verification.",
+                        "remarks": payload.remarks or None,
+                        "vendor_id": vendor_id,
+                        "invoice_id": payload.invoice_id,
+                        "amount_gross": float(gross),
+                        "wht_rate": 5,
+                        "wht_amount": float(wht),
+                        "net_payout_amount": float(net),
+                        "status": "pending_verification",
+                        "source_platform": "payout_portal",
+                        "requester_id": requester_id,
+                        "category": category,
+                        "payment_type": "instalment",
+                        "vendor_invoice_number": payload.invoice_number,
+                    }
+                    res = await db_execute(lambda: db.table("expenditure_requests").insert(row).execute())
+                    if res.data:
+                        created_ids.append(res.data[0]["id"])
+        except Exception as ve:
+            print(f"[WARN] Failed to create pending_verifications for bulk submission: {ve}")
+
+    # Notifications
+    try:
+        from routers.hr import notify_hr_admins
+        notif_type = "payout_commission_request"
+        count = len(created_ids)
+        await notify_hr_admins(
+            title="Commission Request Submitted",
+            message=f"💼 {payload.payee_name} submitted {count} commission claim(s) via portal. Review in Commissions.",
+            notification_type=notif_type
+        )
+    except Exception:
+        pass
+
+    return {
+        "status": "success",
+        "message": f"{len(created_ids)} claim(s) submitted successfully.",
+        "created_ids": created_ids,
+    }
+
+
+@router.patch("/requests/{request_id}")
+async def update_payout_request_status(request_id: str, body: dict, current_admin=Depends(require_roles(["admin", "super_admin"]))):
+    """Simple status update for payout requests (approve/reject from HRM portal)."""
+    db = get_db()
+    allowed = {"approved", "rejected", "pending"}
+    new_status = body.get("status")
+    if not new_status or new_status not in allowed:
+        raise HTTPException(status_code=400, detail=f"status must be one of: {', '.join(allowed)}")
+    req_res = await db_execute(lambda: db.table("expenditure_requests").select("id").eq("id", request_id).limit(1).execute())
+    if not req_res.data:
+        raise HTTPException(status_code=404, detail="Request not found")
+    await db_execute(lambda: db.table("expenditure_requests").update({
+        "status": new_status,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", request_id).execute())
+
+    # --- Notification Bridge ---
+    # Since HR mostly uses the Expenses tab, we ensure this endpoint also triggers notifications
+    # if the claimant is a staff member (requester_id is present).
+    try:
+        from routers.hr import send_notification
+        req_full = await db_execute(lambda: db.table("expenditure_requests")
+            .select("*, vendors(name)").eq("id", request_id).maybe_single().execute())
+        
+        if req_full.data and req_full.data.get("requester_id"):
+            exp = req_full.data
+            requester_id = exp["requester_id"]
+            raw_category = exp.get("category") or ""
+            is_commission = "commission" in raw_category.lower() or "commission" in (exp.get("title") or "").lower()
+            category_label = "Commission Claim" if is_commission else "Reimbursement Claim"
+            amount = exp.get("amount_gross") or 0
+            
+            status_verb = "approved" if new_status == "approved" else "paid" if new_status == "paid" else "rejected"
+            amount_str = f"₦{float(amount):,.0f}"
+            
+            if new_status == "rejected":
+                status_msg = f"❌ Your {category_label} for {amount_str} was declined by HR."
+            elif new_status == "paid":
+                status_msg = f"✅ Your {category_label} for {amount_str} has been paid successfully."
+            else:
+                status_msg = f"📩 Your {category_label} for {amount_str} has been {status_verb}."
+
+            await send_notification(requester_id, "Claim Status Update", status_msg, "expense_update")
+    except Exception as e:
+        print(f"[WARN] Payout notification bridge failed: {e}")
+
+    return {"status": "ok", "new_status": new_status}
 
 @router.patch("/requests/{request_id}/void")
 async def void_payout_request(request_id: str, data: VoidExpenditureRequest, current_admin=Depends(require_roles(["admin", "super_admin"]))):
@@ -1107,7 +1861,7 @@ async def get_payout_stats(
 
     # 2b. Commission Earnings Query (The Earned Ledger)
     comm_query = db.table("commission_earnings")\
-        .select("*, sales_reps(name)")\
+        .select("*, sales_reps(name), vendors(name)")\
         .eq("is_voided", False)\
         .gte("created_at", start_ts)\
         .lte("created_at", end_ts)
@@ -1156,25 +1910,26 @@ async def get_payout_stats(
             # Everything else (Company vendors or tagged 'office') defaults to operational expenses
             cat = "ops"
             
-        # 1. Payout Aggregation (Cash Flow)
-        segment_stats[cat]["paid"] += paid
-        total_paid += paid
-        
-        # 2. Liability Aggregation (Owed) - Mutually Exclusive
-        # Commissions are handled in the second loop (the ledger)
-        if cat != "commissions":
-            segment_stats[cat]["owed"] += owed
-            total_ap += owed
-        
-        # Analytics
+        # Analytics Setup
         p_name = v_info.get('name', 'General Vendor')
         r_name = (r.get('admins') or {}).get('full_name', 'System')
+
+        # 1. Payout Aggregation (Cash Flow) & Liability Aggregation (Owed)
+        # Commissions are handled exclusively in the second loop (the ledger) to avoid double counting
+        if cat != "commissions":
+            segment_stats[cat]["paid"] += paid
+            total_paid += paid
+            segment_stats[cat]["owed"] += owed
+            total_ap += owed
+            total_wht += wht
+            total_gross += gross
+            if owed > 0: 
+                creditors[p_name] = creditors.get(p_name, 0) + owed
+        
+        # Analytics (Always track payees/requesters regardless of cat)
         payees[p_name] = payees.get(p_name, 0) + paid
         requesters[r_name] = requesters.get(r_name, 0) + gross
-        if cat != "commissions" and owed > 0: 
-            creditors[p_name] = creditors.get(p_name, 0) + owed
         
-        total_gross += gross; total_wht += wht
         period_totals[bucket] = period_totals.get(bucket, 0) + gross
 
     # PROCESS COMMISSION EARNINGS (The Ledger of Liability & Legacy Payouts)
@@ -1219,7 +1974,8 @@ async def get_payout_stats(
         unpaid = float(r['net_payout_amount'] or 0) - float(r['amount_paid'] or 0)
         if unpaid <= 0: continue
         
-        created = datetime.fromisoformat(r['created_at'].replace('Z', '+00:00'))
+        # Use robust pandas parsing for Python 3.10 compatibility with variable subseconds
+        created = pd.to_datetime(r['created_at']).to_pydatetime()
         age_days = (now - created).days
         
         if age_days <= 30: aging["0-30"] += unpaid
@@ -1227,7 +1983,8 @@ async def get_payout_stats(
         elif age_days <= 90: aging["61-90"] += unpaid
         else: aging["90+"] += unpaid
 
-    # WHT Compliance (from Paid records)
+    # WHT Compliance (Unified: Expenditures + Commissions)
+    # 1. Expenditures
     comp_res = await db_execute(lambda: db.table("expenditure_requests")
         .select("wht_amount, is_wht_remitted")
         .gt("wht_amount", 0)
@@ -1237,6 +1994,30 @@ async def get_payout_stats(
         val = float(r['wht_amount'] or 0)
         if r.get('is_wht_remitted'): compliance["remitted"] += val
         else: compliance["pending"] += val
+
+    # 2. Commissions
+    try:
+        comm_comp_res = await db_execute(lambda: db.table("commission_earnings")
+            .select("wht_amount, is_wht_remitted")
+            .gt("wht_amount", 0)
+            .eq("is_paid", True)
+            .execute())
+        for c in (comm_comp_res.data or []):
+            val = float(c.get('wht_amount') or 0)
+            if c.get('is_wht_remitted'): compliance["remitted"] += val
+            else: compliance["pending"] += val
+    except Exception as e:
+        if "is_wht_remitted" in str(e):
+            # Fallback: Count all paid commission WHT as pending
+            comm_pending_res = await db_execute(lambda: db.table("commission_earnings")
+                .select("wht_amount")
+                .gt("wht_amount", 0)
+                .eq("is_paid", True)
+                .execute())
+            for c in (comm_pending_res.data or []):
+                compliance["pending"] += float(c.get('wht_amount') or 0)
+        else:
+            raise
 
     # Global Metrics (Current Snapshot)
     active_res = await db_execute(lambda: db.table("expenditure_requests").select("id", count="exact").eq("status", "pending").execute())
@@ -1253,8 +2034,8 @@ async def get_payout_stats(
         .limit(50)
         .execute())
     for r in (eff_res.data or []):
-        c = datetime.fromisoformat(r['created_at'].replace('Z', '+00:00'))
-        p = datetime.fromisoformat(r['reviewed_at'].replace('Z', '+00:00'))
+        c = pd.to_datetime(r['created_at']).to_pydatetime()
+        p = pd.to_datetime(r['reviewed_at']).to_pydatetime()
         pay_times.append((p - c).total_seconds() / 3600)
     avg_speed = sum(pay_times) / len(pay_times) if pay_times else 0
 
@@ -1371,3 +2152,391 @@ async def save_report_schedule(data: ScheduleRequest, current_admin=Depends(requ
     except Exception as e:
         logger.warning(f"Failed to upsert schedule (table might be missing): {e}")
         return {"status": "success", "message": "Automation preference logged."}
+
+
+# ─── PROCUREMENT EXPENSES ─────────────────────────────────────
+from models import ProcurementExpenseCreate
+
+@router.post("/procurement-expenses")
+async def create_procurement_expense(data: ProcurementExpenseCreate, current_admin=Depends(require_roles(["super_admin"]))):
+    db = get_db()
+    payload = data.dict(exclude_none=True)
+    payload["created_by"] = current_admin['sub']
+    
+    res = await db_execute(lambda: db.table("procurement_expenses").insert(payload).execute())
+    if not res.data:
+        raise HTTPException(status_code=400, detail="Failed to record procurement expense")
+    return res.data[0]
+
+@router.get("/procurement-expenses")
+async def list_procurement_expenses(property_id: Optional[str] = None, current_admin=Depends(require_roles(["super_admin"]))):
+    db = get_db()
+    query = db.table("procurement_expenses").select("*")
+    if property_id:
+        query = query.eq("property_id", property_id)
+    res = await db_execute(lambda: query.order("expense_date", desc=True).execute())
+    return res.data
+
+@router.patch("/procurement-expenses/{expense_id}")
+async def update_procurement_expense(expense_id: str, payload: dict, current_admin=Depends(require_roles(["super_admin"]))):
+    db = get_db()
+    update_data = {}
+    if "title" in payload: update_data["title"] = payload["title"]
+    if "amount" in payload: update_data["amount"] = float(payload["amount"])
+    if "category" in payload: update_data["category"] = payload["category"]
+    if "amount_paid" in payload: update_data["amount_paid"] = float(payload["amount_paid"])
+    if "status" in payload: update_data["status"] = payload["status"]
+    if "notes" in payload: update_data["notes"] = payload["notes"]
+    
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No data provided")
+        
+    res = await db_execute(lambda: db.table("procurement_expenses").update(update_data).eq("id", expense_id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    return res.data[0]
+
+@router.post("/procurement-expenses/import")
+async def import_procurement_expenses(
+    file: UploadFile = File(...),
+    property_id: Optional[str] = Form(None),
+    estate_draft_id: Optional[str] = Form(None),
+    current_admin=Depends(require_roles(["super_admin"]))
+):
+    """
+    Intelligent procurement import engine.
+    Detects section headers, metadata, and maps non-standard vendor columns.
+    """
+    db = get_db()
+    content = await file.read()
+    
+    try:
+        # Load data
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(io.BytesIO(content), header=None).fillna('')
+        else:
+            df = pd.read_excel(io.BytesIO(content), header=None).fillna('')
+        
+        all_records = []
+        current_category = "General"
+        project_metadata = {}
+        mapping = {}
+        mapping_header_row_idx = -1
+        
+        # KEYWORD DEFINITIONS
+        section_keywords = ['QUOTATION FOR', 'WORKS', 'SECTION', 'CATEGORY', 'PROPOSAL']
+        header_keywords = {
+            'title': ['item', 'description', 'particulars', 'title', 'name'],
+            'amount': ['total cost', 'total amount', 'amount', 'grand total', 'final cost'],
+            'unit_price': ['unit price', 'rate', 'unit cost', 'price per'],
+            'paid': ['paid', 'payment', 'actual'],
+            'quantity': ['qty', 'quantity', 'units', 'number', 'count'],
+            'duration': ['duration', 'days', 'weeks', 'months', 'period'],
+            'budget': ['budget', 'estimate', 'allocation'],
+            'vendor': ['vendor', 'supplier', 'contractor', 'company']
+        }
+        meta_keywords = {
+            'location': ['location', 'site', 'project'],
+            'date': ['date', 'quotation date'],
+            'company': ['company', 'vendor', 'contractor']
+        }
+
+        # PASS 1: SCAN FOR METADATA & DATA
+        for i, row in df.iterrows():
+            row_list = [str(v).strip() for v in row]
+            row_text = ' '.join([v for v in row_list if v]).upper()
+            
+            # 1. Extract Project Metadata (from top rows)
+            if i < 15: # Usually in header
+                for key, aliases in meta_keywords.items():
+                    if key not in project_metadata:
+                        for alias in aliases:
+                            if alias.upper() in row_text:
+                                # Try to get value from next cell or after colon
+                                for cell in row_list:
+                                    if alias.upper() in cell.upper() and ':' in cell:
+                                        val = cell.split(':', 1)[1].strip()
+                                        if key == 'date':
+                                            try:
+                                                std_date = pd.to_datetime(val, dayfirst=True, errors='coerce')
+                                                if not pd.isna(std_date):
+                                                    val = std_date.strftime('%Y-%m-%d')
+                                            except: pass
+                                        project_metadata[key] = val
+                                        break
+                                if key not in project_metadata:
+                                    for cell in row_list:
+                                        if found_alias and cell:
+                                            val = cell
+                                            if key == 'date':
+                                                # Standardize Date: DD/MM/YYYY -> YYYY-MM-DD
+                                                try:
+                                                    # Try common formats, dayfirst=True is critical for DD/MM/YYYY
+                                                    std_date = pd.to_datetime(val, dayfirst=True, errors='coerce')
+                                                    if not pd.isna(std_date):
+                                                        val = std_date.strftime('%Y-%m-%d')
+                                                except: pass
+                                            project_metadata[key] = val
+                                            break
+                                        if alias.upper() in cell.upper():
+                                            found_alias = True
+            
+            # 2. Detect Section Headers (e.g. "FENCING QUOTATION")
+            # If row has text but very few columns filled, it might be a section
+            non_empty_cells = [v for v in row_list if v and v != 'nan']
+            if 1 <= len(non_empty_cells) <= 2:
+                if any(k in row_text for k in section_keywords):
+                    current_category = ' '.join(non_empty_cells).title()
+                    # Reset mapping for new section if headers repeat
+                    mapping = {} 
+                    continue
+
+            # 3. Detect Table Headers (S/N, Description, etc.)
+            temp_mapping = {}
+            for target, aliases in header_keywords.items():
+                for idx, val in enumerate(row_list):
+                    clean_val = val.lower()
+                    if any(a in clean_val for a in aliases):
+                        temp_mapping[target] = idx
+                        break
+            
+            if 'title' in temp_mapping and 'amount' in temp_mapping:
+                mapping = temp_mapping
+                mapping_header_row_idx = i
+                continue
+
+            # 4. Extract Data Rows
+            if mapping and i > mapping_header_row_idx:
+                title_idx = mapping.get('title')
+                amount_idx = mapping.get('amount')
+                
+                if title_idx is None or amount_idx is None: continue
+                
+                title_val = row_list[title_idx]
+                amount_val = row_list[amount_idx]
+                
+                if not title_val or title_val.lower() in ['total', 'grand total', 'subtotal', 'nan']:
+                    continue
+                
+                # S/N Check (often the first cell is numeric for data rows)
+                first_cell = row_list[0]
+                if not first_cell.isdigit() and len(non_empty_cells) < 3:
+                    # Might be a spacer or sub-header
+                    continue
+
+                # Parse numeric amount
+                try:
+                    amount = float(str(amount_val).replace('₦', '').replace(',', '').strip())
+                except:
+                    continue # Skip if no valid amount
+                
+                if amount <= 0: continue
+
+                # Parse budget if exists
+                budget = 0
+                if mapping.get('budget') is not None:
+                    try:
+                        budget_val = row_list[mapping['budget']]
+                        budget = float(str(budget_val).replace('₦', '').replace(',', '').strip())
+                    except: pass
+                
+                # Vendor detection
+                vendor_name = project_metadata.get('company')
+                if mapping.get('vendor') is not None:
+                    vendor_name = row_list[mapping['vendor']]
+
+                # Build Metadata
+                extra_metadata = {
+                    "Import Source": file.filename,
+                    "Project Location": project_metadata.get('location', 'Unknown'),
+                    "Quotation Date": project_metadata.get('date', 'Unknown')
+                }
+                
+                # Standardize key fields in metadata for frontend badges
+                if mapping.get('quantity') is not None:
+                    extra_metadata["Quantity"] = row_list[mapping['quantity']]
+                if mapping.get('duration') is not None:
+                    extra_metadata["Duration"] = row_list[mapping['duration']]
+                if mapping.get('unit_price') is not None:
+                    extra_metadata["Unit Price"] = row_list[mapping['unit_price']]
+                
+                # Capture all other columns as generic metadata
+                for idx, val in enumerate(row_list):
+                    if idx in mapping.values() or not val or val == 'nan': continue
+                    try:
+                        header_name = str(df.iloc[mapping_header_row_idx, idx]).strip()
+                        if not header_name or header_name == 'nan': header_name = f"Field_{idx}"
+                        extra_metadata[header_name] = val
+                    except:
+                        extra_metadata[f"Col_{idx}"] = val
+
+                # Clean paid
+                paid = 0
+                if mapping.get('paid') is not None:
+                    try:
+                        paid_val = row_list[mapping['paid']]
+                        paid = float(str(paid_val).replace('₦', '').replace(',', '').strip())
+                    except: pass
+
+                # Final Date Validation
+                final_date = project_metadata.get('date')
+                try:
+                    # Ensure it's in YYYY-MM-DD
+                    valid_date = pd.to_datetime(final_date, dayfirst=True, errors='coerce')
+                    if pd.isna(valid_date):
+                        final_date = datetime.now().strftime('%Y-%m-%d')
+                    else:
+                        final_date = valid_date.strftime('%Y-%m-%d')
+                except:
+                    final_date = datetime.now().strftime('%Y-%m-%d')
+
+                all_records.append({
+                    "created_by": current_admin['sub'],
+                    "property_id": property_id,
+                    "estate_draft_id": estate_draft_id,
+                    "title": title_val,
+                    "amount": amount,
+                    "budget": budget or amount, # Default budget to amount if missing
+                    "category": current_category,
+                    "metadata": extra_metadata,
+                    "amount_paid": paid,
+                    "vendor_name": vendor_name,
+                    "status": "paid" if paid >= amount - 1 and amount > 0 else ("partial" if paid > 0 else "pending"),
+                    "expense_date": final_date
+                })
+
+        if not all_records:
+            raise HTTPException(status_code=400, detail="No valid records found. Ensure your file has 'Description' and 'Amount' columns.")
+
+        try:
+            res = await db_execute(lambda: db.table("procurement_expenses").insert(all_records).execute())
+        except Exception as insert_err:
+            # Fallback: Try without created_by if it's missing from schema
+            if "created_by" in str(insert_err):
+                for r in all_records: r.pop("created_by", None)
+                res = await db_execute(lambda: db.table("procurement_expenses").insert(all_records).execute())
+            else:
+                raise insert_err
+        
+        return {
+            "status": "success", 
+            "imported": len(res.data) if res.data else 0,
+            "metadata": project_metadata
+        }
+        
+    except Exception as e:
+        logger.error(f"Procurement Import Error: {e}")
+        raise HTTPException(status_code=400, detail=f"Import failed: {str(e)}")
+
+@router.delete("/procurement-expenses/wipe")
+async def wipe_procurement_ledger(
+    property_id: Optional[str] = Query(None),
+    estate_draft_id: Optional[str] = Query(None),
+    current_admin=Depends(require_roles(["super_admin"]))
+):
+    db = get_db()
+    if not property_id and not estate_draft_id:
+        raise HTTPException(status_code=400, detail="Must provide property_id or estate_draft_id")
+    
+    query = db.table("procurement_expenses").delete()
+    if property_id:
+        query = query.eq("property_id", property_id)
+    else:
+        query = query.eq("estate_draft_id", estate_draft_id)
+        
+    res = await db_execute(lambda: query.execute())
+    return {"status": "success", "wiped": len(res.data) if res.data else 0}
+
+# --- ESTATE DRAFTS & PIPELINE ---
+from models import EstateDraftCreate
+
+@router.post("/estates")
+async def create_estate_draft(data: EstateDraftCreate, current_admin=Depends(require_roles(["super_admin"]))):
+    db = get_db()
+    payload = data.dict()
+    payload["created_by"] = current_admin['sub']
+    
+    res = await db_execute(lambda: db.table("estate_drafts").insert(payload).execute())
+    if not res.data:
+        raise HTTPException(status_code=400, detail="Failed to create estate draft")
+    return res.data[0]
+
+@router.get("/estates")
+async def list_estate_drafts(current_admin=Depends(require_roles(["super_admin"]))):
+    db = get_db()
+    res = await db_execute(lambda: db.table("estate_drafts").select("*").order("created_at", desc=True).execute())
+    return res.data
+
+@router.patch("/estates/{draft_id}")
+async def update_estate_draft(draft_id: str, data: dict, current_admin=Depends(require_roles(["super_admin"]))):
+    db = get_db()
+    res = await db_execute(lambda: db.table("estate_drafts").update(data).eq("id", draft_id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    return res.data[0]
+
+@router.post("/estates/{draft_id}/publish")
+async def publish_estate(draft_id: str, current_admin=Depends(require_roles(["super_admin"]))):
+    db = get_db()
+    
+    # 1. Fetch Draft
+    res = await db_execute(lambda: db.table("estate_drafts").select("*").eq("id", draft_id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    
+    draft = res.data[0]
+    if draft.get("is_public"):
+        raise HTTPException(status_code=400, detail="Estate is already public")
+        
+    # 2. Create Properties for each variation
+    variations = draft.get("variations", [])
+    created_prop_ids = []
+    
+    for var in variations:
+        outright = float(var.get('outright_price', 0))
+        installment = float(var.get('installment_price', 0))
+        size = var['size_sqm']
+        
+        # 1. Create Outright Listing
+        outright_payload = {
+            "name": draft['name'],
+            "estate_name": draft['name'],
+            "location": draft['location'],
+            "description": "Outright Payment Plan",
+            "plot_size_sqm": size,
+            "plot_size_sqm": size,
+            "total_price": outright,
+            "total_plots": var['total_plots'],
+            "acquisition_cost": var.get('acquisition_cost', 0),
+            "budget": float(draft.get('total_budget', 0)) if not created_prop_ids else 0, # Put budget on the first variation only to avoid double counting
+            "is_active": True
+        }
+        o_res = await db_execute(lambda: db.table("properties").insert(outright_payload).execute())
+        if o_res.data:
+            created_prop_ids.append(o_res.data[0]['id'])
+            
+        # 2. Create Installment Listing (Optional)
+        if installment > 0:
+            inst_payload = {
+                "name": draft['name'],
+                "estate_name": draft['name'],
+                "location": draft['location'],
+                "description": "Installment Payment Plan",
+                "plot_size_sqm": size,
+                "total_price": installment,
+                "total_plots": var['total_plots'],
+                "acquisition_cost": 0,
+                "is_active": True
+            }
+            i_res = await db_execute(lambda: db.table("properties").insert(inst_payload).execute())
+            if i_res.data:
+                created_prop_ids.append(i_res.data[0]['id'])
+            
+    # 3. Update Draft Status
+    await db_execute(lambda: db.table("estate_drafts").update({"is_public": True}).eq("id", draft_id).execute())
+    
+    # 4. Link existing expenses to the first property ID created
+    if created_prop_ids:
+        await db_execute(lambda: db.table("procurement_expenses").update({"property_id": created_prop_ids[0]}).eq("estate_draft_id", draft_id).execute())
+
+    return {"status": "success", "properties_created": len(created_prop_ids)}

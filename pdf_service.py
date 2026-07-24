@@ -236,6 +236,84 @@ def _render_with_xhtml2pdf(html_content: str) -> bytes:
     return result.getvalue()
 
 
+def generate_internal_payouts_pdf(invoices: list, start_date: str = None, end_date: str = None, generated_by: str = "Super Admin") -> bytes:
+    """Generates a branded PDF for the Internal Payouts ledger report."""
+    total_invoiced = 0.0
+    total_land_cost = 0.0
+    total_allocation = 0.0
+    total_documentation = 0.0
+    total_vat = 0.0
+    
+    estates = {}
+    client_invoices = []
+    
+    for inv in invoices:
+        amt = float(inv.get("amount") or 0.0)
+        lc = float(inv.get("land_cost") or 0.0) if inv.get("land_cost") is not None else 0.0
+        af = float(inv.get("allocation_fee") or 0.0) if inv.get("allocation_fee") is not None else 0.0
+        df = float(inv.get("documentation_fee") or 0.0) if inv.get("documentation_fee") is not None else 0.0
+        vat = float(inv.get("vat_amount") or 0.0) if inv.get("vat_amount") is not None else 0.0
+        
+        total_invoiced += amt
+        total_land_cost += lc
+        total_allocation += af
+        total_documentation += df
+        total_vat += vat
+        
+        est_name = inv.get("property_name") or "Unknown Estate"
+        if est_name not in estates:
+            estates[est_name] = {
+                "property_name": est_name,
+                "total_amount": 0.0,
+                "land_cost": 0.0,
+                "allocation_fee": 0.0,
+                "documentation_fee": 0.0,
+                "vat_amount": 0.0,
+                "payment_count": 0
+            }
+        estates[est_name]["total_amount"] += amt
+        estates[est_name]["land_cost"] += lc
+        estates[est_name]["allocation_fee"] += af
+        estates[est_name]["documentation_fee"] += df
+        estates[est_name]["vat_amount"] += vat
+        estates[est_name]["payment_count"] += 1
+        
+        client_info = inv.get("clients") or {}
+        client_invoices.append({
+            "invoice_number": inv.get("invoice_number", "—"),
+            "client_name": client_info.get("full_name") or "—",
+            "property_name": est_name,
+            "invoice_date": inv.get("invoice_date", "—"),
+            "amount": amt,
+            "land_cost": lc,
+            "allocation_fee": af,
+            "documentation_fee": df,
+            "vat_amount": vat
+        })
+        
+    totals = {
+        "total_invoiced": total_invoiced,
+        "total_land_cost": total_land_cost,
+        "total_allocation": total_allocation,
+        "total_documentation": total_documentation,
+        "total_vat": total_vat
+    }
+    
+    template = env.get_template("internal_payouts_report.html")
+    html_content = template.render(
+        invoices=invoices,
+        start_date=start_date,
+        end_date=end_date,
+        generated_at=datetime.now().strftime("%d %b %Y %H:%M"),
+        generated_by=generated_by,
+        totals=totals,
+        estate_breakdown=list(estates.values()),
+        client_invoices=client_invoices,
+        format_currency=format_currency,
+        company_logo_b64=None
+    )
+    
+    return _render_with_xhtml2pdf(html_content)
 
 
 def render_invoice_html(invoice: dict) -> str:
@@ -313,8 +391,13 @@ def render_receipt_html(invoice: dict) -> str:
     template = env.get_template("receipt.html")
     client = sanitize_client_address(invoice.get("clients", {}).copy())
     # Only include standard payments (not refunds) in the payment receipt
-    raw_payments = invoice.get("payments", [])
-    payments = [p for p in raw_payments if p.get("payment_type") != "refund" and not p.get("is_voided")]
+    payments = [
+        p for p in raw_payments
+        if p.get("payment_type") != "refund"
+        and not p.get("is_voided")
+        and not str(p.get("reference", "")).startswith("LEGACY-")
+        and not str(p.get("reference", "")).startswith("CLAIM-")
+    ]
     
     amount_val = float(invoice.get("amount") or 0)
     paid_val = float(invoice.get("amount_paid") or 0)
@@ -406,6 +489,8 @@ def render_statement_html(invoices: list, client: dict) -> str:
     running_balance = 0.0
 
     for inv in invoices:
+        if inv.get("status") == "voided":
+            continue
         running_balance += float(inv["amount"])
         transactions.append({
             "date": inv["invoice_date"],
@@ -947,3 +1032,431 @@ def generate_matter_pdf(matter_id: str, html_content: str, css_content: str) -> 
     </html>
     """
     return _render_with_weasyprint(full_html)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PAYSLIP PDF
+# ─────────────────────────────────────────────────────────────────────────────
+
+def generate_payslip_pdf(
+    payroll: dict,
+    staff: dict,
+    commissions: list,
+    bonuses: list,
+) -> bytes:
+    """
+    Generate a fully compliant Nigerian payslip PDF.
+
+    Args:
+        payroll:     A payroll_records row (gross_pay, tax, pension, nhf,
+                     net_pay, period_start, net_pay_breakdown, etc.)
+        staff:       admins row (full_name, email, department, staff_profiles)
+        commissions: list of commission_earnings rows for this period
+        bonuses:     list of bonus rows for this period
+    """
+    fmt   = lambda n: f"₦{float(n or 0):,.2f}"
+    bd    = payroll.get("net_pay_breakdown") or {}
+    prof  = (staff.get("staff_profiles") or [{}])[0]
+    bank_name      = prof.get("bank_name")      or staff.get("bank_name")      or "—"
+    account_number = prof.get("account_number") or staff.get("account_number") or "—"
+    account_name   = prof.get("account_name")   or staff.get("account_name")   or "—"
+    comp  = get_company_context()
+
+    period_raw  = payroll.get("period_start", "")
+    try:
+        period_label = datetime.strptime(period_raw[:7], "%Y-%m").strftime("%B %Y")
+    except Exception:
+        period_label = period_raw[:7] or "—"
+
+    gross       = float(payroll.get("gross_pay") or 0)
+    paye        = float(payroll.get("tax") or 0)
+    pension_emp = float(payroll.get("pension") or 0)
+    nhf         = float(payroll.get("nhf") or 0)
+    net_salary  = float(payroll.get("net_pay") or 0)
+
+    # ── Salary allowance breakdown (from net_pay_breakdown or derive) ──
+    base        = float(bd.get("base_salary") or gross)
+    p_rate      = float(bd.get("pension_employee_rate") or 8.0) / 100
+    nhf_rate    = float(bd.get("nhf_rate") or 2.5) / 100
+    annual_tax  = float(bd.get("monthly_tax") or paye) * 12
+    annual_taxable = float(bd.get("annual_taxable") or 0)
+
+    # Standard Nigerian allowance split if not stored explicitly
+    housing_pct   = float(bd.get("housing_pct") or 30)
+    transport_pct = float(bd.get("transport_pct") or 10)
+    utility_pct   = float(bd.get("utility_pct") or 5)
+    leave_pct     = float(bd.get("leave_pct") or 5)
+    other_pct     = max(0.0, 100 - 40 - housing_pct - transport_pct - utility_pct - leave_pct)
+
+    allowances = [
+        ("Basic Salary (40%)",           base * 0.40),
+        (f"Housing Allowance ({housing_pct:.0f}%)",   base * housing_pct / 100),
+        (f"Transport Allowance ({transport_pct:.0f}%)", base * transport_pct / 100),
+        (f"Utilities Allowance ({utility_pct:.0f}%)",  base * utility_pct / 100),
+        (f"Leave Allowance ({leave_pct:.0f}%)",        base * leave_pct / 100),
+    ]
+    if other_pct > 0:
+        allowances.append((f"Other Allowances ({other_pct:.0f}%)", base * other_pct / 100))
+
+    # ── PAYE band computation (NTA 2025 — effective Jan 1 2026) ──
+    BANDS_2026 = [
+        (800_000,    0.00, "₦0 – ₦800k"),
+        (2_200_000,  0.15, "₦800k – ₦3m"),
+        (9_000_000,  0.18, "₦3m – ₦12m"),
+        (13_000_000, 0.21, "₦12m – ₦25m"),
+        (25_000_000, 0.23, "₦25m – ₦50m"),
+        (float("inf"), 0.25, "Above ₦50m"),
+    ]
+    band_rows = ""
+    if annual_taxable > 0:
+        rem = annual_taxable
+        for limit, rate, label in BANDS_2026:
+            if rem <= 0:
+                break
+            chunk = min(rem, limit)
+            tax_chunk = chunk * rate
+            band_rows += f"""
+            <tr>
+              <td>{label}</td>
+              <td style="text-align:right">{fmt(chunk)}</td>
+              <td style="text-align:right">{rate*100:.0f}%</td>
+              <td style="text-align:right; color:#EF4444; font-weight:700">{fmt(tax_chunk)}</td>
+            </tr>"""
+            rem -= chunk
+    else:
+        band_rows = "<tr><td colspan='4' style='color:#888;text-align:center'>Exempt (income ≤ ₦800,000 p.a.)</td></tr>"
+
+    # ── Commission rows ──
+    total_gross_comm = sum(float(c.get("gross_commission") or 0) for c in commissions)
+    total_wht        = sum(float(c.get("wht_amount") or 0) for c in commissions)
+    total_net_comm   = sum(float(c.get("net_commission") or 0) for c in commissions)
+
+    commission_rows = ""
+    if commissions:
+        for c in commissions:
+            client_name  = c.get("clients", {}).get("full_name") if isinstance(c.get("clients"), dict) else (c.get("client_name") or "—")
+            estate       = c.get("estate_name") or "—"
+            pmt_amt      = float(c.get("payment_amount") or 0)
+            c_rate       = float(c.get("commission_rate") or 0)
+            gross_c      = float(c.get("gross_commission") or 0)
+            wht_c        = float(c.get("wht_amount") or 0)
+            net_c        = float(c.get("net_commission") or 0)
+            commission_rows += f"""
+            <tr>
+              <td>{client_name}</td>
+              <td>{estate}</td>
+              <td style="text-align:right">{fmt(pmt_amt)}</td>
+              <td style="text-align:right">{c_rate:.1f}%</td>
+              <td style="text-align:right">{fmt(gross_c)}</td>
+              <td style="text-align:right; color:#EF4444">({fmt(wht_c)})</td>
+              <td style="text-align:right; color:#10B981; font-weight:700">{fmt(net_c)}</td>
+            </tr>"""
+        commission_rows += f"""
+            <tr style="background:#f0fdf4; font-weight:800; border-top:2px solid #10B981">
+              <td colspan="4">TOTAL COMMISSION</td>
+              <td style="text-align:right">{fmt(total_gross_comm)}</td>
+              <td style="text-align:right; color:#EF4444">({fmt(total_wht)})</td>
+              <td style="text-align:right; color:#10B981">{fmt(total_net_comm)}</td>
+            </tr>"""
+    else:
+        commission_rows = "<tr><td colspan='7' style='text-align:center;color:#888;padding:16px'>No commission earned this period</td></tr>"
+
+    # ── Bonus rows ──
+    total_bonus = sum(float(b.get("amount") or 0) for b in bonuses)
+    bonus_rows = ""
+    if bonuses:
+        for b in bonuses:
+            bonus_rows += f"""
+            <tr>
+              <td>{b.get("bonus_type") or "Bonus"}</td>
+              <td>{fmt(b.get("amount") or 0)}</td>
+              <td>{b.get("notes") or "—"}</td>
+            </tr>"""
+        bonus_rows += f"""
+            <tr style="font-weight:800; background:#fffbeb; border-top:2px solid #F5A623">
+              <td>TOTAL BONUS</td><td>{fmt(total_bonus)}</td><td></td>
+            </tr>"""
+    else:
+        bonus_rows = "<tr><td colspan='3' style='text-align:center;color:#888;padding:16px'>No bonus this period</td></tr>"
+
+    # ── Grand net take-home ──
+    grand_net = net_salary + total_net_comm + total_bonus
+
+    # ── Pensionable emoluments ──
+    pensionable = base * (0.40 + housing_pct/100 + transport_pct/100)
+    er_pension  = float(payroll.get("employer_pension") or pensionable * 0.10)
+
+    now_str = datetime.now().strftime("%d %b %Y")
+
+    html = f"""<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: 'Inter', Arial, sans-serif; font-size: 12px; color: #1A1A1A; background: #fff; }}
+  .page {{ padding: 32px 36px; max-width: 820px; margin: 0 auto; }}
+
+  /* Header */
+  .hdr {{ background: #1A1A1A; color: #fff; padding: 20px 28px; border-radius: 10px 10px 0 0;
+           display: flex; justify-content: space-between; align-items: center; }}
+  .hdr-co {{ font-size: 18px; font-weight: 800; color: #F5A623; letter-spacing: -0.3px; }}
+  .hdr-sub {{ font-size: 11px; color: #9CA3AF; margin-top: 3px; }}
+  .hdr-right {{ text-align: right; }}
+  .hdr-badge {{ background: #F5A623; color: #1A1A1A; font-size: 10px; font-weight: 800;
+                padding: 4px 12px; border-radius: 99px; letter-spacing: 1px; text-transform: uppercase; }}
+
+  /* Employee info band — 4-column table grid */
+  .emp-band {{ background: #F9FAFB; border: 1px solid #E5E7EB; border-top: none; }}
+  .emp-grid {{ width: 100%; border-collapse: collapse; }}
+  .emp-grid td {{ padding: 10px 20px; vertical-align: top; width: 25%;
+                  border-right: 1px solid #E5E7EB; border-bottom: 1px solid #E5E7EB; }}
+  .emp-grid td:last-child {{ border-right: none; }}
+  .emp-grid tr:last-child td {{ border-bottom: none; }}
+  .emp-lbl {{ color: #6B7280; font-weight: 700; text-transform: uppercase;
+              letter-spacing: 0.6px; font-size: 9px; margin-bottom: 4px; }}
+  .emp-val {{ color: #111; font-weight: 700; font-size: 12px; line-height: 1.4; }}
+
+  /* Section title */
+  .sec-title {{ font-size: 11px; font-weight: 800; color: #6B7280; text-transform: uppercase;
+                letter-spacing: 1px; padding: 14px 0 8px; border-bottom: 2px solid #1A1A1A;
+                margin-top: 22px; margin-bottom: 0; }}
+
+  /* Tables */
+  table {{ width: 100%; border-collapse: collapse; }}
+  th {{ background: #1A1A1A; color: #fff; font-size: 10px; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 10px; text-align: left; }}
+  td {{ padding: 8px 10px; border-bottom: 1px solid #F3F4F6; font-size: 12px; }}
+  tr:last-child td {{ border-bottom: none; }}
+  tr:nth-child(even) {{ background: #FAFAFA; }}
+
+  /* Summary box */
+  .summary {{ margin-top: 22px; border: 1px solid #E5E7EB; border-radius: 10px;
+              overflow: hidden; }}
+  .sum-row {{ display: flex; border-bottom: 1px solid #E5E7EB; }}
+  .sum-row:last-child {{ border-bottom: none; }}
+  .sum-card {{ flex: 1; padding: 16px 20px; border-right: 1px solid #E5E7EB;
+               background: #fff; }}
+  .sum-card:last-child {{ border-right: none; }}
+  .sum-card.debit {{ background: #FEF2F2; }}
+  .sum-lbl {{ font-size: 9px; font-weight: 800; color: #6B7280; text-transform: uppercase;
+              letter-spacing: 0.7px; margin-bottom: 8px; }}
+  .sum-val {{ font-size: 16px; font-weight: 900; line-height: 1.2; }}
+  .sum-note {{ font-size: 9px; color: #9CA3AF; margin-top: 4px; }}
+
+  /* Net take-home hero */
+  .net-hero {{ background: #1A1A1A; border-radius: 10px; padding: 20px 28px; margin-top: 20px;
+               display: flex; justify-content: space-between; align-items: center; }}
+  .net-lbl {{ color: #9CA3AF; font-size: 12px; font-weight: 700; text-transform: uppercase;
+              letter-spacing: 1px; }}
+  .net-val {{ color: #F5A623; font-size: 28px; font-weight: 900; letter-spacing: -0.5px; }}
+
+  /* Footer */
+  .footer {{ margin-top: 28px; padding-top: 16px; border-top: 1px solid #E5E7EB;
+             font-size: 10px; color: #9CA3AF; text-align: center; line-height: 1.8; }}
+  .confidential {{ background: #FEF3C7; border: 1px solid #FDE68A; border-radius: 6px;
+                   padding: 8px 14px; margin-top: 14px; font-size: 10px; color: #92400E;
+                   font-weight: 600; text-align: center; }}
+</style></head>
+<body><div class="page">
+
+  <!-- Header -->
+  <div class="hdr">
+    <div style="display:flex; align-items:center; gap:14px">
+      {"<img src='" + comp["logo_b64"] + "' style='height:38px' />" if comp.get("logo_b64") else ""}
+      <div>
+        <div class="hdr-co">{comp["name"]}</div>
+        <div class="hdr-sub">{comp["address"]} &nbsp;|&nbsp; RC {comp["rc"]}</div>
+      </div>
+    </div>
+    <div class="hdr-right">
+      <div class="hdr-badge">Payslip</div>
+      <div style="color:#9CA3AF; font-size:11px; margin-top:6px">Period: {period_label}</div>
+      <div style="color:#9CA3AF; font-size:10px; margin-top:2px">Generated: {now_str}</div>
+    </div>
+  </div>
+
+  <!-- Employee band — 4 col × 3 row grid -->
+  <div class="emp-band">
+    <table class="emp-grid">
+      <tr>
+        <td><div class="emp-lbl">Employee</div><div class="emp-val">{staff.get("full_name","—")}</div></td>
+        <td><div class="emp-lbl">Staff ID</div><div class="emp-val">{staff.get("staff_id") or staff.get("id","—")[:8].upper()}</div></td>
+        <td><div class="emp-lbl">Department</div><div class="emp-val">{staff.get("department","—")}</div></td>
+        <td><div class="emp-lbl">Job Title</div><div class="emp-val">{prof.get("job_title","—")}</div></td>
+      </tr>
+      <tr>
+        <td><div class="emp-lbl">Employment Type</div><div class="emp-val">{(prof.get("staff_type","Full-time") or "Full-time").replace("_"," ").title()}</div></td>
+        <td><div class="emp-lbl">TIN</div><div class="emp-val">{prof.get("tin","—") or "—"}</div></td>
+        <td><div class="emp-lbl">Pension PIN</div><div class="emp-val">{prof.get("pension_pin","—") or "—"}</div></td>
+        <td><div class="emp-lbl">Pay Period</div><div class="emp-val">{period_label}</div></td>
+      </tr>
+      <tr style="background:#F0FDF4">
+        <td colspan="2" style="border-right:1px solid #E5E7EB">
+          <div class="emp-lbl" style="color:#059669">Bank Name</div>
+          <div class="emp-val" style="color:#065F46">{bank_name}</div>
+        </td>
+        <td>
+          <div class="emp-lbl" style="color:#059669">Account Number</div>
+          <div class="emp-val" style="color:#065F46; letter-spacing:1px">{account_number}</div>
+        </td>
+        <td>
+          <div class="emp-lbl" style="color:#059669">Account Name</div>
+          <div class="emp-val" style="color:#065F46">{account_name}</div>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- ── EARNINGS ── -->
+  <div class="sec-title">Earnings Breakdown</div>
+  <table>
+    <thead><tr><th>Component</th><th style="text-align:right">Monthly Amount</th><th style="text-align:right">Annual Amount</th></tr></thead>
+    <tbody>
+      {"".join(f'<tr><td>{lbl}</td><td style="text-align:right">{fmt(amt)}</td><td style="text-align:right">{fmt(amt*12)}</td></tr>' for lbl, amt in allowances)}
+      <tr style="font-weight:800; background:#fffbeb; border-top:2px solid #F5A623">
+        <td>GROSS SALARY</td>
+        <td style="text-align:right">{fmt(gross)}</td>
+        <td style="text-align:right">{fmt(gross*12)}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ── SALARY DEDUCTIONS ── -->
+  <div class="sec-title">Salary Deductions (PAYE &amp; Statutory)</div>
+  <table>
+    <thead><tr><th>Deduction</th><th style="text-align:right">Monthly</th><th style="text-align:right">Annual</th><th>Basis</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Personal Income Tax (PAYE)</td>
+        <td style="text-align:right; color:#EF4444; font-weight:700">{fmt(paye)}</td>
+        <td style="text-align:right; color:#EF4444">{fmt(paye*12)}</td>
+        <td style="color:#6B7280; font-size:11px">NTA 2025 progressive bands</td>
+      </tr>
+      <tr>
+        <td>Pension — Employee (8%)</td>
+        <td style="text-align:right; color:#EF4444; font-weight:700">{fmt(pension_emp)}</td>
+        <td style="text-align:right; color:#EF4444">{fmt(pension_emp*12)}</td>
+        <td style="color:#6B7280; font-size:11px">8% × pensionable emoluments ({fmt(pensionable)}/mo)</td>
+      </tr>
+      {"" if nhf == 0 else f'<tr><td>National Housing Fund (NHF)</td><td style="text-align:right; color:#EF4444; font-weight:700">{fmt(nhf)}</td><td style="text-align:right; color:#EF4444">{fmt(nhf*12)}</td><td style="color:#6B7280;font-size:11px">2.5% × basic salary</td></tr>'}
+      <tr>
+        <td style="color:#6B7280">Pension — Employer (10%) <em style="font-size:10px">[not deducted from salary]</em></td>
+        <td style="text-align:right; color:#10B981">{fmt(er_pension)}</td>
+        <td style="text-align:right; color:#10B981">{fmt(er_pension*12)}</td>
+        <td style="color:#6B7280; font-size:11px">Employer contribution (informational)</td>
+      </tr>
+      <tr style="font-weight:800; background:#FEF2F2; border-top:2px solid #EF4444">
+        <td>TOTAL SALARY DEDUCTIONS</td>
+        <td style="text-align:right; color:#EF4444">{fmt(paye + pension_emp + nhf)}</td>
+        <td style="text-align:right; color:#EF4444">{fmt((paye + pension_emp + nhf)*12)}</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ── PAYE BAND BREAKDOWN ── -->
+  <div class="sec-title">PAYE Computation (NTA 2025 — Annual Taxable Income: {fmt(annual_taxable)})</div>
+  <table>
+    <thead><tr><th>Tax Band</th><th style="text-align:right">Chargeable Amount</th><th style="text-align:right">Rate</th><th style="text-align:right">Tax Payable</th></tr></thead>
+    <tbody>{band_rows}</tbody>
+  </table>
+  <div style="font-size:10px; color:#6B7280; margin-top:6px; padding:0 4px">
+    Annual PAYE: {fmt(annual_tax)} &nbsp;|&nbsp; Monthly PAYE: {fmt(paye)} &nbsp;|&nbsp;
+    Taxable income = Gross Annual {fmt(gross*12)} − Pension {fmt(pension_emp*12)} − NHF {fmt(nhf*12)}
+    {f"− Rent Relief {fmt(float(bd.get('rent_relief', 0))*12)}" if bd.get('rent_relief') else ""}
+  </div>
+
+  <!-- ── COMMISSION ── -->
+  <div class="sec-title">Commission Earnings &amp; WHT Breakdown</div>
+  <table>
+    <thead><tr>
+      <th>Client</th><th>Estate / Project</th>
+      <th style="text-align:right">Payment Rcvd</th>
+      <th style="text-align:right">Rate</th>
+      <th style="text-align:right">Gross Comm</th>
+      <th style="text-align:right">WHT (5%)</th>
+      <th style="text-align:right">Net Commission</th>
+    </tr></thead>
+    <tbody>{commission_rows}</tbody>
+  </table>
+
+  <!-- ── BONUSES ── -->
+  <div class="sec-title">Bonus &amp; Incentive Payments</div>
+  <table>
+    <thead><tr><th>Type</th><th>Amount</th><th>Notes</th></tr></thead>
+    <tbody>{bonus_rows}</tbody>
+  </table>
+
+  <!-- ── NET TAKE-HOME SUMMARY ── -->
+  <div class="summary">
+    <!-- Row 1: earnings -->
+    <div class="sum-row">
+      <div class="sum-card">
+        <div class="sum-lbl">Gross Salary</div>
+        <div class="sum-val" style="color:#1A1A1A">{fmt(gross)}</div>
+        <div class="sum-note">Before deductions</div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-lbl">Net Salary</div>
+        <div class="sum-val" style="color:#3B82F6">{fmt(net_salary)}</div>
+        <div class="sum-note">After PAYE &amp; pension</div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-lbl">Net Commission</div>
+        <div class="sum-val" style="color:#10B981">{fmt(total_net_comm)}</div>
+        <div class="sum-note">After 5% WHT</div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-lbl">Bonus</div>
+        <div class="sum-val" style="color:#F5A623">{fmt(total_bonus)}</div>
+        <div class="sum-note">Incentive payments</div>
+      </div>
+    </div>
+    <!-- Row 2: deductions -->
+    <div class="sum-row">
+      <div class="sum-card debit">
+        <div class="sum-lbl">PAYE Tax</div>
+        <div class="sum-val" style="color:#EF4444">({fmt(paye)})</div>
+        <div class="sum-note">NTA 2025 · remitted to FIRS</div>
+      </div>
+      <div class="sum-card debit">
+        <div class="sum-lbl">Pension (Employee 8%)</div>
+        <div class="sum-val" style="color:#EF4444">({fmt(pension_emp)})</div>
+        <div class="sum-note">Remitted to PFA</div>
+      </div>
+      <div class="sum-card debit">
+        <div class="sum-lbl">NHF</div>
+        <div class="sum-val" style="color:#EF4444">({fmt(nhf)})</div>
+        <div class="sum-note">2.5% of basic · FMBN</div>
+      </div>
+      <div class="sum-card debit">
+        <div class="sum-lbl">WHT on Commission</div>
+        <div class="sum-val" style="color:#EF4444">({fmt(total_wht)})</div>
+        <div class="sum-note">5% · remitted to FIRS</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="net-hero">
+    <div>
+      <div class="net-lbl">Total Take-Home Pay</div>
+      <div style="color:#6B7280; font-size:11px; margin-top:4px">Net Salary + Net Commission + Bonus</div>
+    </div>
+    <div class="net-val">{fmt(grand_net)}</div>
+  </div>
+
+  <div class="confidential">
+    CONFIDENTIAL — This payslip is intended solely for {staff.get("full_name","the named employee")}.
+    Taxes are deducted and remitted to the relevant tax authority in compliance with NTA 2025 / FIRS guidelines.
+  </div>
+
+  <div class="footer">
+    {comp["name"]} &nbsp;|&nbsp; RC {comp["rc"]} &nbsp;|&nbsp;
+    {comp["address"]} &nbsp;|&nbsp;
+    {comp["phone"]} &nbsp;|&nbsp;
+    <a href="https://www.eximps-cloves.com" style="color:#C47D0A">www.eximps-cloves.com</a><br>
+    Generated on {now_str} &nbsp;|&nbsp; Payroll processed under Nigeria Tax Act (NTA) 2025
+  </div>
+
+</div></body></html>"""
+
+    return _render_with_weasyprint(html)

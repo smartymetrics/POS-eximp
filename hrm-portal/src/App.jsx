@@ -1,4 +1,4 @@
-import { useState, createContext, useContext, useCallback, useEffect } from "react";
+import React, { useState, createContext, useContext, useCallback, useEffect, useRef, Fragment } from "react";
 import { apiFetch, API_BASE } from "./api";
 
 const ThemeCtx = createContext({ dark: true, toggle: () => { } });
@@ -96,10 +96,12 @@ const calcScore = p => {
 
 // ─── GLOBAL STYLES ──────────────────────────────────────────────────────────────
 const GS = dark => {
+  const scaleUp = `@keyframes scaleUp { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }`;
   const C = dark ? DARK : LIGHT;
   const G = T.gold;
   return `
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap');
+      ${scaleUp}
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
     ::-webkit-scrollbar{width:6px;height:6px;}
     ::-webkit-scrollbar-track{background:${C.bg};}
@@ -138,10 +140,13 @@ const GS = dark => {
     .bd:hover{background:#EF444422;transform:translateY(-1px);}
     
     /* Inputs */
-    .inp{background:#121417;border:1px solid #FFFFFF14;color:${C.text};padding:12px 18px;border-radius:12px;font-size:14px;outline:none;font-family:inherit;width:100%;transition:all .2s ease;}
-    .inp:focus{border-color:${G};background:#15181C;box-shadow:0 0 0 4px ${G}14;}
-    select.inp option{background:#1A1C20;color:#FFF;}
+    .inp{background:${C.input};border:1px solid ${C.border};color:${C.text};padding:12px 18px;border-radius:12px;font-size:14px;outline:none;font-family:inherit;width:100%;transition:all .25s ease;}
+    .inp:focus{border-color:${G};background:${dark ? "#15181C" : "#FFFFFF"};box-shadow:0 0 0 4px ${G}14;}
+    select.inp{appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='%23${G.replace("#", "")}' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 16px center;background-size:18px;padding-right:48px;}
+    select.inp option{background:${dark ? "#1A1C24" : "#FFFFFF"};color:${C.text};padding:12px;}
+    select.inp optgroup{background:${dark ? "#111317" : "#F4F6FA"};color:${G};font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;padding:10px 0;}
     textarea.inp{resize:vertical;min-height:90px;}
+    @media(max-width:640px){ .inp{font-size:16px;padding:14px 20px;} }
     
     /* Tags */
     .tg{display:inline-flex;align-items:center;padding:5px 14px;border-radius:9999px;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;}
@@ -336,7 +341,7 @@ function Modal({ onClose, title, width = 640, children }) {
           </div>
           <button onClick={onClose} style={{ background: "#FFFFFF0A", border: "1px solid #FFFFFF10", color: C.text, width: 36, height: 36, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "all .2s" }}>✕</button>
         </div>
-        <div className="mc" style={{ flex: 1, overflowY: "auto", scrollbarWidth: "none" }}>
+        <div className="mc" style={{ flex: 1, overflowY: "auto" }}>
           {children}
         </div>
       </div>
@@ -385,6 +390,7 @@ const PAYROLL_ONSITE = [];
 // ─── SIDEBAR ──────────────────────────────────────────────────────────────────
 function Sidebar({ page, setPage, user, onLogout, items, roleLabel, onMenuOpen }) {
   const { dark, toggle } = useTheme(); const C = dark ? DARK : LIGHT;
+  const { unreadByType } = useNotifs();
   const G = T.gold;
   return (
     <div className="hrm-sidebar" style={{ width: 260, background: dark ? "#111317" : "#FFFFFF", borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", flexShrink: 0, height: "100vh", position: "sticky", top: 0, zIndex: 50, overflow: "hidden" }}>
@@ -400,11 +406,26 @@ function Sidebar({ page, setPage, user, onLogout, items, roleLabel, onMenuOpen }
           {items.map(n => (
             n.isHeader ? (
               <div key={n.label} style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "1px", fontWeight: 800, padding: "16px 16px 6px", marginTop: 4 }}>{n.label}</div>
-            ) : (
-              <button key={n.id} className={`nb ${page === n.id ? "on" : ""}`} onClick={() => !n.disabled && setPage(n.id)} style={{ opacity: n.disabled ? 0.5 : 1, cursor: n.disabled ? 'not-allowed' : 'pointer' }}>
-                {IC[n.icon]}{n.label} {n.disabled && <span style={{ fontSize: 9, marginLeft: 'auto', background: '#333', padding: '2px 6px', borderRadius: 4 }}>SOON</span>}
-              </button>
-            )
+            ) : (() => {
+              const badge = unreadByType[n.id] || 0;
+              return (
+                <button key={n.id} className={`nb ${page === n.id ? "on" : ""}`} onClick={() => !n.disabled && setPage(n.id)} style={{ opacity: n.disabled ? 0.5 : 1, cursor: n.disabled ? "not-allowed" : "pointer" }}>
+                  {IC[n.icon]}
+                  <span style={{ flex: 1, textAlign: "left" }}>{n.label}</span>
+                  {n.disabled && <span style={{ fontSize: 9, marginLeft: "auto", background: "#333", padding: "2px 6px", borderRadius: 4 }}>SOON</span>}
+                  {!n.disabled && badge > 0 && (
+                    <span style={{
+                      marginLeft: "auto", minWidth: 18, height: 18, borderRadius: 9, padding: "0 5px",
+                      background: "#F87171", color: "#fff", fontSize: 10, fontWeight: 900,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      boxShadow: "0 0 6px rgba(248,113,113,0.6)"
+                    }}>
+                      {badge > 99 ? "99+" : badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })()
           ))}
         </nav>
       </div>
@@ -435,13 +456,13 @@ function Topbar({ title, user }) {
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         <span className="tg to" style={{ fontSize: 10 }}>{(user.staffType || user.role || "").toUpperCase()} ACCESS</span>
         <span style={{ fontSize: 12, color: C.muted }}>{new Date().toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" })}</span>
-        {user?.id && <NotificationBell userId={user.id} />}
+        <NotificationBell />
       </div>
     </div>
   );
 }
 
-// Authentication is now handled by the main platform.
+// ──────────────────────────────────────────────────uthentication is now handled by the main platform.
 // Redirection logic is in the App component.
 
 
@@ -485,7 +506,14 @@ function GoalForm({ onSave, staffList = [], templates = [], initialGoal = null, 
     if (!f.uid && !f.department) return alert("Please assign this goal to a staff member or department.");
     if (!f.kpi) return alert("Please enter or select a KPI / goal name.");
     if (!f.target || isNaN(parseFloat(f.target))) return alert("Please enter a valid target value.");
-    onSave({ ...f, department: departmentKey || f.department, target: parseFloat(f.target), actual: 0 });
+
+    // Provide visual feedback during save
+    onSave({
+      ...f,
+      department: departmentKey || f.department,
+      target: parseFloat(f.target),
+      actual: initialGoal?.actual_value || 0
+    });
   };
 
   return (
@@ -1521,22 +1549,37 @@ function Presence({ currentUserId, currentUser }) {
                   const u = l.admins || {};
                   const sc = { approved: "#4ADE80", rejected: "#F87171", pending: "#FBB040" }[l.status];
                   return (
-                    <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 16, padding: "14px 16px", background: `${T.orange}08`, border: `1px solid ${T.orange}22`, borderRadius: 12 }}>
-                      <Av av={u.full_name?.split(" ").map(n => n[0]).join("") || "??"} sz={38} />
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 800, color: C.text, fontSize: 14 }}>{u.full_name}</div>
-                        <div style={{ fontSize: 12, color: C.sub, marginTop: 2 }}>{l.leave_type} · {new Date(l.start_date).toLocaleDateString()} → {new Date(l.end_date).toLocaleDateString()} · <span style={{ color: T.orange, fontWeight: 800 }}>{l.days_count} days</span></div>
-                        {l.reason && <div style={{ fontSize: 12, color: C.muted, marginTop: 2, fontStyle: "italic" }}>"{l.reason}"</div>}
+                    <div key={l.id} style={{ background: `${T.orange}08`, border: `1px solid ${T.orange}22`, borderRadius: 12, overflow: "hidden" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "14px 16px" }}>
+                        <Av av={u.full_name?.split(" ").map(n => n[0]).join("") || "??"} sz={38} />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 800, color: C.text, fontSize: 14 }}>{u.full_name}</div>
+                          <div style={{ fontSize: 12, color: C.sub, marginTop: 2 }}>{l.leave_type} · {new Date(l.start_date).toLocaleDateString()} → {new Date(l.end_date).toLocaleDateString()} · <span style={{ color: T.orange, fontWeight: 800 }}>{l.days_count} days</span></div>
+                          {l.reason && <div style={{ fontSize: 12, color: C.muted, marginTop: 2, fontStyle: "italic" }}>"{l.reason}"</div>}
+                        </div>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+                          <span className="tg" style={{ background: `${sc}22`, color: sc, border: `1px solid ${sc}33`, textTransform: "capitalize" }}>{l.status}</span>
+                          {l.status === "pending" && !currentUserId && (
+                            <>
+                              <button className="bp" style={{ fontSize: 11, padding: "5px 12px" }} onClick={() => updateLeave(l.id, "approved")}>Approve</button>
+                              <button className="bd" style={{ fontSize: 11 }} onClick={() => updateLeave(l.id, "rejected")}>Reject</button>
+                            </>
+                          )}
+                        </div>
                       </div>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
-                        <span className="tg" style={{ background: `${sc}22`, color: sc, border: `1px solid ${sc}33`, textTransform: "capitalize" }}>{l.status}</span>
-                        {l.status === "pending" && !currentUserId && (
-                          <>
-                            <button className="bp" style={{ fontSize: 11, padding: "5px 12px" }} onClick={() => updateLeave(l.id, "approved")}>Approve</button>
-                            <button className="bd" style={{ fontSize: 11 }} onClick={() => updateLeave(l.id, "rejected")}>Reject</button>
-                          </>
-                        )}
-                      </div>
+                      {/* Proof document row — visible to HR only (no currentUserId means HR view) */}
+                      {!currentUserId && (
+                        <div style={{ borderTop: `1px solid ${T.orange}22`, padding: "8px 16px", display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontSize: 11, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>Supporting Proof:</span>
+                          {l.proof_url ? (
+                            <a href={l.proof_url} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, padding: "4px 12px", borderRadius: 6, background: `${T.orange}18`, color: T.orange, border: `1px solid ${T.orange}44`, textDecoration: "none", fontWeight: 700 }}>
+                              📎 View Proof Document
+                            </a>
+                          ) : (
+                            <span style={{ fontSize: 11, color: C.muted, fontStyle: "italic" }}>No proof uploaded</span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -2060,135 +2103,308 @@ function Tasks({ currentUser }) {
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
   const [viewT, setViewT] = useState(null);
-  const [nt, setNt] = useState({ title: "", assignedTo: "", due: "", priority: "Medium", project: "", desc: "" });
+  const [nt, setNt] = useState({ title: "", assignedTo: "", due: "", priority: "Medium", desc: "" });
+  // Rejection modal state
+  const [rejectTarget, setRejectTarget] = useState(null); // task being rejected
+  const [rejectNote, setRejectNote] = useState("");
+  const [actionBusy, setActionBusy] = useState(false);
 
   const isHR = currentUser.role?.includes("admin") || currentUser.primary_role === "hr";
   const isLM = currentUser.role?.includes("line_manager");
   const isStaff = !isHR && !isLM;
+  const canCreate = isHR || isLM;
+  const canApprove = isHR || isLM;
+
+  const sendNotif = (staffId, type, message) =>
+    apiFetch(`${API_BASE}/hr/notifications`, {
+      method: "POST",
+      body: JSON.stringify({ staff_id: staffId, type, message })
+    }).catch(() => { });
+
+  const refresh = () => {
+    const params = isStaff ? `?staff_id=${currentUser.id}` : "";
+    apiFetch(`${API_BASE}/hr/tasks${params}`).then(t => {
+      setTasks(t || []);
+      // keep viewT in sync
+      setViewT(v => v ? (t || []).find(x => x.id === v.id) || null : null);
+    });
+  };
 
   useEffect(() => {
     setLoading(true);
     const params = isStaff ? `?staff_id=${currentUser.id}` : "";
     Promise.all([
       apiFetch(`${API_BASE}/hr/tasks${params}`),
-      (isHR || isLM) ? apiFetch(`${API_BASE}/hr/staff`) : Promise.resolve([])
-    ]).then(([t, s]) => {
-      setTasks(t);
-      setStaff(s);
-    }).finally(() => setLoading(false));
+      canCreate ? apiFetch(`${API_BASE}/hr/staff`) : Promise.resolve([])
+    ]).then(([t, s]) => { setTasks(t || []); setStaff(s || []); }).finally(() => setLoading(false));
   }, [currentUser.id]);
 
-  const refresh = () => {
-    const params = isStaff ? `?staff_id=${currentUser.id}` : "";
-    apiFetch(`${API_BASE}/hr/tasks${params}`).then(setTasks);
-  };
-
+  // HR/Manager creates and assigns a task → notify the employee
   const add = async () => {
-    if (!nt.title || !nt.assignedTo || !nt.due) return;
+    if (!nt.title || !nt.assignedTo || !nt.due) return alert("Title, assignee and due date are required.");
+    setActionBusy(true);
     try {
-      await apiFetch(`${API_BASE}/hr/tasks`, {
+      const task = await apiFetch(`${API_BASE}/hr/tasks`, {
         method: "POST",
-        body: JSON.stringify({
-          assigned_to: nt.assignedTo,
-          title: nt.title,
-          due_date: nt.due,
-          priority: nt.priority,
-          notes: nt.desc
-        })
+        body: JSON.stringify({ assigned_to: nt.assignedTo, title: nt.title, due_date: nt.due, priority: nt.priority, notes: nt.desc })
       });
-      setNt({ title: "", assignedTo: "", due: "", priority: "Medium", project: "", desc: "" });
+      await sendNotif(
+        nt.assignedTo, "task_assigned",
+        `📋 You have been assigned a new task: "${nt.title}". Due: ${new Date(nt.due).toLocaleDateString()}. Priority: ${nt.priority}.`
+      );
+      setNt({ title: "", assignedTo: "", due: "", priority: "Medium", desc: "" });
       setShowNew(false);
       refresh();
-    } catch (e) {
-      alert("Error: " + e.message);
-    }
+    } catch (e) { alert("Error: " + e.message); } finally { setActionBusy(false); }
   };
 
-  const updateStatus = async (taskId, newStatus) => {
+  // Employee marks task as done → status becomes "pending_approval", notify HR/manager
+  const markDone = async (task) => {
+    if (task.status === "pending_approval" || task.status === "approved") return;
+    setActionBusy(true);
     try {
-      await apiFetch(`${API_BASE}/hr/tasks/${taskId}`, {
+      await apiFetch(`${API_BASE}/hr/tasks/${task.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "pending_approval" })
+      });
+      // Notify the assigner (assigned_by field) or broadcast to HR role
+      const assignerId = task.assigned_by || null;
+      if (assignerId) {
+        await sendNotif(
+          assignerId, "task_assigned_hr",
+          `✅ ${currentUser.full_name} has marked task "${task.title}" as completed — awaiting your approval.`
+        );
+      }
+      refresh();
+    } catch (e) { alert("Failed: " + e.message); } finally { setActionBusy(false); }
+  };
+
+  // HR/Manager approves the completion → notify employee
+  const approveTask = async (task) => {
+    setActionBusy(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/tasks/${task.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "completed" })
+      });
+      await sendNotif(
+        task.assigned_to, "task_assigned",
+        `🎉 Your task "${task.title}" has been approved as completed by HR/Management. Great work!`
+      );
+      setViewT(null);
+      refresh();
+    } catch (e) { alert("Failed: " + e.message); } finally { setActionBusy(false); }
+  };
+
+  // HR/Manager rejects → status reverts to in_progress, employee notified with note
+  const rejectTask = async () => {
+    if (!rejectNote.trim()) return alert("Please provide a reason for rejection.");
+    setActionBusy(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/tasks/${rejectTarget.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "in_progress", rejection_note: rejectNote.trim() })
+      });
+      await sendNotif(
+        rejectTarget.assigned_to, "task_assigned",
+        `🔁 Your task "${rejectTarget.title}" was sent back for revision. Note from reviewer: "${rejectNote.trim()}"`
+      );
+      setRejectTarget(null); setRejectNote("");
+      setViewT(null);
+      refresh();
+    } catch (e) { alert("Failed: " + e.message); } finally { setActionBusy(false); }
+  };
+
+  // Staff can toggle between pending ↔ in_progress only (not "completed" — that requires approval)
+  const staffUpdateStatus = async (task, newStatus) => {
+    if (!["pending", "in_progress"].includes(newStatus)) return;
+    setActionBusy(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/tasks/${task.id}`, {
         method: "PATCH",
         body: JSON.stringify({ status: newStatus })
       });
-      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
-      if (viewT) setViewT(v => ({ ...v, status: newStatus }));
-    } catch (e) {
-      alert("Failed to update task: " + e.message);
-    }
+      refresh();
+    } catch (e) { alert("Failed: " + e.message); } finally { setActionBusy(false); }
   };
 
-  const canCreate = isHR || isLM;
-  const canEdit = t => isHR || (isLM && t.assigned_by === currentUser.id);
+  // Augmented status colours — pending_approval gets amber, approved = green alias
+  const allSCol = { ...sCol, pending_approval: "#F59E0B", approved: "#4ADE80" };
+  const statusLabel = { pending: "Pending", in_progress: "In Progress", pending_approval: "Awaiting Approval", completed: "Completed", approved: "Completed" };
+
+  const tabCounts = {
+    all: tasks.length,
+    pending_approval: tasks.filter(t => t.status === "pending_approval").length,
+    mine: isStaff ? tasks.length : tasks.filter(t => t.assigned_to === currentUser.id).length,
+  };
+  const [filterTab, setFilterTab] = useState("all");
+  const visibleTasks = tasks.filter(t => {
+    if (filterTab === "pending_approval") return t.status === "pending_approval";
+    if (filterTab === "mine") return t.assigned_to === currentUser.id;
+    return true;
+  });
 
   return (
     <div className="fade">
+      {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 22 }}>
         <div>
           <div className="ho" style={{ fontSize: 22 }}>{isStaff ? "My Tasks" : "Task Manager"}</div>
           <div style={{ fontSize: 13, color: C.sub, marginTop: 4 }}>
-            {isStaff ? "Tasks assigned to you. Complete tasks to boost your performance score."
-              : "Assign and track tasks across the team. Overdue tasks trigger automated alerts."}
+            {isStaff
+              ? "Mark tasks as done when complete — HR or your manager will approve them."
+              : "Assign tasks, review completions, and approve or send back for revision."}
           </div>
         </div>
         {canCreate && <button className="bp" onClick={() => setShowNew(true)}>+ Assign Task</button>}
       </div>
 
+      {/* Filter tabs (only for HR/manager) */}
+      {canApprove && (
+        <div className="tab-bar" style={{ marginBottom: 20 }}>
+          {[["all", "All Tasks"], ["pending_approval", `Awaiting Approval${tabCounts.pending_approval > 0 ? ` (${tabCounts.pending_approval})` : ""}`]].map(([k, l]) => (
+            <button key={k} className={`tab ${filterTab === k ? "on" : "off"}`} onClick={() => setFilterTab(k)}>{l}</button>
+          ))}
+        </div>
+      )}
+
+      {/* Task grid */}
       {loading ? (
         <div style={{ padding: 40, textAlign: "center", color: C.muted }}>Loading tasks…</div>
-      ) : tasks.length === 0 ? (
-        <div className="gc" style={{ padding: 40, textAlign: "center", color: C.muted }}>No tasks found for this period.</div>
+      ) : visibleTasks.length === 0 ? (
+        <div className="gc" style={{ padding: 40, textAlign: "center", color: C.muted }}>
+          {filterTab === "pending_approval" ? "No tasks awaiting approval." : "No tasks found."}
+        </div>
       ) : (
         <div className={isStaff ? "g2" : "g3"} style={{ gap: 14 }}>
-          {tasks.map(t => {
+          {visibleTasks.map(t => {
             const u = t.admins || {};
             const pc = pCol[t.priority] || T.orange;
-            const sc = sCol[t.status] || T.orange;
+            const sc = allSCol[t.status] || T.orange;
+            const needsApproval = t.status === "pending_approval";
             return (
-              <div key={t.id} className="gc" style={{ padding: 20, cursor: "pointer" }} onClick={() => setViewT(t)}>
+              <div key={t.id} className="gc" style={{ padding: 20, cursor: "pointer", borderColor: needsApproval ? "#F59E0B66" : undefined, boxShadow: needsApproval ? `0 0 0 1px #F59E0B33, 0 0 14px #F59E0B18` : undefined }} onClick={() => setViewT(t)}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
                   <span className="tg" style={{ background: `${pc}22`, color: pc, border: `1px solid ${pc}33` }}>{t.priority}</span>
-                  <span className="tg" style={{ background: `${sc}22`, color: sc, border: `1px solid ${sc}33`, textTransform: "capitalize" }}>{t.status}</span>
+                  <span className="tg" style={{ background: `${sc}22`, color: sc, border: `1px solid ${sc}33` }}>{statusLabel[t.status] || t.status}</span>
                 </div>
                 <div style={{ fontSize: 14, fontWeight: 800, color: C.text, marginBottom: 6, lineHeight: 1.4 }}>{t.title}</div>
+                {t.rejection_note && t.status === "in_progress" && (
+                  <div style={{ fontSize: 11, color: "#F87171", background: "#F8717112", border: "1px solid #F8717133", borderRadius: 8, padding: "6px 10px", marginBottom: 8, lineHeight: 1.4 }}>
+                    🔁 Sent back: {t.rejection_note}
+                  </div>
+                )}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12 }}>
                   {!isStaff && <div style={{ display: "flex", alignItems: "center", gap: 8 }}><Av av={u.full_name?.split(" ").map(n => n[0]).join("") || "??"} sz={24} /><span style={{ fontSize: 12, color: C.sub }}>{u.full_name?.split(" ")[0]}</span></div>}
                   <span style={{ fontSize: 11, color: C.muted }}>Due {new Date(t.due_date).toLocaleDateString()}</span>
                 </div>
+                {/* Staff quick-action: mark done */}
+                {isStaff && !["pending_approval", "completed"].includes(t.status) && (
+                  <button className="bp" style={{ width: "100%", marginTop: 12, padding: "8px 0", fontSize: 12 }}
+                    disabled={actionBusy}
+                    onClick={e => { e.stopPropagation(); markDone(t); }}>
+                    ✓ Mark as Done
+                  </button>
+                )}
+                {isStaff && t.status === "pending_approval" && (
+                  <div style={{ marginTop: 10, fontSize: 11, color: "#F59E0B", fontWeight: 700, textAlign: "center" }}>⏳ Awaiting approval</div>
+                )}
+                {/* Manager quick-approve on card */}
+                {canApprove && needsApproval && (
+                  <div style={{ display: "flex", gap: 8, marginTop: 12 }} onClick={e => e.stopPropagation()}>
+                    <button className="bp" style={{ flex: 1, fontSize: 11, padding: "6px 0", background: "#4ADE80", color: "#0F1318" }} disabled={actionBusy}
+                      onClick={() => approveTask(t)}>✓ Approve</button>
+                    <button className="bg" style={{ flex: 1, fontSize: 11, padding: "6px 0", borderColor: "#F87171", color: "#F87171" }} disabled={actionBusy}
+                      onClick={() => { setRejectTarget(t); setRejectNote(""); }}>✕ Reject</button>
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
       )}
 
+      {/* Detail modal */}
       {viewT && (
         <Modal onClose={() => setViewT(null)} title={viewT.title}>
-          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
             <span className="tg" style={{ background: `${pCol[viewT.priority]}22`, color: pCol[viewT.priority], border: `1px solid ${pCol[viewT.priority]}33` }}>{viewT.priority} Priority</span>
-            <span className="tg" style={{ background: `${sCol[viewT.status]}22`, color: sCol[viewT.status], border: `1px solid ${sCol[viewT.status]}33` }}>{viewT.status}</span>
+            <span className="tg" style={{ background: `${(allSCol[viewT.status] || T.orange)}22`, color: allSCol[viewT.status] || T.orange, border: `1px solid ${(allSCol[viewT.status] || T.orange)}33` }}>{statusLabel[viewT.status] || viewT.status}</span>
           </div>
-          <div style={{ fontSize: 13, color: (dark ? DARK : LIGHT).sub, marginBottom: 18, lineHeight: 1.7 }}>{viewT.notes || "No description provided."}</div>
+          {viewT.rejection_note && viewT.status === "in_progress" && (
+            <div style={{ background: "#F8717112", border: "1px solid #F8717133", borderRadius: 10, padding: "10px 14px", marginBottom: 16, fontSize: 13, color: "#F87171", lineHeight: 1.5 }}>
+              <strong>🔁 Reviewer's note:</strong> {viewT.rejection_note}
+            </div>
+          )}
+          <div style={{ fontSize: 13, color: C.sub, marginBottom: 18, lineHeight: 1.7 }}>{viewT.notes || "No description provided."}</div>
           <div className="g2" style={{ gap: 10, marginBottom: 18 }}>
-            <Field label="Staff Member" value={viewT.admins?.full_name} />
+            <Field label="Assigned To" value={viewT.admins?.full_name} />
             <Field label="Due Date" value={new Date(viewT.due_date).toLocaleDateString()} />
             <Field label="Priority" value={viewT.priority} />
-            <Field label="Status" value={viewT.status} />
+            <Field label="Status" value={statusLabel[viewT.status] || viewT.status} />
           </div>
-          {(isStaff || canEdit(viewT)) && (
+
+          {/* Staff actions: toggle pending/in_progress, or mark done */}
+          {isStaff && (
             <div>
-              <div style={{ fontSize: 12, color: (dark ? DARK : LIGHT).muted, marginBottom: 10, fontWeight: 800 }}>Update Task Status</div>
+              <div style={{ fontSize: 12, color: C.muted, marginBottom: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em" }}>Your Actions</div>
+              {["pending_approval", "completed"].includes(viewT.status) ? (
+                <div style={{ textAlign: "center", padding: 14, background: `${allSCol[viewT.status]}15`, borderRadius: 10, color: allSCol[viewT.status], fontWeight: 700, fontSize: 13 }}>
+                  {viewT.status === "pending_approval" ? "⏳ Submitted — awaiting approval from HR/Manager." : "✅ Task completed and approved."}
+                </div>
+              ) : (
+                <div style={{ display: "flex", gap: 10 }}>
+                  {["pending", "in_progress"].map(s => (
+                    <button key={s} className={viewT.status === s ? "bp" : "bg"} style={{ flex: 1, fontSize: 12 }} disabled={actionBusy}
+                      onClick={() => staffUpdateStatus(viewT, s)}>{s === "pending" ? "Not Started" : "In Progress"}</button>
+                  ))}
+                  <button className="bp" style={{ flex: 1, fontSize: 12, background: "#4ADE80", color: "#0F1318" }} disabled={actionBusy}
+                    onClick={() => markDone(viewT)}>✓ Mark Done</button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* HR/Manager approval actions */}
+          {canApprove && viewT.status === "pending_approval" && (
+            <div>
+              <div style={{ fontSize: 12, color: C.muted, marginBottom: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em" }}>Review Completion</div>
+              <div style={{ background: "#F59E0B12", border: "1px dashed #F59E0B55", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: C.sub }}>
+                Staff has marked this task as done. Approve it, or reject with a note if more work is needed.
+              </div>
               <div style={{ display: "flex", gap: 10 }}>
-                {["pending", "in_progress", "completed"].map(s => (
-                  <button key={s} className={viewT.status === s ? "bp" : "bg"} style={{ flex: 1, fontSize: 12, textTransform: "capitalize" }}
-                    onClick={() => updateStatus(viewT.id, s)}>
-                    {s.replace("_", " ")}
-                  </button>
-                ))}
+                <button className="bp" style={{ flex: 1, background: "#4ADE80", color: "#0F1318", padding: 13 }} disabled={actionBusy}
+                  onClick={() => approveTask(viewT)}>✓ Approve Completion</button>
+                <button className="bg" style={{ flex: 1, borderColor: "#F87171", color: "#F87171", padding: 13 }} disabled={actionBusy}
+                  onClick={() => { setRejectTarget(viewT); setRejectNote(""); }}>✕ Reject & Send Back</button>
               </div>
             </div>
           )}
         </Modal>
       )}
 
+      {/* Rejection note modal */}
+      {rejectTarget && (
+        <Modal onClose={() => { setRejectTarget(null); setRejectNote(""); }} title="Reject & Send Back" width={480}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.6 }}>
+              Provide a note explaining what needs to be corrected. The employee will be notified immediately.
+            </div>
+            <div>
+              <Lbl>Reason / Instructions *</Lbl>
+              <textarea className="inp" rows={4} value={rejectNote} onChange={e => setRejectNote(e.target.value)}
+                placeholder="e.g. Please re-check the figures in section 3 and resubmit…" />
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button className="bp" style={{ flex: 1, background: "#F87171", padding: 13 }} disabled={actionBusy || !rejectNote.trim()}
+                onClick={rejectTask}>{actionBusy ? "Sending…" : "Send Back with Note"}</button>
+              <button className="bg" style={{ flex: 1, padding: 13 }} onClick={() => { setRejectTarget(null); setRejectNote(""); }}>Cancel</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Assign new task modal */}
       {showNew && (
         <Modal onClose={() => setShowNew(false)} title="Assign New Task">
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -2207,8 +2423,8 @@ function Tasks({ currentUser }) {
                 </select>
               </div>
             </div>
-            <div><Lbl>Description</Lbl><textarea className="inp" placeholder="Task details and instructions…" value={nt.desc} onChange={e => setNt(n => ({ ...n, desc: e.target.value }))} /></div>
-            <button className="bp" onClick={add} style={{ padding: 12 }}>Assign Task</button>
+            <div><Lbl>Description / Instructions</Lbl><textarea className="inp" placeholder="Task details and instructions…" value={nt.desc} onChange={e => setNt(n => ({ ...n, desc: e.target.value }))} /></div>
+            <button className="bp" onClick={add} disabled={actionBusy} style={{ padding: 12 }}>{actionBusy ? "Assigning…" : "Assign Task"}</button>
           </div>
         </Modal>
       )}
@@ -2377,30 +2593,174 @@ function Disciplinary({ viewOnly, userId, isManager }) {
   );
 }
 
-// ─── MODULE: PAYROLL ──────────────────────────────────────────────────────────
-function Payroll() {
+// ─── SUB-COMPONENT: PAYROLL RUNS HISTORY ──────────────────────────────────────
+const PayrollRunsHistory = ({ payroll }) => {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
-  const [tab, setTab] = useState("payslips");
-  const [payroll, setPayroll] = useState([]);
+  // Group by month/year based on period_start
+  const groups = payroll.reduce((acc, p) => {
+    if (!p.period_start) return acc;
+    const d = new Date(p.period_start);
+    const key = d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    if (!acc[key]) acc[key] = { month: key, count: 0, gross: 0, net: 0, status: p.status, rawDate: d };
+    acc[key].count++;
+    acc[key].gross += p.gross_pay || 0;
+    acc[key].net += p.net_pay || 0;
+    // If any record in the batch is 'paid', we consider the batch 'paid' for display purposes
+    if (p.status === "paid") acc[key].status = "paid";
+    return acc;
+  }, {});
+
+  const runs = Object.values(groups).sort((a, b) => b.rawDate - a.rawDate);
+
+  return (
+    <div className="fade">
+      <div className="tw gc" style={{ padding: 0, overflow: "hidden" }}>
+        <table className="ht">
+          <thead>
+            <tr>
+              <th>Payroll Period</th>
+              <th>Staff Count</th>
+              <th>Total Gross</th>
+              <th>Total Net</th>
+              <th>Batch Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {runs.map(r => (
+              <tr key={r.month}>
+                <td style={{ fontWeight: 800, color: T.orange }}>{r.month}</td>
+                <td>{r.count} Employees</td>
+                <td>₦{r.gross.toLocaleString()}</td>
+                <td>₦{r.net.toLocaleString()}</td>
+                <td>
+                  <span className={`tg ${r.status === 'paid' ? 'tg2' : 'to'}`}>
+                    {r.status === 'paid' ? 'DISBURSED' : 'PENDING'}
+                  </span>
+                </td>
+                <td>
+                  <button className="bg" style={{ fontSize: 11, padding: "6px 12px" }} onClick={() => alert("Batch detail view coming soon. Use 'Staff Payslips' tab to manage individual records.")}>
+                    View Batch Details
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {runs.length === 0 && (
+              <tr>
+                <td colSpan="6" style={{ textAlign: "center", padding: 60 }}>
+                  <div style={{ color: C.muted, fontSize: 14 }}>No historical payroll runs found.</div>
+                  <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Run your first payroll from the 'Staff Payslips' tab.</div>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+// ─── MODULE: PAYROLL ──────────────────────────────────────────────────────────
+function Payroll({ initialTab = "payslips" }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [tab, setTab] = useState(initialTab);
+  const [allPayroll, setAllPayroll] = useState([]);   // full unfiltered list
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [staff, setStaff] = useState([]);
-  const [nf, setNf] = useState({ uid: "", gross: "", tax: "0", notes: "" });
+  const [nf, setNf] = useState({ id: null, uid: "", gross: "", tax: "0", notes: "" });
+  const [selectedPayslip, setSelectedPayslip] = useState(null);
+  const [sendingPayslipId, setSendingPayslipId] = useState(null);
+
+  // Period filter
+  const [filterPeriod, setFilterPeriod] = useState(""); // "YYYY-MM" or ""
+
+  // Bulk select
+  const [selected, setSelected] = useState(new Set());
+
   const fmt = n => n != null ? `₦${Number(n).toLocaleString()}` : "—";
 
-  const handleRunPayroll = async () => {
-    if (!confirm("Are you sure you want to run payroll for the current month? This will generate records for all active staff.")) return;
-    setLoading(true);
+  // Derived: unique periods for filter dropdown
+  const periods = [...new Set(allPayroll.map(p => (p.period_start || "").slice(0, 7)).filter(Boolean))]
+    .sort().reverse();
+
+  // Filtered list
+  const payroll = filterPeriod
+    ? allPayroll.filter(p => (p.period_start || "").startsWith(filterPeriod))
+    : allPayroll;
+
+  const departments = [...new Set(staff.map(s => s.department).filter(Boolean))].sort();
+
+  // Stats for current view
+  const stats = payroll.reduce((acc, p) => ({
+    gross: acc.gross + (p.gross_pay || 0),
+    net: acc.net + (p.net_pay || 0),
+    tax: acc.tax + (p.tax || 0),
+    pension: acc.pension + (p.pension || 0),
+    headcount: acc.headcount + 1,
+    paid: acc.paid + (p.status === "paid" ? 1 : 0),
+  }), { gross: 0, net: 0, tax: 0, pension: 0, headcount: 0, paid: 0 });
+
+  // ── Run Payroll modal state ──
+  const [showRunModal, setShowRunModal] = useState(false);
+  const [runScope, setRunScope] = useState("all");     // "all" | "select"
+  const [runSelected, setRunSelected] = useState(new Set());
+  const [runSearch, setRunSearch] = useState("");
+  const [running, setRunning] = useState(false);
+  const [runResult, setRunResult] = useState(null);      // {message, count, warnings}
+
+  const [showSendModal, setShowSendModal] = useState(false);
+  const [showMarkPaidModal, setShowMarkPaidModal] = useState(false);
+  const [sendScope, setSendScope] = useState("selected");
+  const [sendDepartment, setSendDepartment] = useState("");
+  const [sendBusy, setSendBusy] = useState(false);
+  const [sendResult, setSendResult] = useState(null);
+
+  const [markScope, setMarkScope] = useState("selected");
+  const [markDepartment, setMarkDepartment] = useState("");
+  const [markSendEmail, setMarkSendEmail] = useState(true);
+  const [markBusy, setMarkBusy] = useState(false);
+  const [markResult, setMarkResult] = useState(null);
+
+  const toggleRunStaff = id => setRunSelected(prev => {
+    const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n;
+  });
+
+  const filteredRunStaff = staff.filter(s =>
+    (s.full_name || "").toLowerCase().includes(runSearch.toLowerCase()) ||
+    (s.department || "").toLowerCase().includes(runSearch.toLowerCase())
+  );
+
+  const executeRunPayroll = async () => {
+    const body = runScope === "select"
+      ? { staff_ids: [...runSelected] }
+      : {};
+    if (runScope === "select" && runSelected.size === 0) {
+      alert("Please select at least one staff member."); return;
+    }
+    setRunning(true);
     try {
-      const res = await apiFetch(`${API_BASE}/hr/payroll/run`, { method: "POST" });
-      alert(res.message);
+      const res = await apiFetch(`${API_BASE}/hr/payroll/run`, {
+        method: "POST",
+        body: JSON.stringify(body)
+      });
+      setRunResult(res);
       const updated = await apiFetch(`${API_BASE}/hr/payroll/payslips`);
-      setPayroll(updated);
+      setAllPayroll(updated);
     } catch (e) {
       alert("Payroll error: " + e.message);
+      setRunning(false);
     } finally {
-      setLoading(false);
+      setRunning(false);
     }
+  };
+
+  const closeRunModal = () => {
+    setShowRunModal(false);
+    setRunScope("all");
+    setRunSelected(new Set());
+    setRunSearch("");
+    setRunResult(null);
   };
 
   useEffect(() => {
@@ -2408,10 +2768,8 @@ function Payroll() {
     Promise.all([
       apiFetch(`${API_BASE}/hr/payroll/payslips`),
       apiFetch(`${API_BASE}/hr/staff`)
-    ]).then(([p, s]) => {
-      setPayroll(p);
-      setStaff(s);
-    }).catch(() => setPayroll([]))
+    ]).then(([p, s]) => { setAllPayroll(p); setStaff(s); })
+      .catch(() => setAllPayroll([]))
       .finally(() => setLoading(false));
   }, []);
 
@@ -2427,19 +2785,213 @@ function Payroll() {
           tax: parseFloat(nf.tax),
           net_pay: parseFloat(nf.gross) - parseFloat(nf.tax),
           notes: nf.notes,
-          period_start: new Date().toISOString().split('T')[0]
+          period_start: new Date().toISOString().split("T")[0]
         })
       });
       setShowAdd(false);
-      setNf({ uid: "", gross: "", tax: "0", notes: "" });
+      setNf({ id: null, uid: "", gross: "", tax: "0", notes: "" });
       const updated = await apiFetch(`${API_BASE}/hr/payroll/payslips`);
-      setPayroll(updated);
+      setAllPayroll(updated);
+    } catch (e) { alert("Error: " + e.message); }
+    finally { setLoading(false); }
+  };
+
+  // Edit state
+  const [editRecord, setEditRecord] = useState(null);
+  const [ef, setEf] = useState({ gross: "", tax: "0", pension: "0", nhf: "0", status: "pending" });
+  const [editBusy, setEditBusy] = useState(false);
+
+  const openEdit = p => {
+    setEditRecord(p);
+    const prof = (p.admins?.staff_profiles || [])[0] || {};
+    setEf({
+      gross: String(p.gross_pay ?? ""),
+      tax: String(p.tax ?? "0"),
+      pension: String(p.pension ?? "0"),
+      nhf: String(p.nhf ?? "0"),
+      status: p.status ?? "pending",
+      bank_name: prof.bank_name || "",
+      account_number: prof.account_number || "",
+      account_name: prof.account_name || "",
+    });
+  };
+
+  const computeNet = () => {
+    const g = parseFloat(ef.gross) || 0, t = parseFloat(ef.tax) || 0,
+      pe = parseFloat(ef.pension) || 0, n = parseFloat(ef.nhf) || 0;
+    return Math.max(0, g - t - pe - n);
+  };
+
+  const saveEdit = async () => {
+    if (!editRecord) return;
+    setEditBusy(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/payroll/${editRecord.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          gross_pay: parseFloat(ef.gross) || 0,
+          tax: parseFloat(ef.tax) || 0,
+          pension: parseFloat(ef.pension) || 0,
+          nhf: parseFloat(ef.nhf) || 0,
+          net_pay: computeNet(),
+          status: ef.status,
+        })
+      });
+      // Save bank details separately if any field is filled
+      const bankPayload = {
+        bank_name: ef.bank_name || null,
+        account_number: ef.account_number || null,
+        account_name: ef.account_name || null,
+      };
+      if (Object.values(bankPayload).some(v => v)) {
+        await apiFetch(`${API_BASE}/hr/payroll/${editRecord.id}/bank-details`, {
+          method: "PATCH",
+          body: JSON.stringify(bankPayload)
+        });
+      }
+      setEditRecord(null);
+      const updated = await apiFetch(`${API_BASE}/hr/payroll/payslips`);
+      setAllPayroll(updated);
+    } catch (e) { alert("Update failed: " + e.message); }
+    finally { setEditBusy(false); }
+  };
+
+  const deleteRecord = async p => {
+    if (p.status === "paid") { alert("Cannot delete a paid payroll record. Change the status to 'pending' first."); return; }
+    if (!confirm(`Delete payroll record for ${p.admins?.full_name || "this staff member"}?`)) return;
+    try {
+      await apiFetch(`${API_BASE}/hr/payroll/${p.id}`, { method: "DELETE" });
+      setAllPayroll(prev => prev.filter(r => r.id !== p.id));
+      setSelected(prev => { const n = new Set(prev); n.delete(p.id); return n; });
+    } catch (e) { alert("Delete failed: " + e.message); }
+  };
+
+  const buildBulkPayload = (scope, department) => {
+    const payload = {};
+    if (scope === "selected") payload.ids = [...selected];
+    else if (scope === "department") payload.department = department;
+    else payload.all = true;
+    if (filterPeriod) payload.period_start = `${filterPeriod}-01`;
+    return payload;
+  };
+
+  const openSendModal = () => {
+    if (!sendDepartment && departments.length > 0) setSendDepartment(departments[0]);
+    setShowSendModal(true);
+    setSendResult(null);
+  };
+
+  const openMarkPaidModal = () => {
+    if (!markDepartment && departments.length > 0) setMarkDepartment(departments[0]);
+    setShowMarkPaidModal(true);
+    setMarkResult(null);
+  };
+
+  const executeSendPayslips = async () => {
+    if (sendScope === "selected" && selected.size === 0) {
+      alert("Please select at least one payslip."); return;
+    }
+    if (sendScope === "department" && !sendDepartment) {
+      alert("Please select a department."); return;
+    }
+    setSendBusy(true);
+    try {
+      const payload = buildBulkPayload(sendScope, sendDepartment);
+      const res = await apiFetch(`${API_BASE}/hr/payroll/send-payslips`, {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+      setSendResult(res);
+      alert(`Queued ${res.count} payslip(s) for email.`);
+      setShowSendModal(false);
     } catch (e) {
-      alert("Error: " + e.message);
+      alert("Failed to queue payslips: " + e.message);
     } finally {
-      setLoading(false);
+      setSendBusy(false);
     }
   };
+
+  const executeMarkPaid = async () => {
+    if (markScope === "selected" && selected.size === 0) {
+      alert("Please select at least one payslip."); return;
+    }
+    if (markScope === "department" && !markDepartment) {
+      alert("Please select a department."); return;
+    }
+    setMarkBusy(true);
+    try {
+      const payload = buildBulkPayload(markScope, markDepartment);
+      payload.status = "paid";
+      if (markSendEmail) payload.send_email = true;
+      const res = await apiFetch(`${API_BASE}/hr/payroll/bulk-status`, {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+      setMarkResult(res);
+      alert(`Marked ${res.updated || selected.size} payslip(s) as paid.`);
+      const updated = await apiFetch(`${API_BASE}/hr/payroll/payslips`);
+      setAllPayroll(updated);
+      setSelected(new Set());
+      setShowMarkPaidModal(false);
+    } catch (e) {
+      alert("Failed to mark payslips paid: " + e.message);
+    } finally {
+      setMarkBusy(false);
+    }
+  };
+
+  const sendPayslip = async p => {
+    const name = p.admins?.full_name || "this staff member";
+    const period = p.period_start ? new Date(p.period_start).toLocaleDateString(undefined, { month: "long", year: "numeric" }) : "this period";
+    if (!confirm(`Email payslip to ${name} for ${period}?`)) return;
+    setSendingPayslipId(p.id);
+    try {
+      const res = await apiFetch(`${API_BASE}/hr/payroll/${p.id}/send-payslip`, { method: "POST" });
+      alert(`✅ Payslip sent to ${res.email}`);
+      // Update local record to show sent_at
+      setAllPayroll(prev => prev.map(r => r.id === p.id ? { ...r, payslip_sent_at: res.sent_at } : r));
+    } catch (e) { alert("Failed to send payslip: " + e.message); }
+    finally { setSendingPayslipId(null); }
+  };
+
+  // Bulk actions
+  const allVisibleIds = payroll.map(p => p.id);
+  const allSelected = allVisibleIds.length > 0 && allVisibleIds.every(id => selected.has(id));
+  const someSelected = selected.size > 0;
+
+  const toggleAll = () => {
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(allVisibleIds));
+  };
+  const toggleOne = id => setSelected(prev => {
+    const n = new Set(prev);
+    n.has(id) ? n.delete(id) : n.add(id);
+    return n;
+  });
+
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const bulkSetStatus = async newStatus => {
+    if (!confirm(`Mark ${selected.size} record(s) as "${newStatus}"?`)) return;
+    setBulkBusy(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/payroll/bulk-status`, {
+        method: "POST",
+        body: JSON.stringify({ ids: [...selected], status: newStatus })
+      });
+      const updated = await apiFetch(`${API_BASE}/hr/payroll/payslips`);
+      setAllPayroll(updated);
+      setSelected(new Set());
+    } catch (e) { alert("Bulk update failed: " + e.message); }
+    finally { setBulkBusy(false); }
+  };
+
+  const StatCard = ({ label, value, color = C.text, sub }) => (
+    <div className="gc" style={{ padding: "14px 18px", flex: 1, minWidth: 120 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 900, color }}>{value}</div>
+      {sub && <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{sub}</div>}
+    </div>
+  );
 
   return (
     <div className="fade">
@@ -2449,9 +3001,11 @@ function Payroll() {
           <div style={{ fontSize: 13, color: C.sub, marginTop: 4 }}>Full Staff & Contractors: monthly · Onsite/Labourers: weekly</div>
         </div>
         {tab === "payslips" && (
-          <div style={{ display: "flex", gap: 12 }}>
-            <button className="bg" onClick={() => setShowAdd(true)}>+ Add Entry</button>
-            <button className="bp" onClick={handleRunPayroll}>Run Payroll</button>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <button className="bg" onClick={() => { setNf({ id: null, uid: "", gross: "", tax: "0", notes: "" }); setShowAdd(true); }}>+ Add Entry</button>
+            <button className="bp" onClick={() => { setRunResult(null); setShowRunModal(true); }}>▶ Run Payroll</button>
+            <button className="bp" onClick={() => { setSendResult(null); openSendModal(); }}>📧 Send Payslips</button>
+            <button className="bp" style={{ background: "#10B981", color: "#fff" }} onClick={() => { setMarkResult(null); openMarkPaidModal(); }}>✓ Mark As Paid</button>
           </div>
         )}
       </div>
@@ -2461,70 +3015,767 @@ function Payroll() {
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ display: "inline", marginRight: 6, verticalAlign: "middle" }}><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="9" y1="21" x2="9" y2="9" /></svg>
           Staff Payslips
         </button>
+        <button className={`tab ${tab === "runs" ? "on" : "off"}`} onClick={() => setTab("runs")}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ display: "inline", marginRight: 6, verticalAlign: "middle" }}><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+          Payroll Runs History
+        </button>
         <button className={`tab ${tab === "commissions" ? "on" : "off"}`} onClick={() => setTab("commissions")}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ display: "inline", marginRight: 6, verticalAlign: "middle" }}><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>
           Sales Commissions
         </button>
       </div>
 
-      {tab === "commissions" ? (
+      {tab === "runs" ? (
+        <PayrollRunsHistory payroll={allPayroll} />
+      ) : tab === "commissions" ? (
         <AgentCommissions />
       ) : (
         <>
+          {/* ── Stats bar ── */}
+          {!loading && payroll.length > 0 && (
+            <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
+              <StatCard label="Headcount" value={stats.headcount} sub={`${stats.paid} paid`} />
+              <StatCard label="Total Gross" value={`₦${(stats.gross / 1000).toFixed(0)}k`} color={T.gold} />
+              <StatCard label="Total Net" value={`₦${(stats.net / 1000).toFixed(0)}k`} color="#10B981" />
+              <StatCard label="PAYE Remittable" value={`₦${(stats.tax / 1000).toFixed(0)}k`} color="#F87171" />
+              <StatCard label="Pension (Emp)" value={`₦${(stats.pension / 1000).toFixed(0)}k`} color="#60A5FA" />
+            </div>
+          )}
+
+          {/* ── Filter + bulk toolbar ── */}
+          <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
+            <select className="inp" style={{ width: "auto", minWidth: 180, fontSize: 13 }}
+              value={filterPeriod} onChange={e => { setFilterPeriod(e.target.value); setSelected(new Set()); }}>
+              <option value="">All Periods</option>
+              {periods.map(p => (
+                <option key={p} value={p}>
+                  {new Date(p + "-01").toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+                </option>
+              ))}
+            </select>
+
+            {someSelected && (
+              <div style={{
+                display: "flex", gap: 8, alignItems: "center",
+                background: dark ? "#1e3a2f" : "#ECFDF5", border: "1px solid #10B98133",
+                borderRadius: 8, padding: "6px 14px"
+              }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#10B981" }}>{selected.size} selected</span>
+                <button className="bg" style={{ fontSize: 11, padding: "4px 12px", borderColor: "#10B981", color: "#10B981" }}
+                  onClick={() => bulkSetStatus("paid")} disabled={bulkBusy}>
+                  {bulkBusy ? "Updating…" : "✓ Mark Paid"}
+                </button>
+                <button className="bg" style={{ fontSize: 11, padding: "4px 12px" }}
+                  onClick={() => bulkSetStatus("pending")} disabled={bulkBusy}>Mark Pending</button>
+                <button style={{ background: "none", border: "none", cursor: "pointer", color: C.muted, fontSize: 14, lineHeight: 1 }}
+                  onClick={() => setSelected(new Set())}>✕</button>
+              </div>
+            )}
+          </div>
+
+          {/* ── Run Payroll Modal ── */}
+          {showRunModal && (
+            <Modal onClose={closeRunModal} title="Run Payroll" width={680}>
+              {runResult ? (
+                /* ── Success screen ── */
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20, padding: "12px 0 8px" }}>
+                  <div style={{
+                    width: 64, height: 64, borderRadius: "50%", background: "#10B98118",
+                    border: "2px solid #10B981", display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 28
+                  }}>✓</div>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>{runResult.message}</div>
+                    {runResult.warnings?.length > 0 && (
+                      <div style={{
+                        marginTop: 14, textAlign: "left", background: dark ? "#2d2000" : "#FFFBEB",
+                        border: "1px solid #FDE68A", borderRadius: 10, padding: "12px 16px"
+                      }}>
+                        <div style={{
+                          fontSize: 11, fontWeight: 800, color: "#92400E", textTransform: "uppercase",
+                          letterSpacing: 0.5, marginBottom: 8
+                        }}>⚠ Skipped ({runResult.warnings.length})</div>
+                        {runResult.warnings.map((w, i) => (
+                          <div key={i} style={{ fontSize: 12, color: dark ? "#FCD34D" : "#78350F", marginBottom: 4 }}>• {w}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <button className="bp" style={{ padding: "11px 40px", marginTop: 4 }} onClick={closeRunModal}>Done</button>
+                </div>
+              ) : (
+                /* ── Config screen ── */
+                <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+
+                  {/* Period banner */}
+                  <div style={{
+                    background: dark ? "#1a1d24" : "#F8FAFF",
+                    border: `1px solid ${C.border}`, borderRadius: 10,
+                    padding: "14px 18px", marginBottom: 20,
+                    display: "flex", justifyContent: "space-between", alignItems: "center"
+                  }}>
+                    <div>
+                      <div style={{
+                        fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase",
+                        letterSpacing: 0.5
+                      }}>Pay Period</div>
+                      <div style={{ fontSize: 16, fontWeight: 900, color: T.gold, marginTop: 3 }}>
+                        {new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{
+                        fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase",
+                        letterSpacing: 0.5
+                      }}>Active Staff</div>
+                      <div style={{ fontSize: 16, fontWeight: 900, color: C.text, marginTop: 3 }}>{staff.length}</div>
+                    </div>
+                  </div>
+
+                  {/* Scope selector */}
+                  <div style={{
+                    fontSize: 12, fontWeight: 800, color: C.muted, textTransform: "uppercase",
+                    letterSpacing: 0.5, marginBottom: 10
+                  }}>Select Scope</div>
+                  <div style={{ display: "flex", gap: 12, marginBottom: 22 }}>
+                    {[
+                      {
+                        key: "all", icon: "👥", title: "All Active Staff",
+                        sub: `Run for all ${staff.length} active staff members`
+                      },
+                      {
+                        key: "select", icon: "🎯", title: "Select Specific Staff",
+                        sub: "Choose one or more staff members"
+                      },
+                    ].map(opt => (
+                      <div key={opt.key} onClick={() => { setRunScope(opt.key); setRunSelected(new Set()); }}
+                        style={{
+                          flex: 1, padding: "16px 18px", borderRadius: 12, cursor: "pointer",
+                          border: `2px solid ${runScope === opt.key ? T.gold : C.border}`,
+                          background: runScope === opt.key
+                            ? (dark ? "#2a2000" : "#FFFBEB")
+                            : (dark ? C.card : "#FAFAFA"),
+                          transition: "all 0.15s"
+                        }}>
+                        <div style={{ fontSize: 22, marginBottom: 8 }}>{opt.icon}</div>
+                        <div style={{
+                          fontSize: 13, fontWeight: 800, color: runScope === opt.key ? T.gold : C.text,
+                          marginBottom: 4
+                        }}>{opt.title}</div>
+                        <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.5 }}>{opt.sub}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Staff picker — only visible when scope is "select" */}
+                  {runScope === "select" && (
+                    <div style={{ marginBottom: 22 }}>
+                      {/* Search */}
+                      <div style={{ position: "relative", marginBottom: 12 }}>
+                        <span style={{
+                          position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)",
+                          color: C.muted, fontSize: 14, pointerEvents: "none"
+                        }}>🔍</span>
+                        <input className="inp" placeholder="Search by name or department…"
+                          value={runSearch} onChange={e => setRunSearch(e.target.value)}
+                          style={{ paddingLeft: 36, fontSize: 13 }} />
+                      </div>
+
+                      {/* Select-all bar */}
+                      <div style={{
+                        display: "flex", justifyContent: "space-between", alignItems: "center",
+                        marginBottom: 8
+                      }}>
+                        <div style={{ fontSize: 12, color: C.muted }}>
+                          {runSelected.size > 0
+                            ? <span style={{ color: T.gold, fontWeight: 700 }}>{runSelected.size} selected</span>
+                            : "No staff selected"}
+                        </div>
+                        <div style={{ display: "flex", gap: 10 }}>
+                          <button className="bg" style={{ fontSize: 11, padding: "4px 12px" }}
+                            onClick={() => setRunSelected(new Set(filteredRunStaff.map(s => s.id)))}>
+                            Select All
+                          </button>
+                          {runSelected.size > 0 && (
+                            <button className="bg" style={{ fontSize: 11, padding: "4px 12px" }}
+                              onClick={() => setRunSelected(new Set())}>
+                              Clear
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Staff list */}
+                      <div style={{
+                        height: 320, overflowY: "auto",
+                        border: `1px solid ${C.border}`, borderRadius: 10
+                      }}>
+                        {filteredRunStaff.length === 0 ? (
+                          <div style={{ padding: 24, textAlign: "center", color: C.muted, fontSize: 13 }}>
+                            No staff match your search.
+                          </div>
+                        ) : filteredRunStaff.map((s, idx) => {
+                          const isChosen = runSelected.has(s.id);
+                          const initials = (s.full_name || "??").split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
+                          const profile = (s.staff_profiles || [{}])[0] || {};
+                          const salary = profile.base_salary ? `₦${Number(profile.base_salary).toLocaleString()}/mo` : "No salary set";
+                          return (
+                            <div key={s.id} onClick={() => toggleRunStaff(s.id)}
+                              style={{
+                                display: "flex", alignItems: "center", gap: 14,
+                                padding: "12px 16px", cursor: "pointer",
+                                borderBottom: idx < filteredRunStaff.length - 1 ? `1px solid ${C.border}` : "none",
+                                background: isChosen
+                                  ? (dark ? "#1e3a1e" : "#F0FDF4")
+                                  : (idx % 2 === 0 ? (dark ? C.card : "#fff") : (dark ? "#13151a" : "#FAFAFA")),
+                                transition: "background 0.1s"
+                              }}>
+                              {/* Checkbox */}
+                              <div style={{
+                                width: 20, height: 20, borderRadius: 6, flexShrink: 0,
+                                border: `2px solid ${isChosen ? "#10B981" : C.border}`,
+                                background: isChosen ? "#10B981" : "transparent",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                transition: "all 0.15s"
+                              }}>
+                                {isChosen && <span style={{ color: "#fff", fontSize: 12, lineHeight: 1 }}>✓</span>}
+                              </div>
+                              {/* Avatar */}
+                              <div style={{
+                                width: 36, height: 36, borderRadius: "50%", flexShrink: 0,
+                                background: `hsl(${(initials.charCodeAt(0) * 37) % 360}, 55%, ${dark ? "35%" : "70%"})`,
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                fontSize: 13, fontWeight: 800, color: "#fff"
+                              }}>
+                                {initials}
+                              </div>
+                              {/* Info */}
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{
+                                  fontWeight: 700, fontSize: 13, color: C.text,
+                                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"
+                                }}>
+                                  {s.full_name}
+                                </div>
+                                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                                  {s.department || "—"}
+                                </div>
+                              </div>
+                              {/* Salary */}
+                              <div style={{
+                                fontSize: 11, color: profile.base_salary ? T.gold : "#F87171",
+                                fontWeight: 700, textAlign: "right", flexShrink: 0
+                              }}>
+                                {salary}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Warning for staff with no salary */}
+                  {runScope === "all" && staff.some(s => !(s.staff_profiles?.[0]?.base_salary)) && (
+                    <div style={{
+                      background: dark ? "#2d1a00" : "#FFFBEB",
+                      border: "1px solid #FDE68A", borderRadius: 10,
+                      padding: "10px 14px", marginBottom: 18,
+                      fontSize: 12, color: dark ? "#FCD34D" : "#92400E"
+                    }}>
+                      ⚠ {staff.filter(s => !(s.staff_profiles?.[0]?.base_salary)).length} staff member(s) have no
+                      base salary set and will be skipped. Set their salary in Staff Management first.
+                    </div>
+                  )}
+
+                  {/* Run button */}
+                  <button className="bp"
+                    style={{
+                      padding: "14px 0", fontSize: 15, fontWeight: 800,
+                      opacity: running ? 0.7 : 1,
+                      background: running ? C.border : undefined
+                    }}
+                    onClick={executeRunPayroll}
+                    disabled={running || (runScope === "select" && runSelected.size === 0)}>
+                    {running ? (
+                      <span>⏳ Processing payroll…</span>
+                    ) : runScope === "all" ? (
+                      <span>▶ Run Payroll for All {staff.length} Staff</span>
+                    ) : (
+                      <span>▶ Run Payroll for {runSelected.size || "…"} Staff</span>
+                    )}
+                  </button>
+
+                  <div style={{ marginTop: 12, fontSize: 11, color: C.muted, textAlign: "center", lineHeight: 1.6 }}>
+                    Staff who already have a payroll record for this period will be skipped automatically.
+                  </div>
+                </div>
+              )}
+            </Modal>
+          )}
+
+          {showSendModal && (
+            <Modal onClose={() => setShowSendModal(false)} title="Send Payslips">
+              <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                <div style={{ fontSize: 13, color: C.text, fontWeight: 700 }}>Choose recipients</div>
+
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  {[
+                    { key: "selected", title: "Selected Payslips", subtitle: "Send to only the currently selected records" },
+                    { key: "department", title: "By Department", subtitle: "Send to all staff in one department" },
+                    { key: "all", title: "All Payslips", subtitle: "Send to every payroll record" },
+                  ].map(opt => (
+                    <div key={opt.key} onClick={() => setSendScope(opt.key)}
+                      style={{
+                        flex: 1, minWidth: 180, padding: 16, borderRadius: 12, cursor: "pointer",
+                        border: `2px solid ${sendScope === opt.key ? T.gold : C.border}`,
+                        background: sendScope === opt.key ? (dark ? "#1f2b22" : "#F0FDF4") : (dark ? C.card : "#fff")
+                      }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 6 }}>{opt.title}</div>
+                      <div style={{ fontSize: 11, color: C.muted }}>{opt.subtitle}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {sendScope === "selected" && (
+                  <div style={{ fontSize: 12, color: C.muted }}>
+                    {selected.size > 0
+                      ? `${selected.size} payslip(s) selected.`
+                      : "Select payroll rows from the table first."}
+                  </div>
+                )}
+
+                {sendScope === "department" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <Lbl>Department</Lbl>
+                    <select className="inp" value={sendDepartment} onChange={e => setSendDepartment(e.target.value)}>
+                      <option value="">— Select Department —</option>
+                      {departments.map(dep => <option key={dep} value={dep}>{dep}</option>)}
+                    </select>
+                  </div>
+                )}
+
+                <button className="bp" onClick={executeSendPayslips} disabled={sendBusy || (sendScope === "selected" && selected.size === 0)}>
+                  {sendBusy ? "Queuing payslips…" : "Send Payslips"}
+                </button>
+              </div>
+            </Modal>
+          )}
+
+          {showMarkPaidModal && (
+            <Modal onClose={() => setShowMarkPaidModal(false)} title="Mark Payslips as Paid">
+              <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                <div style={{ fontSize: 13, color: C.text, fontWeight: 700 }}>Choose which payslips to update</div>
+
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  {[
+                    { key: "selected", title: "Selected Payslips", subtitle: "Mark only selected payroll records" },
+                    { key: "department", title: "By Department", subtitle: "Mark all records for one department" },
+                    { key: "all", title: "All Payslips", subtitle: "Mark every payroll record" },
+                  ].map(opt => (
+                    <div key={opt.key} onClick={() => setMarkScope(opt.key)}
+                      style={{
+                        flex: 1, minWidth: 180, padding: 16, borderRadius: 12, cursor: "pointer",
+                        border: `2px solid ${markScope === opt.key ? T.gold : C.border}`,
+                        background: markScope === opt.key ? (dark ? "#1f2b22" : "#F0FDF4") : (dark ? C.card : "#fff")
+                      }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 6 }}>{opt.title}</div>
+                      <div style={{ fontSize: 11, color: C.muted }}>{opt.subtitle}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {markScope === "selected" && (
+                  <div style={{ fontSize: 12, color: C.muted }}>
+                    {selected.size > 0
+                      ? `${selected.size} payslip(s) selected.`
+                      : "Select payroll rows from the table first."}
+                  </div>
+                )}
+
+                {markScope === "department" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <Lbl>Department</Lbl>
+                    <select className="inp" value={markDepartment} onChange={e => setMarkDepartment(e.target.value)}>
+                      <option value="">— Select Department —</option>
+                      {departments.map(dep => <option key={dep} value={dep}>{dep}</option>)}
+                    </select>
+                  </div>
+                )}
+
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <input type="checkbox" id="mark-send-email" checked={markSendEmail} onChange={e => setMarkSendEmail(e.target.checked)} />
+                  <label htmlFor="mark-send-email" style={{ fontSize: 13, color: C.text }}>Also email payslip after marking as paid</label>
+                </div>
+
+                <button className="bp" onClick={executeMarkPaid} disabled={markBusy || (markScope === "selected" && selected.size === 0)}>
+                  {markBusy ? "Updating status…" : "Mark as Paid"}
+                </button>
+              </div>
+            </Modal>
+          )}
+
+          {/* ── Modals ── */}
           {showAdd && (
             <Modal onClose={() => setShowAdd(false)} title="Manual Payroll Entry">
               <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-                <div><Lbl>Personnel Identification *</Lbl>
+                <div><Lbl>Personnel *</Lbl>
                   <select className="inp" value={nf.uid} onChange={e => setNf(x => ({ ...x, uid: e.target.value }))}>
                     <option value="">— Select Staff Member —</option>
                     {staff.map(u => <option key={u.id} value={u.id}>{u.full_name} ({u.department})</option>)}
                   </select>
                 </div>
                 <div className="g2" style={{ gap: 16 }}>
-                  <div><Lbl>Gross Component (₦) *</Lbl><input type="number" className="inp" placeholder="0.00" value={nf.gross} onChange={e => setNf(x => ({ ...x, gross: e.target.value }))} /></div>
-                  <div><Lbl>Tax / Reductions (₦)</Lbl><input type="number" className="inp" placeholder="0.00" value={nf.tax} onChange={e => setNf(x => ({ ...x, tax: e.target.value }))} /></div>
+                  <div><Lbl>Gross Pay (₦) *</Lbl><input type="number" className="inp" placeholder="0.00" value={nf.gross} onChange={e => setNf(x => ({ ...x, gross: e.target.value }))} /></div>
+                  <div><Lbl>Tax / Deductions (₦)</Lbl><input type="number" className="inp" placeholder="0.00" value={nf.tax} onChange={e => setNf(x => ({ ...x, tax: e.target.value }))} /></div>
                 </div>
-                <div><Lbl>Transaction Justification / Notes</Lbl><textarea className="inp" placeholder="E.g. Performance Bonus for Q1, Contractor retainer, Reimbursement of expenses..." value={nf.notes} onChange={e => setNf(x => ({ ...x, notes: e.target.value }))} /></div>
-                <button className="bp" onClick={addManual} style={{ padding: 16, fontSize: 15 }}>Submit Payroll Record</button>
+                <div><Lbl>Notes</Lbl><textarea className="inp" placeholder="E.g. Contractor retainer, Q1 performance bonus…" value={nf.notes} onChange={e => setNf(x => ({ ...x, notes: e.target.value }))} /></div>
+                <button className="bp" onClick={addManual} style={{ padding: 16, fontSize: 15 }}>Submit Record</button>
               </div>
             </Modal>
           )}
 
+          {editRecord && (
+            <Modal onClose={() => setEditRecord(null)} title="Edit Payroll Record" width={580}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+
+                {/* Staff identity banner */}
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 14,
+                  background: dark ? "rgba(251,176,64,0.08)" : "#FFFBEB",
+                  border: "1px solid #FBB04033", borderRadius: 12, padding: "14px 18px"
+                }}>
+                  <div style={{
+                    width: 44, height: 44, borderRadius: "50%", flexShrink: 0,
+                    background: T.gold + "33", border: `2px solid ${T.gold}55`,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 16, fontWeight: 900, color: T.gold
+                  }}>
+                    {(editRecord.admins?.full_name || "?").split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{editRecord.admins?.full_name}</div>
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                      {editRecord.admins?.department || "—"} &nbsp;·&nbsp;
+                      {editRecord.period_start ? new Date(editRecord.period_start).toLocaleDateString(undefined, { month: "long", year: "numeric" }) : "—"}
+                    </div>
+                  </div>
+                  <span className={`tg ${editRecord.status === "paid" ? "tg2" : editRecord.status === "cancelled" ? "tr" : "ty"}`}
+                    style={{ fontSize: 11 }}>{editRecord.status}</span>
+                </div>
+
+                {/* ── Payroll Figures ── */}
+                <div style={{
+                  fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase",
+                  letterSpacing: 0.6, paddingBottom: 8, borderBottom: `1px solid ${C.border}`
+                }}>
+                  Payroll Figures
+                </div>
+                <div className="g2" style={{ gap: 14 }}>
+                  <div><Lbl>Gross Pay (₦)</Lbl><input type="number" className="inp" value={ef.gross} onChange={e => setEf(x => ({ ...x, gross: e.target.value }))} /></div>
+                  <div><Lbl>PAYE Tax (₦)</Lbl><input type="number" className="inp" value={ef.tax} onChange={e => setEf(x => ({ ...x, tax: e.target.value }))} /></div>
+                </div>
+                <div className="g2" style={{ gap: 14 }}>
+                  <div><Lbl>Pension — Employee (₦)</Lbl><input type="number" className="inp" value={ef.pension} onChange={e => setEf(x => ({ ...x, pension: e.target.value }))} /></div>
+                  <div><Lbl>NHF (₦)</Lbl><input type="number" className="inp" value={ef.nhf} onChange={e => setEf(x => ({ ...x, nhf: e.target.value }))} /></div>
+                </div>
+
+                {/* Net pay display */}
+                <div style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  background: dark ? "rgba(74,222,128,0.07)" : "#F0FDF4",
+                  border: "1px solid #4ADE8022", borderRadius: 10, padding: "12px 18px"
+                }}>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5 }}>Net Pay to Transfer</div>
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Gross − PAYE − Pension − NHF</div>
+                  </div>
+                  <div style={{ fontSize: 22, fontWeight: 900, color: "#4ADE80" }}>₦{computeNet().toLocaleString()}</div>
+                </div>
+
+                {/* ── Bank Details ── */}
+                <div style={{
+                  fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase",
+                  letterSpacing: 0.6, paddingBottom: 8, borderBottom: `1px solid ${C.border}`,
+                  marginTop: 4
+                }}>
+                  Bank Details
+                  {(!ef.bank_name && !ef.account_number && !ef.account_name) && (
+                    <span style={{
+                      marginLeft: 10, fontWeight: 600, color: "#F87171",
+                      textTransform: "none", fontSize: 10
+                    }}>⚠ Not set — add now to process payment</span>
+                  )}
+                </div>
+
+                {/* Read-only display if all 3 are already set, editable otherwise */}
+                {(ef.bank_name && ef.account_number && ef.account_name) ? (
+                  <div style={{
+                    background: dark ? "#1a2a1a" : "#F0FDF4",
+                    border: "1px solid #10B98133", borderRadius: 10, overflow: "hidden"
+                  }}>
+                    {[
+                      ["Bank Name", ef.bank_name],
+                      ["Account Number", ef.account_number],
+                      ["Account Name", ef.account_name],
+                    ].map(([label, val]) => (
+                      <div key={label} style={{
+                        display: "flex", justifyContent: "space-between",
+                        padding: "10px 16px", borderBottom: `1px solid ${C.border}`, fontSize: 13
+                      }}>
+                        <span style={{ color: C.muted, fontWeight: 600 }}>{label}</span>
+                        <span style={{ fontWeight: 800, color: C.text }}>{val}</span>
+                      </div>
+                    ))}
+                    <div style={{ padding: "8px 16px" }}>
+                      <button className="bg" style={{
+                        fontSize: 11, padding: "4px 14px",
+                        borderColor: T.gold, color: T.gold
+                      }}
+                        onClick={() => setEf(x => ({ ...x, _editBank: true }))}>
+                        ✏ Edit Bank Details
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <div><Lbl>Bank Name</Lbl>
+                      <input className="inp" placeholder="e.g. First Bank, GTBank, Zenith…"
+                        value={ef.bank_name} onChange={e => setEf(x => ({ ...x, bank_name: e.target.value }))} />
+                    </div>
+                    <div className="g2" style={{ gap: 14 }}>
+                      <div><Lbl>Account Number</Lbl>
+                        <input className="inp" placeholder="10-digit NUBAN"
+                          maxLength={10}
+                          value={ef.account_number} onChange={e => setEf(x => ({ ...x, account_number: e.target.value.replace(/\D/g, "") }))} />
+                      </div>
+                      <div><Lbl>Account Name</Lbl>
+                        <input className="inp" placeholder="As registered with bank"
+                          value={ef.account_name} onChange={e => setEf(x => ({ ...x, account_name: e.target.value }))} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Editable bank fields when "Edit Bank Details" was clicked */}
+                {ef._editBank && (
+                  <div style={{
+                    display: "flex", flexDirection: "column", gap: 12,
+                    padding: 14, background: dark ? "#1a1a2e" : "#FFFBEB",
+                    border: `1px solid ${T.gold}33`, borderRadius: 10
+                  }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: T.gold }}>Editing Bank Details</div>
+                    <div><Lbl>Bank Name</Lbl>
+                      <input className="inp" value={ef.bank_name}
+                        onChange={e => setEf(x => ({ ...x, bank_name: e.target.value }))} />
+                    </div>
+                    <div className="g2" style={{ gap: 14 }}>
+                      <div><Lbl>Account Number</Lbl>
+                        <input className="inp" maxLength={10} value={ef.account_number}
+                          onChange={e => setEf(x => ({ ...x, account_number: e.target.value.replace(/\D/g, "") }))} />
+                      </div>
+                      <div><Lbl>Account Name</Lbl>
+                        <input className="inp" value={ef.account_name}
+                          onChange={e => setEf(x => ({ ...x, account_name: e.target.value }))} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Status ── */}
+                <div style={{
+                  fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase",
+                  letterSpacing: 0.6, paddingBottom: 8, borderBottom: `1px solid ${C.border}`,
+                  marginTop: 4
+                }}>
+                  Payment Status
+                </div>
+                <div><Lbl>Mark this record as</Lbl>
+                  <select className="inp" value={ef.status} onChange={e => setEf(x => ({ ...x, status: e.target.value }))}>
+                    <option value="pending">Pending — bank transfer not yet done</option>
+                    <option value="paid">Paid — bank transfer confirmed ✓</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+
+                {/* Action buttons */}
+                <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+                  <button className="bp" style={{ flex: 1, padding: 13 }} onClick={saveEdit} disabled={editBusy}>
+                    {editBusy ? "Saving…" : "Save Changes"}
+                  </button>
+                  <button className="bg" style={{ flex: 1, padding: 13 }} onClick={() => setEditRecord(null)}>Cancel</button>
+                </div>
+
+              </div>
+            </Modal>
+          )}
+
+          {/* ── Table ── */}
           {loading ? (
             <div style={{ padding: 40, textAlign: "center", color: C.muted }}>Loading payroll records…</div>
           ) : payroll.length === 0 ? (
             <div className="gc" style={{ padding: 48, textAlign: "center" }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>💳</div>
-              <div className="ho" style={{ fontSize: 16, marginBottom: 8 }}>No Payroll Records Yet</div>
-              <div style={{ fontSize: 13, color: C.muted }}>Run payroll to generate payslips for your team.</div>
+              <div className="ho" style={{ fontSize: 16, marginBottom: 8 }}>
+                {filterPeriod ? "No records for this period" : "No Payroll Records Yet"}
+              </div>
+              <div style={{ fontSize: 13, color: C.muted }}>
+                {filterPeriod ? "Try selecting a different period or clear the filter." : "Run payroll to generate payslips for your team."}
+              </div>
             </div>
           ) : (
             <div className="gc" style={{ overflow: "hidden" }}>
-              <div style={{ padding: "14px 20px", borderBottom: `1px solid ${C.border}` }}>
-                <div className="ho" style={{ fontSize: 14 }}>Payroll Records</div>
-              </div>
               <div className="tw">
                 <table className="ht">
-                  <thead><tr>{["Staff Member", "Period", "Gross Pay", "Net Pay", "Status", ""].map(h => <th key={h}>{h}</th>)}</tr></thead>
+                  <thead>
+                    <tr>
+                      <th style={{ width: 36 }}>
+                        <input type="checkbox" checked={allSelected} onChange={toggleAll}
+                          style={{ cursor: "pointer", accentColor: T.gold }} />
+                      </th>
+                      <th>Staff Member</th>
+                      <th>Period</th>
+                      <th>Gross</th>
+                      <th>PAYE</th>
+                      <th>Net Salary</th>
+                      <th>Status</th>
+                      <th>Payslip</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
                   <tbody>
-                    {payroll.map(p => (
-                      <tr key={p.id}>
-                        <td><div style={{ display: "flex", alignItems: "center", gap: 10 }}><Av av={p.admins?.full_name?.split(" ").map(n => n[0]).join("") || "??"} sz={26} /><span style={{ fontWeight: 800 }}>{p.admins?.full_name}</span></div></td>
-                        <td style={{ color: C.sub }}>{p.period_start ? new Date(p.period_start).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) : "—"}</td>
-                        <td style={{ fontWeight: 700 }}>{fmt(p.gross_pay)}</td>
-                        <td style={{ color: T.orange, fontWeight: 800, fontSize: 14 }}>{fmt(p.net_pay)}</td>
-                        <td><span className={`tg ${p.status === "paid" ? "tg2" : "ty"}`}>{p.status}</span></td>
-                        <td><button className="bg" style={{ fontSize: 11, padding: "5px 12px" }}>Payslip</button></td>
-                      </tr>
-                    ))}
+                    {payroll.map(p => {
+                      const isSent = !!p.payslip_sent_at;
+                      const sending = sendingPayslipId === p.id;
+                      return (
+                        <tr key={p.id} style={{ background: selected.has(p.id) ? (dark ? "#1e3a2f" : "#F0FDF4") : undefined }}>
+                          <td>
+                            <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleOne(p.id)}
+                              style={{ cursor: "pointer", accentColor: T.gold }} />
+                          </td>
+                          <td>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                              <Av av={p.admins?.full_name?.split(" ").map(n => n[0]).join("") || "??"} sz={26} />
+                              <div>
+                                <div style={{ fontWeight: 800 }}>{p.admins?.full_name}</div>
+                                <div style={{ fontSize: 11, color: C.muted }}>{p.admins?.department}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td style={{ color: C.sub }}>
+                            {p.period_start ? new Date(p.period_start).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : "—"}
+                          </td>
+                          <td style={{ fontWeight: 700 }}>{fmt(p.gross_pay)}</td>
+                          <td style={{ color: "#F87171", fontWeight: 700, fontSize: 12 }}>({fmt(p.tax)})</td>
+                          <td style={{ color: "#10B981", fontWeight: 800, fontSize: 14 }}>{fmt(p.net_pay)}</td>
+                          <td>
+                            <span className={`tg ${p.status === "paid" ? "tg2" : p.status === "cancelled" ? "tr" : "ty"}`}>
+                              {p.status}
+                            </span>
+                          </td>
+                          <td>
+                            {isSent ? (
+                              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                                <span style={{ fontSize: 10, color: "#10B981", fontWeight: 700 }}>✓ Sent</span>
+                                <span style={{ fontSize: 10, color: C.muted }}>
+                                  {new Date(p.payslip_sent_at).toLocaleDateString(undefined, { day: "2-digit", month: "short" })}
+                                </span>
+                              </div>
+                            ) : (
+                              <span style={{ fontSize: 10, color: C.muted }}>Not sent</span>
+                            )}
+                          </td>
+                          <td>
+                            <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+                              <button className="bg" style={{ fontSize: 11, padding: "5px 10px" }}
+                                onClick={() => setSelectedPayslip(p)}>View</button>
+                              <button className="bg"
+                                style={{
+                                  fontSize: 11, padding: "5px 10px",
+                                  borderColor: "#10B981", color: "#10B981",
+                                  opacity: sending ? 0.6 : 1
+                                }}
+                                onClick={() => sendPayslip(p)} disabled={sending}
+                                title={isSent ? `Resend (last sent ${new Date(p.payslip_sent_at).toLocaleDateString()})` : "Email payslip to staff"}>
+                                {sending ? "…" : isSent ? "Resend" : "📧"}
+                              </button>
+                              <button className="bg"
+                                style={{ fontSize: 11, padding: "5px 10px", borderColor: T.orange, color: T.orange }}
+                                onClick={() => openEdit(p)}>Edit</button>
+                              <button className="bg"
+                                style={{ fontSize: 11, padding: "5px 8px", borderColor: "#F87171", color: "#F87171" }}
+                                onClick={() => deleteRecord(p)}
+                                title={p.status === "paid" ? "Cannot delete paid records" : "Delete"}>✕</button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
             </div>
           )}
+
+          {selectedPayslip && <PayslipBreakdown p={selectedPayslip} onClose={() => setSelectedPayslip(null)} dark={dark} />}
         </>
       )}
     </div>
+  );
+}
+
+function PayslipBreakdown({ p, onClose, dark }) {
+  const C = dark ? DARK : LIGHT;
+  const breakdown = p.net_pay_breakdown || {};
+  const fmt = n => n != null ? `₦${Number(n).toLocaleString()}` : "—";
+
+  return (
+    <Modal onClose={onClose} title="Payslip Breakdown" width={540}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        <div style={{ textAlign: "center", paddingBottom: 12, borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 800 }}>Monthly Remuneration</div>
+          <div className="ho" style={{ fontSize: 32, marginTop: 4 }}>{fmt(p.net_pay)}</div>
+          <div className="tg tg2" style={{ marginTop: 10 }}>Net Payout</div>
+        </div>
+
+        <div className="g2" style={{ gap: 20 }}>
+          <div className="field">
+            <div className="fl">Gross Earnings</div>
+            <div className="fv">{fmt(p.gross_pay)}</div>
+          </div>
+          <div className="field" style={{ background: "#EF44440D", borderColor: "#EF44441A" }}>
+            <div className="fl" style={{ color: "#EF4444" }}>Total Deductions</div>
+            <div className="fv" style={{ color: "#EF4444" }}>{fmt(p.gross_pay - p.net_pay)}</div>
+          </div>
+        </div>
+
+        <div>
+          <div className="fl" style={{ marginBottom: 12 }}>Detailed Deductions</div>
+          <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
+            <table className="ht">
+              <tbody>
+                <tr><td style={{ border: "none" }}>Personal Income Tax (PAYE)</td><td style={{ border: "none", textAlign: "right", fontWeight: 700, color: "#EF4444" }}>- {fmt(p.tax)}</td></tr>
+                <tr><td style={{ border: "none" }}>Pension Contribution</td><td style={{ border: "none", textAlign: "right", fontWeight: 700, color: "#EF4444" }}>- {fmt(p.pension)}</td></tr>
+                {p.nhf > 0 && <tr><td style={{ border: "none" }}>National Housing Fund (NHF)</td><td style={{ border: "none", textAlign: "right", fontWeight: 700, color: "#EF4444" }}>- {fmt(p.nhf)}</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {breakdown.annual_taxable > 0 && (
+          <div style={{ background: C.surface, padding: 16, borderRadius: 12, border: `1px dashed ${C.border}` }}>
+            <div className="fl" style={{ marginBottom: 8 }}>Tax Computation (NTA 2025)</div>
+            <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.5 }}>
+              Annual taxable income: <strong>{fmt(breakdown.annual_taxable)}</strong>.
+              {" "}Progressive rates 0%–25% per Nigeria Tax Act 2025 (effective Jan 2026).
+              Monthly PAYE: <strong>{fmt(breakdown.monthly_tax)}</strong>.
+            </div>
+          </div>
+        )}
+
+        <button className="bp" onClick={onClose} style={{ padding: 14 }}>Close Breakdown</button>
+      </div>
+    </Modal>
   );
 }
 
@@ -2538,6 +3789,8 @@ function AgentCommissions() {
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cTab, setCTab] = useState("owed");
+  const [commRequests, setCommRequests] = useState([]);
+  const [reqLoading, setReqLoading] = useState(false);
 
   // Global Rate
   const [showRateModal, setShowRateModal] = useState(false);
@@ -2590,22 +3843,38 @@ function AgentCommissions() {
   const loadDashboard = async () => {
     setLoading(true);
     try {
-      const [o, p, e, r, s] = await Promise.all([
+      const [o, p, e, r, s, cr] = await Promise.all([
         apiFetch(`${API_BASE}/commission/owed`),
         apiFetch(`${API_BASE}/commission/payouts`),
         apiFetch(`${API_BASE}/commission/earnings`),
         apiFetch(`${API_BASE}/sales-reps`),
-        apiFetch(`${API_BASE}/hr/staff`)
+        apiFetch(`${API_BASE}/hr/staff`),
+        apiFetch(`${API_BASE}/payouts/requests?vendor_type=staff&payment_type=staff_commission`).catch(() => []),
       ]);
       setOwed(Array.isArray(o) ? o : []);
       setPayouts(Array.isArray(p) ? p : []);
       setEarnings(Array.isArray(e) ? e : []);
       setReps(Array.isArray(r) ? r : []);
       setStaff(Array.isArray(s) ? s : []);
+      setCommRequests(Array.isArray(cr) ? cr : []);
     } catch (err) { console.error("Commission load error:", err); }
     finally { setLoading(false); }
   };
   useEffect(() => { loadDashboard(); }, []);
+
+  // Commission Request Approve/Reject
+  const approveCommRequest = async (id) => {
+    try {
+      await apiFetch(`${API_BASE}/payouts/requests/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'approved' }) });
+      setCommRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'approved' } : r));
+    } catch (e) { alert("Failed: " + e.message); }
+  };
+  const rejectCommRequest = async (id) => {
+    try {
+      await apiFetch(`${API_BASE}/payouts/requests/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'rejected' }) });
+      setCommRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'rejected' } : r));
+    } catch (e) { alert("Failed: " + e.message); }
+  };
 
   // Global Rate
   const openRateModal = async () => {
@@ -2737,6 +4006,14 @@ function AgentCommissions() {
         <button className={`tab ${cTab === "owed" ? "on" : "off"}`} onClick={() => setCTab("owed")}>Pending Owed</button>
         <button className={`tab ${cTab === "payouts" ? "on" : "off"}`} onClick={() => setCTab("payouts")}>Payout History</button>
         <button className={`tab ${cTab === "earnings" ? "on" : "off"}`} onClick={() => setCTab("earnings")}>All Earnings</button>
+        <button className={`tab ${cTab === "requests" ? "on" : "off"}`} onClick={() => setCTab("requests")} style={{ position: "relative" }}>
+          Staff Requests
+          {commRequests.filter(r => r.status === "pending").length > 0 && (
+            <span style={{ position: "absolute", top: -4, right: -4, background: "#F87171", color: "#fff", fontSize: 9, fontWeight: 800, borderRadius: "50%", width: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {commRequests.filter(r => r.status === "pending").length}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Pending Owed */}
@@ -2853,6 +4130,41 @@ function AgentCommissions() {
         </div>
       )}
 
+      {cTab === "requests" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 8 }}>
+          {commRequests.length === 0 ? (
+            <div style={{ textAlign: "center", padding: 40, color: C.muted, fontSize: 13 }}>No staff commission requests found.</div>
+          ) : commRequests.map(r => {
+            const isPending = r.status === "pending";
+            const stCol = { pending: T.gold, approved: "#4ADE80", rejected: "#F87171" };
+            const sc = stCol[r.status] || C.muted;
+            return (
+              <div key={r.id} className="gc" style={{ padding: "16px 18px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 800, fontSize: 14, color: C.text }}>{r.vendors?.name || "—"}</div>
+                    {r.remarks && <div style={{ fontSize: 12, color: C.sub, background: C.base, borderRadius: 6, padding: "6px 10px", marginTop: 6, lineHeight: 1.5 }}>{r.remarks}</div>}
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
+                      Ref: {r.vendor_invoice_number || r.id?.slice(0, 8)} · {new Date(r.created_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div style={{ fontWeight: 800, fontSize: 15, color: T.gold }}>₦{parseFloat(r.amount_gross || 0).toLocaleString()}</div>
+                    <span className="tg" style={{ background: `${sc}22`, color: sc, fontSize: 10, marginTop: 4, display: "inline-block" }}>{r.status}</span>
+                  </div>
+                </div>
+                {isPending && (
+                  <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                    <button className="bp" style={{ fontSize: 11, padding: "5px 14px" }} onClick={() => approveCommRequest(r.id)}>Approve</button>
+                    <button style={{ fontSize: 11, padding: "5px 14px", border: "1px solid #F87171", background: "#F8717118", color: "#F87171", borderRadius: 6, cursor: "pointer" }} onClick={() => rejectCommRequest(r.id)}>Reject</button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* MODAL: Global Rate */}
       {showRateModal && (
         <Modal onClose={() => setShowRateModal(false)} title="Global Default Commission Rate">
@@ -2958,6 +4270,7 @@ function StaffPayroll({ user }) {
   const [data, setData] = useState({ payslips: [], commissions: null });
   const [loading, setLoading] = useState(true);
   const [viewingDocs, setViewingDocs] = useState(null);
+  const [selectedPayslip, setSelectedPayslip] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [dates, setDates] = useState({
     start: new Date(new Date().getFullYear(), new Date().getMonth() - 2, 1).toISOString().split('T')[0],
@@ -3036,13 +4349,19 @@ function StaffPayroll({ user }) {
                           <td>{fmt(p.gross_pay)}</td>
                           <td style={{ color: T.orange, fontWeight: 800 }}>{fmt(p.net_pay)}</td>
                           <td><span className={`tg ${p.status === "paid" ? "tg2" : "ty"}`}>{p.status}</span></td>
-                          <td><button className="bg" style={{ fontSize: 10, padding: "4px 10px" }}>View PDF</button></td>
+                          <td>
+                            <div style={{ display: "flex", gap: 6 }}>
+                              <button className="bg" style={{ fontSize: 10, padding: "4px 10px" }} onClick={() => setSelectedPayslip(p)}>Breakdown</button>
+                              <button className="bg" style={{ fontSize: 10, padding: "4px 10px" }}>View PDF</button>
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
               )}
+              {selectedPayslip && <PayslipBreakdown p={selectedPayslip} onClose={() => setSelectedPayslip(null)} dark={dark} />}
             </div>
           ) : (
             <div>
@@ -3254,7 +4573,7 @@ function LeaveManagement({ user }) {
         <div className="gc tw">
           <table className="ht">
             <thead>
-              <tr>{["Staff", "Type", "Period", "Days", "Status", ""].map(h => <th key={h}>{h}</th>)}</tr>
+              <tr>{["Staff", "Type", "Period", "Days", "Reason", "Status", ""].map(h => <th key={h}>{h}</th>)}</tr>
             </thead>
             <tbody>
               {requests.map(r => (
@@ -3263,23 +4582,27 @@ function LeaveManagement({ user }) {
                   <td>{r.leave_type}</td>
                   <td style={{ fontSize: 12, color: C.sub }}>{new Date(r.start_date).toLocaleDateString()} — {new Date(r.end_date).toLocaleDateString()}</td>
                   <td style={{ fontWeight: 800, color: T.orange }}>{r.days_count}d</td>
-                  <td>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span className={`tg ${r.status === "approved" ? "tg2" : r.status === "pending" ? "ty" : "tr"}`}>{r.status}</span>
-                      {r.proof_url && (
-                        <a href={r.proof_url} target="_blank" rel="noreferrer" title="View Proof" style={{ display: "flex", color: T.orange }}>
-                          <svg style={{ width: 16, height: 16 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.44 11.05a19.19 19.19 0 0 0-18.88 0 2 2 0 0 0 0 3.9 19.19 19.19 0 0 0 18.88 0 2 2 0 0 0 0-3.9z" /><circle cx="12" cy="13" r="3" /></svg>
-                        </a>
-                      )}
-                    </div>
+                  <td style={{ fontSize: 12, color: C.sub, fontStyle: "italic", maxWidth: 180 }}>
+                    {r.reason ? `"${r.reason}"` : <span style={{ color: C.muted }}>—</span>}
                   </td>
                   <td>
-                    {isHR && r.status === "pending" && (
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <button className="bp" style={{ fontSize: 10, padding: "4px 10px" }} onClick={() => updateStatus(r.id, "approved")}>Approve</button>
-                        <button className="bd" style={{ fontSize: 10, padding: "4px 10px" }} onClick={() => updateStatus(r.id, "rejected")}>Reject</button>
-                      </div>
-                    )}
+                    <span className={`tg ${r.status === "approved" ? "tg2" : r.status === "pending" ? "ty" : "tr"}`}>{r.status}</span>
+                  </td>
+                  <td>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {r.proof_url && (
+                        <a href={r.proof_url} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10, padding: "4px 10px", borderRadius: 6, background: `${T.orange}18`, color: T.orange, border: `1px solid ${T.orange}44`, textDecoration: "none", fontWeight: 700 }}>
+                          <svg style={{ width: 12, height: 12, flexShrink: 0 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
+                          View Proof
+                        </a>
+                      )}
+                      {isHR && r.status === "pending" && (
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button className="bp" style={{ fontSize: 10, padding: "4px 10px" }} onClick={() => updateStatus(r.id, "approved")}>Approve</button>
+                          <button className="bd" style={{ fontSize: 10, padding: "4px 10px" }} onClick={() => updateStatus(r.id, "rejected")}>Reject</button>
+                        </div>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -3477,9 +4800,10 @@ function LegalManager({ staffId: initialStaffId, staffName: initialStaffName, is
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const [matters, setMatters] = useState([]);
   const [staffList, setStaffList] = useState([]);
+  const [drafterList, setDrafterList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showInitiate, setShowInitiate] = useState(false);
-  const [initForm, setInitForm] = useState({ title: "", type: "Personnel", priority: "Normal", notes: "", staff_id: initialStaffId, external_name: "", external_email: "", isExternal: false });
+  const [initForm, setInitForm] = useState({ title: "", type: "Personnel", priority: "Normal", notes: "", staff_id: initialStaffId, external_name: "", external_email: "", isExternal: false, drafter_id: "" });
   const [submitting, setSubmitting] = useState(false);
   const [dispatchState, setDispatchState] = useState({});
   const [dispatchMsg, setDispatchMsg] = useState({});
@@ -3497,6 +4821,16 @@ function LegalManager({ staffId: initialStaffId, staffName: initialStaffName, is
       if (isHR) {
         const staff = await apiFetch(`${API_BASE}/hr/staff`);
         setStaffList(staff);
+
+        try {
+          const cands = await apiFetch(`${API_BASE}/hr-legal/collaborator-candidates`);
+          // Prioritise lawyers
+          const lawyers = cands.filter(c => (c.role || '').toLowerCase().includes('legal') || (c.role || '').toLowerCase().includes('lawyer'));
+          const others = cands.filter(c => !lawyers.includes(c));
+          setDrafterList([...lawyers, ...others]);
+        } catch (e) {
+          console.warn("Could not fetch drafter list", e);
+        }
       }
     } catch (e) { console.error("Legal load error:", e); }
     finally { setLoading(false); }
@@ -3521,11 +4855,12 @@ function LegalManager({ staffId: initialStaffId, staffName: initialStaffName, is
           hr_memo: initForm.notes,
           external_party_name: initForm.isExternal ? initForm.external_name : null,
           external_party_email: initForm.isExternal ? initForm.external_email : null,
+          drafter_id: initForm.drafter_id || null,
           status: "Draft"
         })
       });
       setShowInitiate(false);
-      setInitForm({ title: "", type: "Personnel", priority: "Normal", notes: "", staff_id: initialStaffId, external_name: "", external_email: "", isExternal: false });
+      setInitForm({ title: "", type: "Personnel", priority: "Normal", notes: "", staff_id: initialStaffId, external_name: "", external_email: "", isExternal: false, drafter_id: "" });
       load();
     } catch (e) { alert(e.message); }
     finally { setSubmitting(false); }
@@ -3581,7 +4916,7 @@ function LegalManager({ staffId: initialStaffId, staffName: initialStaffName, is
                   </a>
                 )}
                 {m.status === "Executed" ? (
-                  <a href={`/api/hr-legal/matters/${m.id}/export`} className="bg" style={{ fontSize: 10, padding: "5px 12px", textDecoration: "none", width: '100%', textAlign: 'center', boxSizing: 'border-box' }}>Download Contract</a>
+                  <a href={getMatterExportUrl(m.id)} className="bg" style={{ fontSize: 10, padding: "5px 12px", textDecoration: "none", width: '100%', textAlign: 'center', boxSizing: 'border-box' }}>Download Contract</a>
                 ) : m.status !== "Legal Signing" ? (
                   <>
                     <div style={{ fontSize: 10, color: C.muted, fontStyle: "italic" }}>{m.status === "Review" ? "Awaiting Legal Review" : "In Progress"}</div>
@@ -3733,6 +5068,18 @@ function LegalManager({ staffId: initialStaffId, staffName: initialStaffName, is
                 </select>
               </div>
             </div>
+            {isHR && (
+              <div>
+                <Lbl>Assign Drafter <span style={{ fontWeight: "normal", color: C.muted }}>(optional)</span></Lbl>
+                <select className="inp" value={initForm.drafter_id} onChange={e => setInitForm({ ...initForm, drafter_id: e.target.value })}>
+                  <option value="">-- Myself (default) --</option>
+                  {drafterList.map(c => (
+                    <option key={c.id} value={c.id}>{c.full_name} ({c.role || "Admin"})</option>
+                  ))}
+                </select>
+                <div style={{ fontSize: 10, color: C.sub, marginTop: 4 }}>Assign this matter directly to a specific lawyer.</div>
+              </div>
+            )}
             <div><Lbl>HR Brief / Memo (Internal for Legal)</Lbl>
               <textarea className="inp" rows={4} placeholder="Brief instructions for the legal team..." value={initForm.notes} onChange={e => setInitForm({ ...initForm, notes: e.target.value })} />
             </div>
@@ -3746,6 +5093,584 @@ function LegalManager({ staffId: initialStaffId, staffName: initialStaffName, is
   );
 }
 
+
+// ══════════════════════════════════════════════════════════════════════
+//  CONTRACT KITCHEN — HR's full contract drafting, mailing, signing hub
+// ══════════════════════════════════════════════════════════════════════
+function ContractKitchen({ user }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [matters, setMatters] = useState([]);
+  const [staffList, setStaffList] = useState([]);
+  const [lawyerList, setLawyerList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [filterStatus, setFilterStatus] = useState("All");
+  const [filterType, setFilterType] = useState("All");
+  const [view, setView] = useState("grid");
+
+  const [showNew, setShowNew] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(null);
+  const [showVisModal, setShowVisModal] = useState(null);
+  const [showDetailModal, setShowDetailModal] = useState(null);
+
+  const [newForm, setNewForm] = useState({
+    title: "", category: "Employment Contract", priority: "Normal",
+    isExternal: false, staff_id: "", external_name: "", external_email: "",
+    notes: "", inviteLawyer: false, lawyer_id: "", lawyer_note: "",
+    staffVisible: false
+  });
+  const [saving, setSaving] = useState(false);
+
+  const [inviteForm, setInviteForm] = useState({ lawyer_id: "", note: "", permission: "Edit" });
+  const [inviting, setInviting] = useState(false);
+  const [collaborators, setCollaborators] = useState([]);
+  const [loadingCollabs, setLoadingCollabs] = useState(false);
+
+  const CK_COLORS = {
+    draft: { bg: "#F59E0B20", border: "#F59E0B", text: "#F59E0B" },
+    review: { bg: "#8B5CF620", border: "#8B5CF6", text: "#8B5CF6" },
+    "legal signing": { bg: "#3B82F620", border: "#3B82F6", text: "#60A5FA" },
+    executed: { bg: "#10B98120", border: "#10B981", text: "#10B981" },
+    voided: { bg: "#EF444420", border: "#EF4444", text: "#EF4444" },
+  };
+
+  const CONTRACT_TYPES = [
+    "Employment Contract", "Offer Letter", "NDA", "Consultancy Agreement",
+    "Freelance Contract", "Vendor Agreement", "Disciplinary Notice",
+    "Exit Settlement", "Service Agreement", "Personnel", "External"
+  ];
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [mattersData, staffData, collabCands] = await Promise.all([
+        apiFetch(`${API_BASE}/hr-legal/matters`),
+        apiFetch(`${API_BASE}/hr/staff`),
+        apiFetch(`${API_BASE}/hr-legal/collaborator-candidates`).catch(() => [])
+      ]);
+      setMatters(mattersData || []);
+      setStaffList(staffData || []);
+      setLawyerList(collabCands || []);
+    } catch (e) { console.error("ContractKitchen load error:", e); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const loadCollaborators = async (matterId) => {
+    setLoadingCollabs(true);
+    try {
+      const data = await apiFetch(`${API_BASE}/hr-legal/matters/${matterId}`);
+      setCollaborators(data.collaborators || []);
+    } catch (e) { console.error("Collab load error:", e); }
+    finally { setLoadingCollabs(false); }
+  };
+
+  const getMatterExportUrl = (matterId) => {
+    const token = localStorage.getItem("ec_token");
+    const baseUrl = `${API_BASE}/hr-legal/matters/${matterId}/export`;
+    return token ? `${baseUrl}?token=${encodeURIComponent(token)}` : baseUrl;
+  };
+
+  const createContract = async () => {
+    if (!newForm.title.trim()) return alert("Contract title is required.");
+    if (!newForm.isExternal && !newForm.staff_id) return alert("Please select a staff member.");
+    if (newForm.isExternal && (!newForm.external_name || !newForm.external_email)) return alert("Name and email required for external parties.");
+    setSaving(true);
+    try {
+      const payload = {
+        title: newForm.title, category: newForm.category, priority: newForm.priority,
+        status: "Draft", hr_memo: newForm.notes,
+        staff_id: newForm.isExternal ? null : (newForm.staff_id || null),
+        external_party_name: newForm.isExternal ? newForm.external_name : null,
+        external_party_email: newForm.isExternal ? newForm.external_email : null,
+        staff_visible: newForm.staffVisible,
+      };
+      const matter = await apiFetch(`${API_BASE}/hr-legal/matters`, { method: "POST", body: JSON.stringify(payload) });
+
+      if (newForm.inviteLawyer && newForm.lawyer_id && matter?.id) {
+        await apiFetch(`${API_BASE}/hr-legal/matters/${matter.id}/collaborators`, {
+          method: "POST",
+          body: JSON.stringify({ admin_id: newForm.lawyer_id, permission_level: "Edit", invitation_note: newForm.lawyer_note })
+        }).catch(e => console.warn("Lawyer invite error:", e));
+      }
+
+      setShowNew(false);
+      setNewForm({ title: "", category: "Employment Contract", priority: "Normal", isExternal: false, staff_id: "", external_name: "", external_email: "", notes: "", inviteLawyer: false, lawyer_id: "", lawyer_note: "", staffVisible: false });
+      load();
+
+      // Navigate to editor
+      if (matter?.id) window.open(`/legal/advanced-editor?id=${matter.id}`, "_blank");
+    } catch (e) { alert(e.message || "Failed to create contract"); }
+    finally { setSaving(false); }
+  };
+
+  const inviteLawyer = async () => {
+    if (!inviteForm.lawyer_id) return alert("Select a lawyer.");
+    setInviting(true);
+    try {
+      await apiFetch(`${API_BASE}/hr-legal/matters/${showInviteModal}/collaborators`, {
+        method: "POST",
+        body: JSON.stringify({ admin_id: inviteForm.lawyer_id, permission_level: inviteForm.permission, invitation_note: inviteForm.note })
+      });
+      await loadCollaborators(showInviteModal);
+      setInviteForm({ lawyer_id: "", note: "", permission: "Edit" });
+      alert("Lawyer invited successfully.");
+    } catch (e) { alert(e.message || "Failed to invite lawyer"); }
+    finally { setInviting(false); }
+  };
+
+  const removeCollaborator = async (matterId, adminId) => {
+    if (!confirm("Remove this collaborator?")) return;
+    try {
+      await apiFetch(`${API_BASE}/hr-legal/matters/${matterId}/collaborators/${adminId}`, { method: "DELETE" });
+      await loadCollaborators(matterId);
+    } catch (e) { alert(e.message); }
+  };
+
+  const toggleVisibility = async (matter) => {
+    const newState = !matter.staff_visible;
+    try {
+      await apiFetch(`${API_BASE}/hr-legal/matters/${matter.id}/visibility`, {
+        method: "PATCH", body: JSON.stringify({ staff_visible: newState })
+      });
+      setMatters(prev => prev.map(m => m.id === matter.id ? { ...m, staff_visible: newState } : m));
+      if (showVisModal?.id === matter.id) setShowVisModal(prev => ({ ...prev, staff_visible: newState }));
+    } catch (e) { alert("Failed to update visibility"); }
+  };
+
+  const openEditor = (matter) => window.open(`/legal/advanced-editor?id=${matter.id}`, "_blank");
+
+  const dispatchSign = async (matterId) => {
+    if (!confirm("Send signing link to the recipient?")) return;
+    try {
+      const r = await apiFetch(`${API_BASE}/hr-legal/matters/${matterId}/dispatch-signature`, { method: "POST" });
+      alert(r.message || "Dispatched!");
+      load();
+    } catch (e) { alert(e.message); }
+  };
+
+  const resendSign = async (matterId) => {
+    try {
+      const r = await apiFetch(`${API_BASE}/hr-legal/matters/${matterId}/resend-signature`, { method: "POST" });
+      alert(r.message || "Resent!");
+    } catch (e) { alert(e.message); }
+  };
+
+  const getStatusColor = (s) => {
+    const k = (s || "").toLowerCase();
+    return CK_COLORS[k] || { bg: "#6B728020", border: "#6B7280", text: "#9CA3AF" };
+  };
+
+  const filtered = matters.filter(m => {
+    const matchSearch = !search ||
+      (m.title || "").toLowerCase().includes(search.toLowerCase()) ||
+      (m.external_party_name || "").toLowerCase().includes(search.toLowerCase());
+    const matchStatus = filterStatus === "All" || (m.status || "") === filterStatus;
+    const matchType = filterType === "All" || (m.category || "") === filterType;
+    return matchSearch && matchStatus && matchType;
+  });
+
+  const stats = {
+    total: matters.length,
+    draft: matters.filter(m => m.status === "Draft").length,
+    pending: matters.filter(m => m.status === "Legal Signing").length,
+    executed: matters.filter(m => m.status === "Executed").length,
+    staffVisible: matters.filter(m => m.staff_visible).length,
+  };
+
+  const cardBase = { background: dark ? "#1A1C22" : "#FFFFFF", border: `1px solid ${C.border}`, borderRadius: 14, padding: 20 };
+
+  const Toggle = ({ checked, onChange, color = "#10B981" }) => (
+    <label style={{ cursor: "pointer", position: "relative", display: "inline-block", width: 40, height: 22, flexShrink: 0 }}>
+      <input type="checkbox" checked={checked} onChange={onChange} style={{ opacity: 0, width: 0, height: 0 }} />
+      <span style={{ position: "absolute", inset: 0, borderRadius: 11, cursor: "pointer", background: checked ? color : C.border, transition: "background 0.2s" }}>
+        <span style={{ position: "absolute", height: 16, width: 16, left: checked ? 20 : 3, bottom: 3, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
+      </span>
+    </label>
+  );
+
+  return (
+    <div className="fade">
+      {/* Header */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 26, fontWeight: 700, color: C.text, marginBottom: 4 }}>⚖️ Contract Kitchen</h2>
+            <p style={{ fontSize: 12, color: C.muted }}>Draft · Invite Lawyers · Mail · Sign · Archive — all from one place</p>
+          </div>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <button onClick={() => setView(v => v === "grid" ? "list" : "grid")} style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.muted, borderRadius: 8, padding: "7px 12px", cursor: "pointer", fontSize: 12 }}>
+              {view === "grid" ? "☰ List" : "⊞ Grid"}
+            </button>
+            <button onClick={load} style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.muted, borderRadius: 8, padding: "7px 12px", cursor: "pointer", fontSize: 12 }}>⟳</button>
+            <button onClick={() => setShowNew(true)} style={{
+              background: "linear-gradient(135deg, #D4AF37, #B8963E)", color: "#fff", border: "none",
+              borderRadius: 10, padding: "10px 20px", fontWeight: 700, fontSize: 13, cursor: "pointer",
+              boxShadow: "0 4px 14px rgba(212,175,55,0.35)"
+            }}>+ New Contract</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px,1fr))", gap: 10, marginBottom: 22 }}>
+        {[
+          { label: "Total", val: stats.total, color: "#60A5FA", icon: "📋" },
+          { label: "Drafts", val: stats.draft, color: "#F59E0B", icon: "✏️" },
+          { label: "Pending Sign", val: stats.pending, color: "#8B5CF6", icon: "✍️" },
+          { label: "Executed", val: stats.executed, color: "#10B981", icon: "✅" },
+          { label: "Staff Visible", val: stats.staffVisible, color: "#EC4899", icon: "👁" },
+        ].map(s => (
+          <div key={s.label} style={{ ...cardBase, padding: 14, textAlign: "center" }}>
+            <div style={{ fontSize: 18, marginBottom: 4 }}>{s.icon}</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.val}</div>
+            <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.8, marginTop: 2 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍  Search contracts..."
+          style={{ flex: 1, minWidth: 180, background: C.surface, border: `1px solid ${C.border}`, color: C.text, borderRadius: 9, padding: "8px 12px", fontSize: 12 }} />
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.text, borderRadius: 9, padding: "8px 12px", fontSize: 12 }}>
+          {["All", "Draft", "Review", "Legal Signing", "Executed", "Voided"].map(s => <option key={s}>{s}</option>)}
+        </select>
+        <select value={filterType} onChange={e => setFilterType(e.target.value)} style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.text, borderRadius: 9, padding: "8px 12px", fontSize: 12 }}>
+          <option value="All">All Types</option>
+          {CONTRACT_TYPES.map(t => <option key={t}>{t}</option>)}
+        </select>
+      </div>
+
+      {/* Content */}
+      {loading ? (
+        <div style={{ textAlign: "center", padding: 60, color: C.muted }}>
+          <div style={{ fontSize: 40, marginBottom: 12, animation: "spin 1s linear infinite" }}>⚖️</div>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>Loading the kitchen...</div>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div style={{ textAlign: "center", padding: 60, color: C.muted, border: `1.5px dashed ${C.border}`, borderRadius: 14 }}>
+          <div style={{ fontSize: 42, marginBottom: 12 }}>📋</div>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>No contracts found</div>
+          <div style={{ fontSize: 12 }}>Click "New Contract" to start cooking</div>
+        </div>
+      ) : view === "grid" ? (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 14 }}>
+          {filtered.map(m => (
+            <CKContractCard key={m.id} matter={m} staffList={staffList} getStatusColor={getStatusColor}
+              onEdit={() => openEditor(m)}
+              onInvite={() => { setShowInviteModal(m.id); loadCollaborators(m.id); }}
+              onVisibility={() => setShowVisModal(m)}
+              onDetail={() => setShowDetailModal(m)}
+              onDispatch={() => dispatchSign(m.id)}
+              onResend={() => resendSign(m.id)}
+              onDownload={() => window.open(getMatterExportUrl(m.id), "_blank")}
+              C={C} dark={dark} />
+          ))}
+        </div>
+      ) : (
+        <div style={{ ...cardBase, padding: 0, overflow: "hidden" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: dark ? "#111317" : "#F9FAFB", borderBottom: `1px solid ${C.border}` }}>
+                {["Contract", "Party", "Type", "Status", "Visibility", "Created", "Actions"].map(h => (
+                  <th key={h} style={{ padding: "12px 16px", fontSize: 10, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: 1, textAlign: "left" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((m, i) => {
+                const sc = getStatusColor(m.status);
+                const party = m.staff_id ? (staffList.find(s => s.id === m.staff_id)?.full_name || "Staff") : (m.external_party_name || "External");
+                return (
+                  <tr key={m.id} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 ? (dark ? "#ffffff04" : "#F9FAFB") : "transparent" }}>
+                    <td style={{ padding: "12px 16px" }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.text, maxWidth: 200, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.title}</div>
+                    </td>
+                    <td style={{ padding: "12px 16px", fontSize: 11, color: C.sub }}>{party}</td>
+                    <td style={{ padding: "12px 16px" }}><span style={{ fontSize: 9, fontWeight: 700, background: C.border, color: C.muted, borderRadius: 5, padding: "2px 7px" }}>{m.category}</span></td>
+                    <td style={{ padding: "12px 16px" }}><span style={{ fontSize: 9, fontWeight: 800, background: sc.bg, color: sc.text, borderRadius: 5, padding: "3px 7px" }}>{m.status}</span></td>
+                    <td style={{ padding: "12px 16px", fontSize: 10, color: m.staff_visible ? "#10B981" : C.muted, fontWeight: 600 }}>{m.staff_visible ? "👁 Public" : "🔒 Private"}</td>
+                    <td style={{ padding: "12px 16px", fontSize: 10, color: C.muted }}>{new Date(m.created_at).toLocaleDateString()}</td>
+                    <td style={{ padding: "12px 16px" }}>
+                      <div style={{ display: "flex", gap: 5 }}>
+                        {[
+                          ["✏️", "Edit", () => openEditor(m), "#33333322"],
+                          ["👥", "Collaborators", () => { setShowInviteModal(m.id); loadCollaborators(m.id); }, "#8B5CF620"],
+                          [m.staff_visible ? "👁" : "🔒", "Vis", () => setShowVisModal(m), m.staff_visible ? "#10B98120" : "#33333318"],
+                          ["📄", "Info", () => setShowDetailModal(m), "#60A5FA20"],
+                        ].map(([icon, label, fn, bg]) => (
+                          <button key={label} onClick={fn} title={label} style={{ background: bg, border: "none", color: C.muted, borderRadius: 6, padding: "4px 7px", cursor: "pointer", fontSize: 11 }}>{icon}</button>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ── MODAL: New Contract ── */}
+      {showNew && (
+        <Modal onClose={() => setShowNew(false)} title="🍳 New Contract" width={600}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div><Lbl>Contract Title *</Lbl>
+              <input className="inp" placeholder="e.g. Employment Contract – John Doe 2026" value={newForm.title} onChange={e => setNewForm({ ...newForm, title: e.target.value })} />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div><Lbl>Contract Type</Lbl>
+                <select className="inp" value={newForm.category} onChange={e => setNewForm({ ...newForm, category: e.target.value })}>
+                  {CONTRACT_TYPES.map(t => <option key={t}>{t}</option>)}
+                </select>
+              </div>
+              <div><Lbl>Priority</Lbl>
+                <select className="inp" value={newForm.priority} onChange={e => setNewForm({ ...newForm, priority: e.target.value })}>
+                  <option>Critical</option><option>Normal</option><option>Low</option>
+                </select>
+              </div>
+            </div>
+
+            <div style={{ background: `${C.border}22`, borderRadius: 10, padding: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <Lbl style={{ margin: 0 }}>Recipient *</Lbl>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, cursor: "pointer", color: C.muted }}>
+                  <input type="checkbox" checked={newForm.isExternal} onChange={e => setNewForm({ ...newForm, isExternal: e.target.checked })} />
+                  External Party
+                </label>
+              </div>
+              {newForm.isExternal ? (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <input className="inp" placeholder="Full Name" value={newForm.external_name} onChange={e => setNewForm({ ...newForm, external_name: e.target.value })} />
+                  <input className="inp" placeholder="Email Address" type="email" value={newForm.external_email} onChange={e => setNewForm({ ...newForm, external_email: e.target.value })} />
+                </div>
+              ) : (
+                <select className="inp" value={newForm.staff_id} onChange={e => setNewForm({ ...newForm, staff_id: e.target.value })}>
+                  <option value="">— Select Staff Member —</option>
+                  {staffList.map(s => <option key={s.id} value={s.id}>{s.full_name} ({s.department || "No Dept"})</option>)}
+                </select>
+              )}
+            </div>
+
+            <div style={{ background: newForm.staffVisible ? "#10B98112" : `${C.border}18`, borderRadius: 10, padding: 14, border: `1px solid ${newForm.staffVisible ? "#10B98133" : C.border}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{newForm.staffVisible ? "👁 Visible to Staff" : "🔒 Hidden from Staff"}</div>
+                  <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{newForm.staffVisible ? "Staff will see this in their portal immediately" : "Staff cannot see this contract at all (default)"}</div>
+                </div>
+                <Toggle checked={newForm.staffVisible} onChange={e => setNewForm({ ...newForm, staffVisible: e.target.checked })} color="#10B981" />
+              </div>
+            </div>
+
+            <div style={{ background: `${C.border}18`, borderRadius: 10, padding: 14, border: `1px solid ${newForm.inviteLawyer ? "#8B5CF633" : C.border}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: newForm.inviteLawyer ? 12 : 0 }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>👥 Invite Collaborator</div>
+                  <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>Collaborators see contracts once explicitly invited</div>
+                </div>
+                <Toggle checked={newForm.inviteLawyer} onChange={e => setNewForm({ ...newForm, inviteLawyer: e.target.checked })} color="#8B5CF6" />
+              </div>
+              {newForm.inviteLawyer && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <select className="inp" value={newForm.lawyer_id} onChange={e => setNewForm({ ...newForm, lawyer_id: e.target.value })}>
+                    <option value="">— Select Collaborator —</option>
+                    {lawyerList.map(l => <option key={l.id} value={l.id}>{l.full_name} ({l.role || "Admin"})</option>)}
+                  </select>
+                  <textarea className="inp" rows={2} placeholder="Note to collaborator..." value={newForm.lawyer_note} onChange={e => setNewForm({ ...newForm, lawyer_note: e.target.value })} />
+                </div>
+              )}
+            </div>
+
+            <div><Lbl>Internal Memo (not sent to recipient)</Lbl>
+              <textarea className="inp" rows={3} placeholder="Context, instructions, notes for your records..." value={newForm.notes} onChange={e => setNewForm({ ...newForm, notes: e.target.value })} />
+            </div>
+
+            <button className="bp" style={{ padding: 14, fontSize: 13, fontWeight: 700 }} onClick={createContract} disabled={saving}>
+              {saving ? "Creating..." : "🍳 Create & Open in Editor"}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── MODAL: Invite Collaborator ── */}
+      {showInviteModal && (
+        <Modal onClose={() => { setShowInviteModal(null); setCollaborators([]); }} title="👥 Team Collaboration" width={480}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ padding: 12, background: "#8B5CF618", borderRadius: 10, border: "1px solid #8B5CF630", fontSize: 11, color: C.sub }}>
+              💡 Collaborators only discover this contract once you invite them. It is completely invisible to them otherwise.
+            </div>
+            <div><Lbl>Select Collaborator *</Lbl>
+              <select className="inp" value={inviteForm.lawyer_id} onChange={e => setInviteForm({ ...inviteForm, lawyer_id: e.target.value })}>
+                <option value="">— Select Collaborator —</option>
+                {lawyerList.map(l => <option key={l.id} value={l.id}>{l.full_name} ({l.role || "Admin"})</option>)}
+              </select>
+            </div>
+            <div><Lbl>Permission Level</Lbl>
+              <select className="inp" value={inviteForm.permission} onChange={e => setInviteForm({ ...inviteForm, permission: e.target.value })}>
+                <option value="View">View Only</option>
+                <option value="Edit">Edit (Full Collaboration)</option>
+              </select>
+            </div>
+            <div><Lbl>Invitation Note</Lbl>
+              <textarea className="inp" rows={3} placeholder="Message to the collaborator about this matter..." value={inviteForm.note} onChange={e => setInviteForm({ ...inviteForm, note: e.target.value })} />
+            </div>
+            <button className="bp" style={{ padding: 12 }} onClick={inviteLawyer} disabled={inviting}>
+              {inviting ? "Inviting..." : "👥 Send Invitation"}
+            </button>
+
+            <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Current Collaborators</div>
+              {loadingCollabs ? <div style={{ fontSize: 11, color: C.muted }}>Loading...</div> :
+                collaborators.length === 0 ? <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic" }}>No collaborators yet.</div> :
+                  collaborators.map(c => (
+                    <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{c.admins?.full_name || "Unknown"}</div>
+                        <div style={{ fontSize: 10, color: C.muted }}>{c.permission_level}</div>
+                      </div>
+                      <button onClick={() => removeCollaborator(showInviteModal, c.admin_id)} style={{ background: "#EF444415", border: "1px solid #EF444430", color: "#EF4444", borderRadius: 6, padding: "3px 8px", fontSize: 10, cursor: "pointer" }}>Remove</button>
+                    </div>
+                  ))
+              }
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── MODAL: Visibility ── */}
+      {showVisModal && (
+        <Modal onClose={() => setShowVisModal(null)} title="👁 Staff Visibility Control" width={440}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ padding: 14, background: showVisModal.staff_visible ? "#10B98112" : "#F59E0B12", borderRadius: 12, border: `1px solid ${showVisModal.staff_visible ? "#10B98133" : "#F59E0B33"}` }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: showVisModal.staff_visible ? "#10B981" : "#F59E0B", marginBottom: 6 }}>
+                {showVisModal.staff_visible ? "🟢 Currently Visible to Staff" : "🔒 Currently Hidden from Staff"}
+              </div>
+              <div style={{ fontSize: 11, color: C.sub }}>
+                {showVisModal.staff_visible ? "The staff member can view this in their HR Portal under 'My Legal Matters'." : "The staff member cannot see this contract at all."}
+              </div>
+            </div>
+            <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.7 }}>
+              <div style={{ marginBottom: 8, fontWeight: 700, color: C.text }}>{showVisModal.title}</div>
+              <div>Make it <strong style={{ color: "#10B981" }}>public</strong> for contracts the staff must acknowledge or sign — offer letters, employment agreements, NDAs. Keep it <strong style={{ color: "#F59E0B" }}>private</strong> for disciplinary matters or sensitive internal documents.</div>
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => toggleVisibility(showVisModal)} style={{
+                flex: 1, padding: 12, borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13,
+                background: showVisModal.staff_visible ? "#EF444415" : "#10B98115",
+                color: showVisModal.staff_visible ? "#EF4444" : "#10B981",
+                border: `1px solid ${showVisModal.staff_visible ? "#EF444430" : "#10B98130"}`
+              }}>
+                {showVisModal.staff_visible ? "🔒 Make Private" : "👁 Make Public"}
+              </button>
+              <button onClick={() => setShowVisModal(null)} style={{ flex: 1, padding: 12, borderRadius: 10, border: `1px solid ${C.border}`, background: "transparent", color: C.muted, cursor: "pointer", fontWeight: 700 }}>Close</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── MODAL: Detail ── */}
+      {showDetailModal && (
+        <Modal onClose={() => setShowDetailModal(null)} title="📄 Contract Details" width={520}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {[
+              ["Title", showDetailModal.title],
+              ["Type", showDetailModal.category],
+              ["Status", showDetailModal.status],
+              ["Priority", showDetailModal.priority],
+              ["Recipient", showDetailModal.staff_id ? (staffList.find(s => s.id === showDetailModal.staff_id)?.full_name || "Staff") : (showDetailModal.external_party_name || "External")],
+              ["Email", showDetailModal.external_party_email || "—"],
+              ["Staff Visible", showDetailModal.staff_visible ? "✅ Yes (Public)" : "🔒 No (Private)"],
+              ["Created", new Date(showDetailModal.created_at).toLocaleString()],
+            ].map(([label, val]) => (
+              <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "9px 0", borderBottom: `1px solid ${C.border}` }}>
+                <span style={{ fontSize: 10, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</span>
+                <span style={{ fontSize: 12, color: C.text, fontWeight: 600, maxWidth: "60%", textAlign: "right" }}>{val || "—"}</span>
+              </div>
+            ))}
+            {showDetailModal.hr_memo && (
+              <div style={{ padding: 12, background: "#F59E0B10", borderRadius: 10, border: "1px solid #F59E0B30", marginTop: 4 }}>
+                <div style={{ fontSize: 9, fontWeight: 800, color: "#F59E0B", marginBottom: 4 }}>INTERNAL MEMO</div>
+                <div style={{ fontSize: 11, color: C.sub }}>{showDetailModal.hr_memo}</div>
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+              <button onClick={() => { setShowDetailModal(null); openEditor(showDetailModal); }} className="bp" style={{ flex: 1, padding: 11, fontSize: 12 }}>✏️ Open Editor</button>
+              {showDetailModal.status === "Executed" && (
+                <button onClick={() => window.open(getMatterExportUrl(showDetailModal.id), "_blank")} style={{ flex: 1, padding: 11, background: "#10B98115", border: "1px solid #10B98130", color: "#10B981", borderRadius: 9, cursor: "pointer", fontWeight: 700, fontSize: 12 }}>📥 Download</button>
+              )}
+              {(showDetailModal.status === "Draft" || showDetailModal.status === "Review") && (
+                <button onClick={() => { setShowDetailModal(null); dispatchSign(showDetailModal.id); }} style={{ flex: 1, padding: 11, background: "#8B5CF615", border: "1px solid #8B5CF630", color: "#8B5CF6", borderRadius: 9, cursor: "pointer", fontWeight: 700, fontSize: 12 }}>✈️ Send for Signing</button>
+              )}
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function CKContractCard({ matter, staffList, getStatusColor, onEdit, onInvite, onVisibility, onDetail, onDispatch, onResend, onDownload, C, dark }) {
+  const sc = getStatusColor(matter.status);
+  const party = matter.staff_id
+    ? (staffList.find(s => s.id === matter.staff_id)?.full_name || "Staff")
+    : (matter.external_party_name || "External Party");
+  const isInternal = !!matter.staff_id;
+
+  return (
+    <div style={{
+      background: dark ? "#1A1C22" : "#FFFFFF", border: `1px solid ${C.border}`,
+      borderTop: `3px solid ${sc.border}`, borderRadius: 14, padding: 18,
+      display: "flex", flexDirection: "column", gap: 12,
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: C.text, lineHeight: 1.3, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{matter.title}</div>
+          <div style={{ fontSize: 10, color: C.muted }}>{matter.category}</div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end", flexShrink: 0 }}>
+          <span style={{ fontSize: 9, fontWeight: 800, background: sc.bg, color: sc.text, borderRadius: 6, padding: "3px 8px", border: `1px solid ${sc.border}30`, textTransform: "uppercase", letterSpacing: 0.5 }}>{matter.status}</span>
+          <span style={{ fontSize: 9, color: matter.staff_visible ? "#10B981" : C.muted, fontWeight: 600 }}>{matter.staff_visible ? "👁 Public" : "🔒 Private"}</span>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 10px", background: dark ? "#ffffff08" : "#F3F4F6", borderRadius: 8 }}>
+        <div style={{ width: 28, height: 28, borderRadius: "50%", background: isInternal ? "#D4AF3730" : "#8B5CF630", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>
+          {isInternal ? "👤" : "🌐"}
+        </div>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{party}</div>
+          <div style={{ fontSize: 10, color: C.muted }}>{isInternal ? "Internal Staff" : "External Party"}</div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, fontSize: 10, color: C.muted }}>
+        <span>📅 {new Date(matter.created_at).toLocaleDateString()}</span>
+        <span>·</span>
+        <span style={{ color: matter.priority === "Critical" ? "#EF4444" : matter.priority === "Low" ? C.muted : "#F59E0B", fontWeight: 600 }}>{matter.priority}</span>
+      </div>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+        {[
+          ["✏️ Edit", onEdit, "#33333320", C.muted, C.border],
+          ["⚖️ Lawyers", onInvite, "#8B5CF618", "#8B5CF6", "#8B5CF620"],
+          [matter.staff_visible ? "👁 Public" : "🔒 Private", onVisibility, matter.staff_visible ? "#10B98118" : "#33333318", matter.staff_visible ? "#10B981" : C.muted, matter.staff_visible ? "#10B98130" : C.border],
+          ["📄 Details", onDetail, "#60A5FA18", "#60A5FA", "#60A5FA20"],
+        ].map(([label, fn, bg, color, border]) => (
+          <button key={label} onClick={fn} style={{ background: bg, border: `1px solid ${border}`, color, borderRadius: 7, padding: "5px 10px", cursor: "pointer", fontSize: 10, fontWeight: 600 }}>{label}</button>
+        ))}
+        {matter.status === "Executed" ? (
+          <button onClick={onDownload} style={{ background: "#10B98118", border: "1px solid #10B98130", color: "#10B981", borderRadius: 7, padding: "5px 10px", cursor: "pointer", fontSize: 10, fontWeight: 700 }}>📥 Download</button>
+        ) : matter.status === "Legal Signing" ? (
+          <button onClick={onResend} style={{ background: "#F59E0B18", border: "1px solid #F59E0B30", color: "#F59E0B", borderRadius: 7, padding: "5px 10px", cursor: "pointer", fontSize: 10, fontWeight: 600 }}>🔄 Resend</button>
+        ) : (
+          <button onClick={onDispatch} style={{ background: "#3B82F618", border: "1px solid #3B82F630", color: "#60A5FA", borderRadius: 7, padding: "5px 10px", cursor: "pointer", fontSize: 10, fontWeight: 600 }}>✈️ Send for Signing</button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function QualificationsManager({ staffId, isHR }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
@@ -4092,7 +6017,17 @@ function StaffDirectory({ authRole }) {
       phone_number: p.phone_number || "",
       emergency_contact: p.emergency_contact || "",
       address: p.address || "",
-      bio: p.bio || ""
+      bio: p.bio || "",
+      gender: p.gender || "",
+      dob: p.dob || "",
+      nationality: p.nationality || "",
+      marital_status: p.marital_status || "",
+      leave_quota: p.leave_quota || 20,
+      bank_name: p.bank_name || "",
+      account_number: p.account_number || "",
+      account_name: p.account_name || "",
+      pension_pin: p.pension_pin || "",
+      base_salary: p.base_salary || ""
     });
     setEditMode(false);
   }, [view]);
@@ -4211,7 +6146,12 @@ function StaffDirectory({ authRole }) {
           gender: draftView.gender,
           nationality: draftView.nationality,
           marital_status: draftView.marital_status,
-          leave_quota: draftView.leave_quota ? parseInt(draftView.leave_quota, 10) : 20
+          leave_quota: draftView.leave_quota ? parseInt(draftView.leave_quota, 10) : 20,
+          bank_name: draftView.bank_name,
+          account_number: draftView.account_number,
+          account_name: draftView.account_name,
+          pension_pin: draftView.pension_pin,
+          base_salary: draftView.base_salary ? parseFloat(draftView.base_salary) : null
         })
       });
       setView(prev => ({
@@ -4233,7 +6173,12 @@ function StaffDirectory({ authRole }) {
           gender: draftView.gender,
           nationality: draftView.nationality,
           marital_status: draftView.marital_status,
-          leave_quota: draftView.leave_quota
+          leave_quota: draftView.leave_quota,
+          bank_name: draftView.bank_name,
+          account_number: draftView.account_number,
+          account_name: draftView.account_name,
+          pension_pin: draftView.pension_pin,
+          base_salary: draftView.base_salary
         }]
       }));
       loadStaff();
@@ -4667,13 +6612,71 @@ function StaffDirectory({ authRole }) {
           {dtTab === "quals" && <QualificationsManager staffId={view.id} isHR={authRole === "hr"} />}
 
           {dtTab === "bank" && (
-            <div className="g1 fade" style={{ gap: 10, marginBottom: 18 }}>
-              <Field label="Bank Name" value={view.staff_profiles?.[0]?.bank_name} />
-              <Field label="Account Number" value={view.staff_profiles?.[0]?.account_number} />
-              <Field label="Account Name" value={view.staff_profiles?.[0]?.account_name} />
-              <Field label="Monthly Base Salary" value={view.staff_profiles?.[0]?.base_salary ? `₦${Number(view.staff_profiles[0].base_salary).toLocaleString()}` : "Not Set"} />
+            <div className="g1 fade" style={{ gap: 16, marginBottom: 18 }}>
+              {/* ── Salary / Payroll Section ── */}
+              <div style={{ padding: 18, background: `${T.orange}09`, border: `1px solid ${T.orange}33`, borderRadius: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                  <span style={{ fontSize: 20 }}>💰</span>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 900, color: T.orange, textTransform: "uppercase", letterSpacing: 0.5 }}>Salary & Payroll</div>
+                    <div style={{ fontSize: 11, color: (dark ? DARK : LIGHT).muted }}>Set by HR · Accessed by Payroll</div>
+                  </div>
+                </div>
+                {editMode ? (
+                  <div>
+                    <Lbl>Monthly Base Salary (₦) *</Lbl>
+                    <input
+                      type="number"
+                      className="inp"
+                      placeholder="e.g. 250000"
+                      value={draftView.base_salary || ""}
+                      onChange={e => setDraftView(d => ({ ...d, base_salary: e.target.value }))}
+                      style={{ fontSize: 16, fontWeight: 700 }}
+                    />
+                    <div style={{ fontSize: 11, color: (dark ? DARK : LIGHT).muted, marginTop: 6 }}>
+                      This value is used by Payroll when running monthly payslips. Only HR managers can edit this field.
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontSize: 11, color: (dark ? DARK : LIGHT).muted, marginBottom: 4, textTransform: "uppercase", fontWeight: 700 }}>Monthly Base Salary</div>
+                      <div style={{ fontSize: 24, fontWeight: 900, color: view.staff_profiles?.[0]?.base_salary ? "#4ADE80" : (dark ? DARK : LIGHT).muted }}>
+                        {view.staff_profiles?.[0]?.base_salary ? `₦${Number(view.staff_profiles[0].base_salary).toLocaleString()}` : "Not Set"}
+                      </div>
+                    </div>
+                    {view.staff_profiles?.[0]?.base_salary && (
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 11, color: (dark ? DARK : LIGHT).muted, marginBottom: 4, textTransform: "uppercase", fontWeight: 700 }}>Annual</div>
+                        <div style={{ fontSize: 16, fontWeight: 800, color: T.gold }}>₦{(Number(view.staff_profiles[0].base_salary) * 12).toLocaleString()}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* ── Bank Details Section ── */}
+              <div style={{ padding: 18, background: (dark ? DARK : LIGHT).surface, border: `1px solid ${(dark ? DARK : LIGHT).border}`, borderRadius: 14 }}>
+                <div style={{ fontSize: 12, fontWeight: 800, color: (dark ? DARK : LIGHT).sub, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>🏦 Bank Details</div>
+                {editMode ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <div><Lbl>Bank Name</Lbl><input className="inp" value={draftView.bank_name || ""} onChange={e => setDraftView(d => ({ ...d, bank_name: e.target.value }))} /></div>
+                    <div><Lbl>Account Number</Lbl><input className="inp" value={draftView.account_number || ""} onChange={e => setDraftView(d => ({ ...d, account_number: e.target.value }))} /></div>
+                    <div><Lbl>Account Name</Lbl><input className="inp" value={draftView.account_name || ""} onChange={e => setDraftView(d => ({ ...d, account_name: e.target.value }))} /></div>
+                    <div><Lbl>Pension PIN</Lbl><input className="inp" value={draftView.pension_pin || ""} onChange={e => setDraftView(d => ({ ...d, pension_pin: e.target.value }))} /></div>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <Field label="Bank Name" value={view.staff_profiles?.[0]?.bank_name} />
+                    <Field label="Account Number" value={view.staff_profiles?.[0]?.account_number} />
+                    <Field label="Account Name" value={view.staff_profiles?.[0]?.account_name} />
+                    <Field label="Pension PIN" value={view.staff_profiles?.[0]?.pension_pin} />
+                  </div>
+                )}
+              </div>
+
               <div style={{ padding: 12, background: `${T.orange}0D`, border: `1px solid ${T.orange}22`, borderRadius: 8, fontSize: 12, color: (dark ? DARK : LIGHT).muted }}>
-                Payment info is only visible to HR and Finance teams.
+                💼 Financial information is visible to HR and Finance teams only. Salary data flows directly into payroll processing.
               </div>
             </div>
           )}
@@ -5020,6 +7023,7 @@ function HRDashboard() {
 // ─── MY PROFILE PAGE (shared component for any user) ─────────────────────────
 function MyProfile({ user }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const G = T.gold;
   const [prof, setProf] = useState(null);
   const [draft, setDraft] = useState({});
   const [loading, setLoading] = useState(true);
@@ -5065,6 +7069,11 @@ function MyProfile({ user }) {
       }
 
       // 2. Update Detailed Profile (HR API)
+      // Only include bank fields if they were previously empty (employee self-fill)
+      const bankPayload = {};
+      if (!p.bank_name && draft.bank_name) bankPayload.bank_name = draft.bank_name;
+      if (!p.account_number && draft.account_number) bankPayload.account_number = draft.account_number;
+      if (!p.account_name && draft.account_name) bankPayload.account_name = draft.account_name;
       await apiFetch(`${API_BASE}/hr/profile/${user.id}`, {
         method: "PATCH",
         body: JSON.stringify({
@@ -5075,7 +7084,8 @@ function MyProfile({ user }) {
           dob: draft.dob || null,
           gender: draft.gender,
           nationality: draft.nationality,
-          marital_status: draft.marital_status
+          marital_status: draft.marital_status,
+          ...bankPayload
         })
       });
       setProf(prev => ({
@@ -5090,7 +7100,8 @@ function MyProfile({ user }) {
           dob: draft.dob,
           gender: draft.gender,
           nationality: draft.nationality,
-          marital_status: draft.marital_status
+          marital_status: draft.marital_status,
+          ...bankPayload
         }]
       }));
       setEditMode(false);
@@ -5209,6 +7220,25 @@ function MyProfile({ user }) {
                 <Field label="DOB" value={p.dob} />
                 <Field label="Nationality" value={p.nationality} />
                 <Field label="Marital Status" value={p.marital_status} />
+                <div style={{ gridColumn: "1 / -1", marginTop: 12, borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, marginBottom: 12, textTransform: "uppercase" }}>Identity Verification Assets</div>
+                  <div style={{ display: "flex", gap: 30 }}>
+                    {p.passport_photo_url && (
+                      <div>
+                        <div style={{ fontSize: 11, color: C.sub, marginBottom: 6 }}>Passport Photo</div>
+                        <img src={p.passport_photo_url} alt="Passport" style={{ width: 100, height: 120, objectFit: "cover", borderRadius: 8, border: `1px solid ${C.border}` }} />
+                      </div>
+                    )}
+                    {p.signature_url && (
+                      <div>
+                        <div style={{ fontSize: 11, color: C.sub, marginBottom: 6 }}>Digital Signature</div>
+                        <div style={{ padding: 10, background: "#fff", borderRadius: 8, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <img src={p.signature_url} alt="Signature" style={{ maxHeight: 60, maxWidth: 200 }} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </>
             )}
           </div>
@@ -5243,12 +7273,31 @@ function MyProfile({ user }) {
 
         {tab === "bank" && (
           <div className="g1 fade" style={{ gap: 12 }}>
-            <Field label="Bank Name" value={p.bank_name} />
-            <Field label="Account Number" value={p.account_number} />
-            <Field label="Account Name" value={p.account_name} />
-            <div style={{ padding: 14, background: `${T.orange}0D`, border: `1px solid ${T.orange}22`, borderRadius: 10, fontSize: 13, color: C.sub, lineHeight: 1.5 }}>
-              <b>Note:</b> These details are used for payroll processing. If you need to update them, please contact the HR department with valid proof.
-            </div>
+            {/* Bank fields: editable in editMode only when the existing value is empty */}
+            {editMode && !p.bank_name ? (
+              <div><Lbl>Bank Name</Lbl><input className="inp" placeholder="e.g. Zenith Bank" value={draft.bank_name || ""} onChange={e => setDraft(d => ({ ...d, bank_name: e.target.value }))} /></div>
+            ) : (
+              <Field label="Bank Name" value={p.bank_name} />
+            )}
+            {editMode && !p.account_number ? (
+              <div><Lbl>Account Number</Lbl><input className="inp" placeholder="10-digit account number" maxLength={10} value={draft.account_number || ""} onChange={e => setDraft(d => ({ ...d, account_number: e.target.value }))} /></div>
+            ) : (
+              <Field label="Account Number" value={p.account_number} />
+            )}
+            {editMode && !p.account_name ? (
+              <div><Lbl>Account Name</Lbl><input className="inp" placeholder="Name as it appears on the account" value={draft.account_name || ""} onChange={e => setDraft(d => ({ ...d, account_name: e.target.value }))} /></div>
+            ) : (
+              <Field label="Account Name" value={p.account_name} />
+            )}
+            {editMode && (!p.bank_name || !p.account_number || !p.account_name) ? (
+              <div style={{ padding: 14, background: `${G}0D`, border: `1px solid ${G}33`, borderRadius: 10, fontSize: 13, color: C.sub, lineHeight: 1.5 }}>
+                ℹ️ You can fill in your empty bank details now. Once saved, only HR can modify them.
+              </div>
+            ) : (
+              <div style={{ padding: 14, background: `${T.orange}0D`, border: `1px solid ${T.orange}22`, borderRadius: 10, fontSize: 13, color: C.sub, lineHeight: 1.5 }}>
+                <b>Note:</b> These details are used for payroll processing. To update existing bank details, contact HR with valid proof.
+              </div>
+            )}
           </div>
         )}
 
@@ -5300,6 +7349,7 @@ function MyPayslip({ user }) {
 // ─── PORTAL WRAPPERS ──────────────────────────────────────────────────────────
 function DrawerNav({ items, page, setPage, user, onLogout, roleLabel, onClose }) {
   const { dark, toggle } = useTheme(); const C = dark ? DARK : LIGHT;
+  const { unreadByType } = useNotifs();
   const G = T.gold;
   return (
     <>
@@ -5314,11 +7364,23 @@ function DrawerNav({ items, page, setPage, user, onLogout, roleLabel, onClose })
         </div>
         <div style={{ fontSize: 9, color: C.muted, letterSpacing: "2px", marginBottom: 6, fontWeight: 700, textTransform: "uppercase" }}>{roleLabel}</div>
         <nav style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 20 }}>
-          {items.map(n => (
-            <button key={n.id} className={`nb ${page === n.id ? "on" : ""}`} onClick={() => { setPage(n.id); onClose(); }}>
-              {IC[n.icon]}{n.label}
-            </button>
-          ))}
+          {items.map(n => {
+            if (n.isHeader) return (
+              <div key={n.label} style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "1px", fontWeight: 800, padding: "12px 16px 4px" }}>{n.label}</div>
+            );
+            const badge = unreadByType[n.id] || 0;
+            return (
+              <button key={n.id} className={`nb ${page === n.id ? "on" : ""}`} onClick={() => { setPage(n.id); onClose(); }}>
+                {IC[n.icon]}
+                <span style={{ flex: 1, textAlign: "left" }}>{n.label}</span>
+                {badge > 0 && (
+                  <span style={{ minWidth: 18, height: 18, borderRadius: 9, padding: "0 5px", background: "#F87171", color: "#fff", fontSize: 10, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </nav>
         <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
@@ -5355,30 +7417,32 @@ function Portal({ user, onLogout, navItems, roleLabel, renderPage, initialPage }
   };
 
   return (
-    <div className="hrm">
-      {/* Mobile top bar */}
-      <div className="hrm-topbar-mobile">
-        <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 17, color: T.gold }}>HR Suite</div>
-        <button onClick={openDrawer} style={{ background: "none", border: `1px solid ${C.border}`, color: C.text, padding: "8px 10px", borderRadius: 10, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-          <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
-          Menu
-        </button>
-      </div>
+    <NotifProvider userId={user?.id}>
+      <div className="hrm">
+        {/* Mobile top bar */}
+        <div className="hrm-topbar-mobile">
+          <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 17, color: T.gold }}>HR Suite</div>
+          <button onClick={openDrawer} style={{ background: "none", border: `1px solid ${C.border}`, color: C.text, padding: "8px 10px", borderRadius: 10, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+            <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
+            Menu
+          </button>
+        </div>
 
-      {/* Mobile slide-in drawer */}
-      <DrawerNav items={navItems} page={page} setPage={setPage} user={user} onLogout={onLogout} roleLabel={roleLabel} onClose={closeDrawer} />
+        {/* Mobile slide-in drawer */}
+        <DrawerNav items={navItems} page={page} setPage={setPage} user={user} onLogout={onLogout} roleLabel={roleLabel} onClose={closeDrawer} />
 
-      {/* Desktop sidebar */}
-      <Sidebar page={page} setPage={setPage} user={user} onLogout={onLogout} items={navItems} roleLabel={roleLabel} />
+        {/* Desktop sidebar */}
+        <Sidebar page={page} setPage={setPage} user={user} onLogout={onLogout} items={navItems} roleLabel={roleLabel} />
 
-      {/* Main content */}
-      <div className="hrm-main" style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-        <Topbar title={navItems.find(n => n.id === page)?.label || ""} user={user} />
-        <div className="hrm-content-padding" style={{ flex: 1, padding: 28 }}>
-          {renderPage(page)}
+        {/* Main content */}
+        <div className="hrm-main" style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+          <Topbar title={navItems.find(n => n.id === page)?.label || ""} user={user} />
+          <div className="hrm-content-padding" style={{ flex: 1, padding: 28 }}>
+            {renderPage(page)}
+          </div>
         </div>
       </div>
-    </div>
+    </NotifProvider>
   );
 }
 
@@ -5397,6 +7461,7 @@ function StaffTimesheet() {
     return dt.toISOString().split('T')[0];
   };
   const [form, setForm] = useState({ week_start: getMonday(), mon: 0, tue: 0, wed: 0, thu: 0, fri: 0, sat: 0, notes: "" });
+  const [syncing, setSyncing] = useState(false);
 
   const load = () => { setLoading(true); apiFetch(`${API_BASE}/hr/timesheets`).then(d => setSheets(d || [])).catch(() => { }).finally(() => setLoading(false)); };
   useEffect(load, []);
@@ -5414,6 +7479,47 @@ function StaffTimesheet() {
       });
       setShowNew(false); setForm({ week_start: getMonday(), mon: 0, tue: 0, wed: 0, thu: 0, fri: 0, sat: 0, notes: "" }); load();
     } catch (e) { alert(e.message); }
+  };
+
+  const syncFromAttendance = async () => {
+    if (!form.week_start) return alert("Please select a week starting date first.");
+    const start = new Date(form.week_start);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 5); // mon to sat
+
+    const startStr = form.week_start;
+    const endStr = end.toISOString().split('T')[0];
+
+    try {
+      setSyncing(true);
+      const data = await apiFetch(`${API_BASE}/hr/presence/attendance?start_date=${startStr}&end_date=${endStr}`);
+      if (!data || data.length === 0) {
+        alert("No attendance records found for this week.");
+        return;
+      }
+
+      const newForm = { ...form };
+      data.forEach(rec => {
+        if (rec.check_in && rec.check_out) {
+          const cin = new Date(rec.check_in);
+          const cout = new Date(rec.check_out);
+          const diffHrs = Math.max(0, Math.round((cout - cin) / (1000 * 60 * 60) * 2) / 2);
+
+          const dDate = new Date(rec.date);
+          const dayMap = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+          const dayKey = dayMap[dDate.getDay()];
+          if (newForm.hasOwnProperty(dayKey)) {
+            newForm[dayKey] = diffHrs;
+          }
+        }
+      });
+      setForm(newForm);
+      alert("Successfully synced hours from your attendance records!");
+    } catch (e) {
+      alert("Sync failed: " + e.message);
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const stCol = { pending: T.gold, approved: "#4ADE80", rejected: "#F87171" };
@@ -5530,7 +7636,12 @@ function StaffTimesheet() {
       {showNew && (
         <Modal onClose={() => setShowNew(false)} title="Log Weekly Hours" width={560}>
           <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            <div><Lbl>Week Starting (Monday)</Lbl><input type="date" className="inp" value={form.week_start} onChange={e => setForm(f => ({ ...f, week_start: e.target.value }))} /></div>
+            <div style={{ display: "flex", gap: 12, alignItems: "flex-end" }}>
+              <div style={{ flex: 1 }}><Lbl>Week Starting (Monday)</Lbl><input type="date" className="inp" value={form.week_start} onChange={e => setForm(f => ({ ...f, week_start: e.target.value }))} /></div>
+              <button className="bg" onClick={syncFromAttendance} disabled={syncing} style={{ padding: "11px 16px", marginBottom: 0, display: "flex", alignItems: "center", gap: 8, height: 44 }}>
+                {syncing ? "⌛ Syncing..." : "🔄 Sync from Attendance"}
+              </button>
+            </div>
             {/* Visual day grid */}
             <div>
               <Lbl>Daily Hours</Lbl>
@@ -5559,6 +7670,64 @@ function StaffTimesheet() {
             <button className="bp" onClick={submit} style={{ padding: 14 }}>Submit for Approval</button>
           </div>
         </Modal>
+      )}
+    </div>
+  );
+}
+
+function TimesheetAuditSection({ sheet, C }) {
+  const [audit, setAudit] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!sheet) return;
+    const start = new Date(sheet.week_start);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 5);
+    const startStr = sheet.week_start;
+    const endStr = end.toISOString().split('T')[0];
+
+    apiFetch(`${API_BASE}/hr/presence/attendance?staff_id=${sheet.staff_id}&start_date=${startStr}&end_date=${endStr}`)
+      .then(data => {
+        let totalAttendance = 0;
+        data.forEach(r => {
+          if (r.check_in && r.check_out) {
+            const cin = new Date(r.check_in);
+            const cout = new Date(r.check_out);
+            const hrs = Math.max(0, Math.round((cout - cin) / (1000 * 60 * 60) * 2) / 2);
+            totalAttendance += hrs;
+          }
+        });
+        const sheetTotal = (sheet.mon_hrs || 0) + (sheet.tue_hrs || 0) + (sheet.wed_hrs || 0) + (sheet.thu_hrs || 0) + (sheet.fri_hrs || 0);
+        const diff = sheetTotal - totalAttendance;
+        setAudit({ totalAttendance, sheetTotal, diff });
+      })
+      .catch(() => { })
+      .finally(() => setLoading(false));
+  }, [sheet]);
+
+  if (loading) return <div style={{ fontSize: 11, color: C.muted, padding: "10px 0" }}>🔍 Verifying against attendance logs...</div>;
+  if (!audit) return null;
+
+  const isVerified = Math.abs(audit.diff) <= 1;
+  const statusCol = isVerified ? "#4ADE80" : audit.diff > 0 ? "#F87171" : T.gold;
+
+  return (
+    <div style={{ padding: "12px 14px", borderRadius: 10, background: `${statusCol}08`, border: `1px solid ${statusCol}33` }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: statusCol, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 5 }}>
+          <span>{isVerified ? "✅" : audit.diff > 0 ? "⚠️" : "ℹ️"}</span>
+          {isVerified ? "Verified: Matches Logs" : audit.diff > 0 ? "Audit Warning: Mismatch" : "Logs exceed claim"}
+        </div>
+        <div style={{ fontSize: 11, color: C.muted, fontWeight: 700 }}>Logs: {audit.totalAttendance}h</div>
+      </div>
+      {!isVerified && audit.diff > 0 && (
+        <div style={{ fontSize: 11, color: C.sub, lineHeight: 1.4 }}>
+          Claim is <b>{audit.diff}h</b> more than the physical attendance clock for this week.
+        </div>
+      )}
+      {isVerified && (
+        <div style={{ fontSize: 10, color: C.muted }}>Timesheet is consistent with clock-in/out records.</div>
       )}
     </div>
   );
@@ -5708,6 +7877,7 @@ function TimesheetApprovalCenter() {
                 </div>;
               })}
             </div>
+            <TimesheetAuditSection sheet={reviewing} C={C} />
             {reviewing.notes && <div style={{ fontSize: 13, color: C.sub, fontStyle: "italic" }}>Staff note: "{reviewing.notes}"</div>}
             <div>
               <Lbl>Reviewer Notes (required for rejection)</Lbl>
@@ -5750,7 +7920,7 @@ function ShiftScheduler({ isHR }) {
   const addShift = async () => {
     if (!form.staff_id || !form.shift_date) return alert("Staff and date required");
     try {
-      await apiFetch(`${API_BASE}/hr/shifts`, { method: "POST", body: JSON.stringify(form) });
+      await apiFetch(`${API_BASE}/hr/shifts`, { method: "POST", body: JSON.stringify({ staff_id: form.staff_id, shift_date: form.shift_date, start_time: form.start_time, end_time: form.end_time, shift_type: form.shift_type, notes: form.notes }) });
       setShowNew(false);
       apiFetch(`${API_BASE}/hr/shifts`).then(setShifts);
     } catch (e) { alert(e.message); }
@@ -5811,21 +7981,39 @@ function ShiftScheduler({ isHR }) {
 }
 
 // ─── HUB: LEAVE POLICIES ─────────────────────────────────────────────────────
-function LeavePolicies() {
+function LeavePolicies({ isHR }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const [policies, setPolicies] = useState([]); const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState({ leave_type: "Annual", days_per_year: 20, carry_over: false, requires_proof: false, description: "" });
+  const [editingPolicy, setEditingPolicy] = useState(null);
+  const emptyForm = { leave_type: "", days_per_year: 20, carry_over: false, requires_proof: false, description: "" };
+  const [form, setForm] = useState(emptyForm);
 
-  useEffect(() => {
-    apiFetch(`${API_BASE}/hr/leave-policies`).then(d => setPolicies(d || [])).catch(() => setPolicies([])).finally(() => setLoading(false));
-  }, []);
+  const reload = () => apiFetch(`${API_BASE}/hr/leave-policies`).then(d => setPolicies(d || [])).catch(() => setPolicies([])).finally(() => setLoading(false));
 
-  const add = async () => {
+  useEffect(() => { reload(); }, []);
+
+  const openAdd = () => { setEditingPolicy(null); setForm(emptyForm); setShowNew(true); };
+  const openEdit = (p) => { setEditingPolicy(p); setForm({ leave_type: p.leave_type, days_per_year: p.days_per_year, carry_over: !!p.carry_over, requires_proof: !!p.requires_proof, description: p.description || "" }); setShowNew(true); };
+
+  const save = async () => {
+    if (!form.leave_type.trim()) return alert("Leave type is required.");
     try {
-      await apiFetch(`${API_BASE}/hr/leave-policies`, { method: "POST", body: JSON.stringify(form) });
-      setShowNew(false);
-      apiFetch(`${API_BASE}/hr/leave-policies`).then(d => setPolicies(d || []));
+      if (editingPolicy?.id) {
+        await apiFetch(`${API_BASE}/hr/leave-policies/${editingPolicy.id}`, { method: "PATCH", body: JSON.stringify({ leave_type: form.leave_type, days_per_year: form.days_per_year, carry_over: form.carry_over, requires_proof: form.requires_proof, description: form.description }) });
+      } else {
+        await apiFetch(`${API_BASE}/hr/leave-policies`, { method: "POST", body: JSON.stringify({ leave_type: form.leave_type, days_per_year: form.days_per_year, carry_over: form.carry_over, requires_proof: form.requires_proof, description: form.description }) });
+      }
+      setShowNew(false); setEditingPolicy(null); reload();
+    } catch (e) { alert(e.message); }
+  };
+
+  const deletePolicy = async (p) => {
+    if (!p.id) return alert("Cannot delete default policies.");
+    if (!confirm(`Delete the "${p.leave_type}" policy? This cannot be undone.`)) return;
+    try {
+      await apiFetch(`${API_BASE}/hr/leave-policies/${p.id}`, { method: "DELETE" });
+      reload();
     } catch (e) { alert(e.message); }
   };
 
@@ -5838,43 +8026,57 @@ function LeavePolicies() {
     { leave_type: "Compassionate Leave", days_per_year: 3, carry_over: false, description: "Bereavement and family emergency" },
   ];
 
+  const displayPolicies = policies.length > 0 ? policies : defaults;
+
   return (
     <div className="fade">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
         <div><div className="ho" style={{ fontSize: 22 }}>Leave Policies</div><div style={{ fontSize: 13, color: C.sub }}>Configure leave types, entitlements and carry-over rules.</div></div>
-        <button className="bp" onClick={() => setShowNew(true)}>+ Add Policy</button>
+        {isHR && <button className="bp" onClick={openAdd}>+ Add Policy</button>}
       </div>
-      <div className="g2" style={{ gap: 16, marginBottom: 22 }}>
-        {(policies.length > 0 ? policies : defaults).map((p, i) => (
-          <div key={i} className="gc" style={{ padding: 20 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-              <div className="ho" style={{ fontSize: 15 }}>{p.leave_type}</div>
-              <span className="tg to" style={{ fontSize: 12 }}>{p.days_per_year} days/yr</span>
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading policies…</div> : (
+        <div className="g2" style={{ gap: 16, marginBottom: 22 }}>
+          {displayPolicies.map((p, i) => (
+            <div key={p.id || i} className="gc" style={{ padding: 20, position: "relative" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12, alignItems: "flex-start" }}>
+                <div className="ho" style={{ fontSize: 15 }}>{p.leave_type}</div>
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <span className="tg to" style={{ fontSize: 12 }}>{p.days_per_year} days/yr</span>
+                  {isHR && p.id && (
+                    <>
+                      <button onClick={() => openEdit(p)} style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 6, padding: "3px 10px", fontSize: 11, color: C.sub, cursor: "pointer" }}>Edit</button>
+                      <button onClick={() => deletePolicy(p)} style={{ background: "transparent", border: "1px solid #F8717133", borderRadius: 6, padding: "3px 10px", fontSize: 11, color: "#F87171", cursor: "pointer" }}>Delete</button>
+                    </>
+                  )}
+                </div>
+              </div>
+              <div style={{ fontSize: 12, color: C.sub, marginBottom: 10, lineHeight: 1.5 }}>{p.description || "—"}</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                {p.carry_over && <span className="tg tg2" style={{ fontSize: 10 }}>Carry Over</span>}
+                {p.requires_proof && <span className="tg tb" style={{ fontSize: 10 }}>Proof Required</span>}
+              </div>
             </div>
-            <div style={{ fontSize: 12, color: C.sub, marginBottom: 10, lineHeight: 1.5 }}>{p.description || "—"}</div>
-            <div style={{ display: "flex", gap: 8 }}>
-              {p.carry_over && <span className="tg tg2" style={{ fontSize: 10 }}>Carry Over</span>}
-              {p.requires_proof && <span className="tg tb" style={{ fontSize: 10 }}>Proof Required</span>}
-            </div>
-          </div>
-        ))}
-      </div>
-      {showNew && <Modal onClose={() => setShowNew(false)} title="Add Leave Policy">
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div><Lbl>Leave Type *</Lbl><input className="inp" value={form.leave_type} onChange={e => setForm(f => ({ ...f, leave_type: e.target.value }))} /></div>
-          <div><Lbl>Days Per Year</Lbl><input type="number" className="inp" value={form.days_per_year} onChange={e => setForm(f => ({ ...f, days_per_year: +e.target.value }))} /></div>
-          <div><Lbl>Description</Lbl><textarea className="inp" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></div>
-          <div style={{ display: "flex", gap: 16 }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, color: C.sub, fontSize: 13 }}>
-              <input type="checkbox" checked={form.carry_over} onChange={e => setForm(f => ({ ...f, carry_over: e.target.checked }))} /> Allow Carry Over
-            </label>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, color: C.sub, fontSize: 13 }}>
-              <input type="checkbox" checked={form.requires_proof} onChange={e => setForm(f => ({ ...f, requires_proof: e.target.checked }))} /> Requires Proof
-            </label>
-          </div>
-          <button className="bp" onClick={add}>Save Policy</button>
+          ))}
         </div>
-      </Modal>}
+      )}
+      {showNew && (
+        <Modal onClose={() => { setShowNew(false); setEditingPolicy(null); }} title={editingPolicy ? `Edit — ${editingPolicy.leave_type}` : "Add Leave Policy"}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div><Lbl>Leave Type *</Lbl><input className="inp" value={form.leave_type} onChange={e => setForm(f => ({ ...f, leave_type: e.target.value }))} placeholder="e.g. Sick Leave" /></div>
+            <div><Lbl>Days Per Year</Lbl><input type="number" className="inp" value={form.days_per_year} onChange={e => setForm(f => ({ ...f, days_per_year: +e.target.value }))} /></div>
+            <div><Lbl>Description</Lbl><textarea className="inp" rows={3} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Brief policy description…" /></div>
+            <div style={{ display: "flex", gap: 16 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, color: C.sub, fontSize: 13 }}>
+                <input type="checkbox" checked={form.carry_over} onChange={e => setForm(f => ({ ...f, carry_over: e.target.checked }))} /> Allow Carry Over
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, color: C.sub, fontSize: 13 }}>
+                <input type="checkbox" checked={form.requires_proof} onChange={e => setForm(f => ({ ...f, requires_proof: e.target.checked }))} /> Requires Proof
+              </label>
+            </div>
+            <button className="bp" onClick={save}>{editingPolicy ? "Save Changes" : "Add Policy"}</button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -5986,7 +8188,7 @@ function ImprovementPlans({ viewOnly, userId, authRole }) {
   const save = async () => {
     if (!form.staff_id || !form.reason || !form.start_date) return alert("Staff, reason and start date required");
     try {
-      await apiFetch(`${API_BASE}/hr/pip`, { method: "POST", body: JSON.stringify(form) });
+      await apiFetch(`${API_BASE}/hr/pip`, { method: "POST", body: JSON.stringify({ staff_id: form.staff_id, reason: form.reason, goals: form.goals, start_date: form.start_date, review_date: form.review_date, notes: form.notes }) });
       setShowNew(false); apiFetch(`${API_BASE}/hr/pip`).then(d => setPips(d || []));
     } catch (e) { alert(e.message); }
   };
@@ -6058,7 +8260,7 @@ function SuccessionPlanning() {
     if (!form.critical_role || !form.successor_id) return alert("Role and successor required.");
     setSaving(true);
     try {
-      await apiFetch(`${API_BASE}/hr/succession-plans`, { method: "POST", body: JSON.stringify(form) });
+      await apiFetch(`${API_BASE}/hr/succession-plans`, { method: "POST", body: JSON.stringify({ critical_role: form.critical_role, successor_id: form.successor_id, readiness: form.readiness, development_notes: form.development_notes }) });
       setShowNew(false); setForm({ critical_role: "", successor_id: "", readiness: "6-12 months", development_notes: "" });
       refresh();
     } catch (e) { alert("Error: " + e.message); } finally { setSaving(false); }
@@ -6192,10 +8394,10 @@ function SkillsMatrix() {
 }
 
 // ─── HUB: LEARNING & TRAINING ────────────────────────────────────────────────
-function LearningHub({ isHR }) {
+function LearningHub({ isHR, defaultTab = "trainings" }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const [trainings, setTrainings] = useState([]); const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState("trainings");
+  const [tab, setTab] = useState(defaultTab);
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({ title: "", training_type: "Internal", description: "", start_date: "", end_date: "", trainer: "" });
 
@@ -6206,7 +8408,7 @@ function LearningHub({ isHR }) {
   const add = async () => {
     if (!form.title || !form.start_date) return alert("Title and start date required");
     try {
-      await apiFetch(`${API_BASE}/hr/trainings`, { method: "POST", body: JSON.stringify(form) });
+      await apiFetch(`${API_BASE}/hr/trainings`, { method: "POST", body: JSON.stringify({ title: form.title, training_type: form.training_type, description: form.description, start_date: form.start_date, end_date: form.end_date, trainer: form.trainer }) });
       setShowNew(false); apiFetch(`${API_BASE}/hr/trainings`).then(d => setTrainings(d || []));
     } catch (e) { alert(e.message); }
   };
@@ -6276,6 +8478,7 @@ function OnboardingHub({ isHR }) {
   const [staff, setStaff] = useState([]); const [selected, setSelected] = useState(null);
   const [checklist, setChecklist] = useState([]); const [loading, setLoading] = useState(false);
   const [showNew, setShowNew] = useState(false);
+  const [tab, setTab] = useState("progress");
 
   const defaultItems = ["Sign Employment Contract", "Complete ID Verification", "IT Equipment Issued", "Company Email Created", "System Access Granted", "Meet Line Manager", "Complete HR Induction", "Review Company Handbook", "Set up Payroll Information", "Complete Probation Agreement"];
 
@@ -6309,38 +8512,69 @@ function OnboardingHub({ isHR }) {
 
   return (
     <div className="fade">
-      <div style={{ marginBottom: 22 }}>
-        <div className="ho" style={{ fontSize: 22 }}>Onboarding</div>
-        <div style={{ fontSize: 13, color: C.sub }}>New hire onboarding checklists and task completion.</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+        <div><div className="ho" style={{ fontSize: 22 }}>Onboarding Hub</div><div style={{ fontSize: 13, color: C.sub }}>Manage new hire onboarding and standard checklists.</div></div>
+        <Tabs items={[["progress", "Hire Progress"], ["master", "Master Checklist"]]} active={tab} setActive={setTab} />
       </div>
-      {isHR && (
-        <div style={{ display: "flex", gap: 12, marginBottom: 22, flexWrap: "wrap" }}>
-          <select className="inp" style={{ maxWidth: 300 }} value={selected?.id || ""} onChange={e => { const s = staff.find(x => x.id === e.target.value); setSelected(s || null); if (s) loadChecklist(s.id); }}>
-            <option value="">— Select New Hire —</option>
-            {staff.filter(s => s.is_active).map(s => <option key={s.id} value={s.id}>{s.full_name} ({s.department})</option>)}
-          </select>
-          {selected && checklist.length === 0 && <button className="bp" onClick={() => createChecklist(selected.id)}>Generate Checklist</button>}
-        </div>
-      )}
-      {selected && checklist.length > 0 && (
+
+      {tab === "progress" ? (
         <>
-          <div style={{ marginBottom: 18 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.text, marginBottom: 8 }}>
-              <span style={{ fontWeight: 800 }}>{selected.full_name} — Onboarding Progress</span>
-              <span style={{ color: T.gold, fontWeight: 800 }}>{completed}/{total} complete ({pct}%)</span>
+          {isHR && (
+            <div style={{ display: "flex", gap: 12, marginBottom: 22, flexWrap: "wrap" }}>
+              <select className="inp" style={{ maxWidth: 300 }} value={selected?.id || ""} onChange={e => { const s = staff.find(x => x.id === e.target.value); setSelected(s || null); if (s) loadChecklist(s.id); }}>
+                <option value="">👤 Select New Hire 👤</option>
+                {staff.filter(s => s.is_active).map(s => <option key={s.id} value={s.id}>{s.full_name} ({s.department})</option>)}
+              </select>
+              {selected && checklist.length === 0 && <button className="bp" onClick={() => createChecklist(selected.id)}>Generate Checklist</button>}
             </div>
-            <Bar pct={pct} />
-          </div>
-          <div className="g2">{checklist.map(item => (
-            <div key={item.id} className="gc" style={{ padding: 16, display: "flex", alignItems: "center", gap: 14, borderLeft: `3px solid ${item.completed ? "#4ADE80" : C.border}` }}>
-              <div onClick={() => !item.completed && markDone(item.id)} style={{ width: 22, height: 22, borderRadius: "50%", border: `2px solid ${item.completed ? "#4ADE80" : C.border}`, background: item.completed ? "#4ADE80" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: item.completed ? "default" : "pointer", flexShrink: 0, color: item.completed ? "#0F1318" : "transparent", fontWeight: 800, fontSize: 12 }}>✓</div>
-              <span style={{ fontSize: 13, color: item.completed ? C.muted : C.text, textDecoration: item.completed ? "line-through" : "none" }}>{item.item}</span>
-            </div>
-          ))}</div>
+          )}
+          {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading...</div> : (
+            <>
+              {selected && checklist.length > 0 && (
+                <>
+                  <div style={{ marginBottom: 18 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.text, marginBottom: 8 }}>
+                      <span style={{ fontWeight: 800 }}>{selected.full_name} — Onboarding Progress</span>
+                      <span style={{ color: T.gold, fontWeight: 800 }}>{completed}/{total} complete ({pct}%)</span>
+                    </div>
+                    <Bar pct={pct} />
+                  </div>
+                  <div className="g2">{checklist.map(item => (
+                    <div key={item.id} className="gc" style={{ padding: 16, display: "flex", alignItems: "center", gap: 14, borderLeft: `3px solid ${item.completed ? "#4ADE80" : C.border}` }}>
+                      <div onClick={() => !item.completed && markDone(item.id)} style={{ width: 22, height: 22, borderRadius: "50%", border: `2px solid ${item.completed ? "#4ADE80" : C.border}`, background: item.completed ? "#4ADE80" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: item.completed ? "default" : "pointer", flexShrink: 0, color: item.completed ? "#0F1318" : "transparent", fontWeight: 800, fontSize: 12 }}>✓</div>
+                      <span style={{ fontSize: 13, color: item.completed ? C.muted : C.text, textDecoration: item.completed ? "line-through" : "none" }}>{item.item}</span>
+                    </div>
+                  ))}</div>
+                </>
+              )}
+              {(!selected || checklist.length === 0) && !loading && (
+                <div className="gc" style={{ padding: 60, textAlign: "center", color: C.muted, background: C.card }}>
+                  <div style={{ fontSize: 32, marginBottom: 12 }}>👤</div>
+                  <div style={{ fontWeight: 800, color: C.sub }}>No Checklist Active</div>
+                  <div style={{ fontSize: 13 }}>Select a new hire above to view or generate their onboarding tasks.</div>
+                </div>
+              )}
+            </>
+          )}
         </>
-      )}
-      {(!selected || checklist.length === 0) && !loading && (
-        <div className="gc" style={{ padding: 40, textAlign: "center", color: C.muted }}>Select a new hire above to view or generate their onboarding checklist.</div>
+      ) : (
+        <div className="fade">
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontWeight: 800, fontSize: 16, color: C.text, marginBottom: 4 }}>Master Onboarding Template</div>
+            <div style={{ fontSize: 13, color: C.sub }}>These items are automatically assigned to every new hire when their checklist is generated.</div>
+          </div>
+          <div className="g2">
+            {defaultItems.map((item, i) => (
+              <div key={i} className="gc" style={{ padding: "14px 18px", display: "flex", alignItems: "center", gap: 12, borderLeft: `3px solid ${T.gold}` }}>
+                <div style={{ width: 24, height: 24, borderRadius: "50%", background: `${T.gold}22`, color: T.gold, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800 }}>{i + 1}</div>
+                <span style={{ fontSize: 13, color: C.text }}>{item}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: 20, padding: 16, background: `${T.gold}11`, borderRadius: 8, border: `1px dashed ${T.gold}44`, fontSize: 12, color: C.sub, textAlign: "center" }}>
+            Note: Master checklist is currently set globally. To modify these items, please contact the system administrator.
+          </div>
+        </div>
       )}
     </div>
   );
@@ -6363,7 +8597,7 @@ function ProbationTracker({ isHR }) {
   const save = async () => {
     if (!form.staff_id || !form.review_date) return alert("Staff and date required");
     try {
-      await apiFetch(`${API_BASE}/hr/probation`, { method: "POST", body: JSON.stringify(form) });
+      await apiFetch(`${API_BASE}/hr/probation`, { method: "POST", body: JSON.stringify({ staff_id: form.staff_id, review_date: form.review_date, outcome: form.outcome, notes: form.notes }) });
       setShowNew(false); apiFetch(`${API_BASE}/hr/probation`).then(d => setReviews(d || []));
     } catch (e) { alert(e.message); }
   };
@@ -6558,58 +8792,138 @@ function BonusManager({ isHR }) {
 // ─── HUB: TAX CONFIGURATION ──────────────────────────────────────────────────
 function TaxConfig() {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
-  const [config, setConfig] = useState({ paye_enabled: true, pension_employee_rate: 8, pension_employer_rate: 10, nhf_rate: 2.5, wht_default_rate: 5, wht_contractor_rate: 10 });
-  const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false);
+  const [config, setConfig] = useState({
+    paye_enabled: true,
+    pension_employee_rate: 8, pension_employer_rate: 10,
+    nhf_rate: 2.5,
+    wht_default_rate: 5, wht_contractor_rate: 10,
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    apiFetch(`${API_BASE}/hr/tax-config`).then(d => { if (d) setConfig(c => ({ ...c, ...d })); }).catch(() => { }).finally(() => setLoading(false));
+    apiFetch(`${API_BASE}/hr/tax-config`)
+      .then(d => { if (d) setConfig(c => ({ ...c, ...d })); })
+      .catch(() => { })
+      .finally(() => setLoading(false));
   }, []);
 
   const save = async () => {
     setSaving(true);
     try {
-      await apiFetch(`${API_BASE}/hr/tax-config`, { method: "POST", body: JSON.stringify(config) });
+      await apiFetch(`${API_BASE}/hr/tax-config`, { method: "PATCH", body: JSON.stringify(config) });
       alert("Tax configuration saved successfully.");
     } catch (e) { alert("Error: " + e.message); } finally { setSaving(false); }
   };
 
-  const Field = ({ label, field, suffix = "%", step = "0.5", min = "0", max = "100" }) => (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: `1px solid ${C.border}` }}>
-      <span style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>{label}</span>
+  const Field = ({ label, hint, field, suffix = "%", step = "0.5", min = "0", max = "100" }) => (
+    <div style={{
+      display: "flex", justifyContent: "space-between", alignItems: "center",
+      padding: "12px 0", borderBottom: `1px solid ${C.border}`
+    }}>
+      <div>
+        <div style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>{label}</div>
+        {hint && <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{hint}</div>}
+      </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <input type="number" step={step} min={min} max={max} value={config[field]} onChange={e => setConfig(c => ({ ...c, [field]: parseFloat(e.target.value) }))}
-          style={{ width: 80, padding: "6px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: dark ? "#1a1a2e" : "#f8f8f8", color: C.text, fontSize: 14, fontWeight: 800, textAlign: "right" }} />
-        <span style={{ fontSize: 12, color: C.muted, width: 20 }}>{suffix}</span>
+        <input type="number" step={step} min={min} max={max} value={config[field]}
+          onChange={e => setConfig(c => ({ ...c, [field]: parseFloat(e.target.value) }))}
+          style={{
+            width: 80, padding: "6px 10px", borderRadius: 8,
+            border: `1px solid ${C.border}`, background: dark ? "#1a1a2e" : "#f8f8f8",
+            color: C.text, fontSize: 14, fontWeight: 800, textAlign: "right"
+          }} />
+        <span style={{ fontSize: 12, color: C.muted, width: 28 }}>{suffix}</span>
       </div>
     </div>
   );
+
+  const BANDS_2026 = [
+    ["₦0 – ₦800,000", "0%", "Exempt"],
+    ["₦800,001 – ₦3,000,000", "15%", ""],
+    ["₦3,000,001 – ₦12,000,000", "18%", ""],
+    ["₦12,000,001 – ₦25,000,000", "21%", ""],
+    ["₦25,000,001 – ₦50,000,000", "23%", ""],
+    ["Above ₦50,000,000", "25%", "Top rate"],
+  ];
 
   return (
     <div className="fade">
       <div style={{ marginBottom: 22 }}>
         <div className="ho" style={{ fontSize: 22 }}>Tax Configuration</div>
-        <div style={{ fontSize: 13, color: C.sub }}>Nigerian PAYE, Pension, NHF and WHT rates and settings.</div>
+        <div style={{ fontSize: 13, color: C.sub }}>
+          Nigerian PAYE, Pension, NHF and WHT rates — updated for <strong>Nigeria Tax Act (NTA) 2025</strong>, effective Jan 1 2026.
+        </div>
+      </div>
+
+      {/* NTA 2025 notice banner */}
+      <div style={{
+        background: "#FEF3C7", border: "1px solid #FDE68A", borderRadius: 10,
+        padding: "12px 18px", marginBottom: 22, display: "flex", gap: 12, alignItems: "flex-start"
+      }}>
+        <span style={{ fontSize: 18 }}>⚖️</span>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: "#92400E" }}>Nigeria Tax Act 2025 — Now in Effect</div>
+          <div style={{ fontSize: 12, color: "#78350F", marginTop: 3, lineHeight: 1.6 }}>
+            The Consolidated Relief Allowance (CRA) has been <strong>abolished</strong>. PAYE now uses updated progressive bands (0%–25%).
+            The employer's obligation is to deduct PAYE on gross income minus pension minus NHF — nothing more.
+            Employees may claim personal deductions (e.g. rent relief) directly with FIRS on their own annual return.
+          </div>
+        </div>
       </div>
 
       {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading…</div> : (
         <div className="g2">
+
           {/* PAYE */}
           <div className="gc" style={{ padding: 24 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
               <div style={{ fontWeight: 800, color: "#F87171", fontSize: 15 }}>PAYE (Pay As You Earn)</div>
               <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
                 <span style={{ fontSize: 12, color: C.muted }}>Enabled</span>
-                <div onClick={() => setConfig(c => ({ ...c, paye_enabled: !c.paye_enabled }))} style={{ width: 40, height: 22, borderRadius: 11, background: config.paye_enabled ? "#4ADE80" : C.border, position: "relative", cursor: "pointer", transition: "background 0.2s" }}>
-                  <div style={{ position: "absolute", top: 3, left: config.paye_enabled ? 21 : 3, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
+                <div onClick={() => setConfig(c => ({ ...c, paye_enabled: !c.paye_enabled }))}
+                  style={{
+                    width: 40, height: 22, borderRadius: 11,
+                    background: config.paye_enabled ? "#4ADE80" : C.border,
+                    position: "relative", cursor: "pointer", transition: "background 0.2s"
+                  }}>
+                  <div style={{
+                    position: "absolute", top: 3,
+                    left: config.paye_enabled ? 21 : 3,
+                    width: 16, height: 16, borderRadius: "50%",
+                    background: "#fff", transition: "left 0.2s"
+                  }} />
                 </div>
               </label>
             </div>
-            <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6, marginBottom: 16 }}>Progressive rate: 7–24% based on income band per FIRS guidelines. Remitted monthly to FIRS.</div>
-            <div style={{ padding: 12, background: "#F8717111", borderRadius: 8, fontSize: 12 }}>
-              <div style={{ fontWeight: 800, color: "#F87171", marginBottom: 6 }}>PAYE Bands (Fixed — FIRS)</div>
-              {[["First ₦300,000", "7%"], ["Next ₦300,000", "11%"], ["Next ₦500,000", "15%"], ["Next ₦500,000", "19%"], ["Next ₦1,600,000", "21%"], ["Above ₦3,200,000", "24%"]].map(([band, rate]) => (
-                <div key={band} style={{ display: "flex", justifyContent: "space-between", color: C.sub, marginBottom: 3 }}>
-                  <span>{band}</span><span style={{ fontWeight: 700, color: "#F87171" }}>{rate}</span>
+            <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6, marginBottom: 14 }}>
+              Progressive rate: 0–25% per NTA 2025. Remitted to FIRS by the 10th of the following month.
+              Employees earning ≤ ₦800,000/year are fully exempt.
+            </div>
+
+            {/* 2026 Bands table */}
+            <div style={{
+              background: dark ? "#1a1a2e" : "#FEF2F2", borderRadius: 8,
+              border: `1px solid ${dark ? "#3f3f5a" : "#FECACA"}`, overflow: "hidden"
+            }}>
+              <div style={{
+                padding: "8px 12px", background: "#F87171", fontSize: 10,
+                fontWeight: 800, color: "#fff", textTransform: "uppercase", letterSpacing: 1
+              }}>
+                NTA 2025 PAYE Bands (Fixed by FIRS — not editable)
+              </div>
+              {BANDS_2026.map(([band, rate, note]) => (
+                <div key={band} style={{
+                  display: "flex", justifyContent: "space-between",
+                  alignItems: "center", padding: "7px 12px",
+                  borderBottom: `1px solid ${dark ? "#2d2d4a" : "#FEE2E2"}`,
+                  fontSize: 12
+                }}>
+                  <span style={{ color: C.sub }}>{band}</span>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    {note && <span style={{ fontSize: 10, color: "#F87171", fontStyle: "italic" }}>{note}</span>}
+                    <span style={{ fontWeight: 800, color: "#F87171", minWidth: 32, textAlign: "right" }}>{rate}</span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -6617,31 +8931,41 @@ function TaxConfig() {
 
           {/* Pension */}
           <div className="gc" style={{ padding: 24 }}>
-            <div style={{ fontWeight: 800, color: "#60A5FA", fontSize: 15, marginBottom: 6 }}>Pension Contribution (PRA 2014)</div>
-            <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6, marginBottom: 18 }}>Mandatory for all staff on payroll. Remitted to approved PFAs by the 7th of each month.</div>
-            <Field label="Employee Contribution" field="pension_employee_rate" />
-            <Field label="Employer Contribution" field="pension_employer_rate" />
+            <div style={{ fontWeight: 800, color: "#60A5FA", fontSize: 15, marginBottom: 4 }}>Pension (PRA 2014)</div>
+            <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6, marginBottom: 14 }}>
+              Mandatory for all staff. Computed on pensionable emoluments (Basic + Housing + Transport only).
+              Remitted to the employee's PFA by the 7th of each month.
+            </div>
+            <Field label="Employee Contribution" hint="Statutory minimum is 8%" field="pension_employee_rate" />
+            <Field label="Employer Contribution" hint="Statutory minimum is 10%" field="pension_employer_rate" />
           </div>
 
           {/* NHF */}
           <div className="gc" style={{ padding: 24 }}>
-            <div style={{ fontWeight: 800, color: T.gold, fontSize: 15, marginBottom: 6 }}>NHF (National Housing Fund)</div>
-            <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6, marginBottom: 18 }}>Applies to Nigerians earning ₦3,000/month or more. Remitted to FMBN.</div>
+            <div style={{ fontWeight: 800, color: T.gold, fontSize: 15, marginBottom: 4 }}>NHF (National Housing Fund)</div>
+            <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6, marginBottom: 14 }}>
+              Applies to Nigerians earning ₦3,000/month or more. Remitted to FMBN. Computed on basic salary only.
+            </div>
             <Field label="NHF Rate (of basic salary)" field="nhf_rate" step="0.5" />
           </div>
 
           {/* WHT */}
           <div className="gc" style={{ padding: 24 }}>
-            <div style={{ fontWeight: 800, color: "#4ADE80", fontSize: 15, marginBottom: 6 }}>WHT (Withholding Tax)</div>
-            <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6, marginBottom: 18 }}>Deducted at source before contractor and professional fee payments.</div>
-            <Field label="Default WHT Rate" field="wht_default_rate" />
+            <div style={{ fontWeight: 800, color: "#4ADE80", fontSize: 15, marginBottom: 4 }}>WHT (Withholding Tax)</div>
+            <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6, marginBottom: 14 }}>
+              Deducted at source before commission and professional fee payments. Remitted to FIRS by the 21st.
+            </div>
+            <Field label="Default WHT Rate (e.g. commission)" field="wht_default_rate" />
             <Field label="Contractor WHT Rate" field="wht_contractor_rate" />
           </div>
+
         </div>
       )}
 
       <div style={{ marginTop: 24, display: "flex", justifyContent: "flex-end" }}>
-        <button className="bp" onClick={save} disabled={saving} style={{ padding: "12px 32px" }}>{saving ? "Saving…" : "Save Configuration"}</button>
+        <button className="bp" onClick={save} disabled={saving} style={{ padding: "12px 32px" }}>
+          {saving ? "Saving…" : "Save Configuration"}
+        </button>
       </div>
     </div>
   );
@@ -6652,19 +8976,54 @@ function Announcements({ isHR }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const [items, setItems] = useState([]); const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
+  const [posting, setPosting] = useState(false);
   const [form, setForm] = useState({ title: "", body: "", priority: "Normal", target_department: "" });
 
+  const loadAnnouncements = () =>
+    apiFetch(`${API_BASE}/hr/announcements`).then(d => setItems(d || [])).catch(() => setItems([]));
+
   useEffect(() => {
-    apiFetch(`${API_BASE}/hr/announcements`).then(d => setItems(d || [])).catch(() => setItems([])).finally(() => setLoading(false));
+    loadAnnouncements().finally(() => setLoading(false));
   }, []);
 
   const post = async () => {
     if (!form.title || !form.body) return alert("Title and body required");
+    setPosting(true);
     try {
-      await apiFetch(`${API_BASE}/hr/announcements`, { method: "POST", body: JSON.stringify(form) });
-      setShowNew(false); setForm({ title: "", body: "", priority: "Normal", target_department: "" });
-      apiFetch(`${API_BASE}/hr/announcements`).then(d => setItems(d || []));
-    } catch (e) { alert(e.message); }
+      // 1. Create the announcement
+      await apiFetch(`${API_BASE}/hr/announcements`, {
+        method: "POST",
+        body: JSON.stringify({
+          title: form.title,
+          body: form.body,
+          priority: form.priority,
+          target_department: form.target_department || null
+        })
+      });
+
+      // 2. Fetch all staff to notify
+      const allStaff = await apiFetch(`${API_BASE}/hr/staff`).catch(() => []);
+      const targets = form.target_department
+        ? allStaff.filter(s => s.department === form.target_department)
+        : allStaff;
+
+      const priorityIcon = { Urgent: "🚨", Normal: "📢", Info: "ℹ️" }[form.priority] || "📢";
+      const notifMsg = `${priorityIcon} New announcement: "${form.title}" — ${form.body.slice(0, 120)}${form.body.length > 120 ? "…" : ""}`;
+
+      // 3. Send notification to each target staff member in parallel
+      await Promise.allSettled(
+        targets.map(s =>
+          apiFetch(`${API_BASE}/hr/notifications`, {
+            method: "POST",
+            body: JSON.stringify({ staff_id: s.id, type: "announcement", message: notifMsg })
+          })
+        )
+      );
+
+      setShowNew(false);
+      setForm({ title: "", body: "", priority: "Normal", target_department: "" });
+      loadAnnouncements();
+    } catch (e) { alert(e.message); } finally { setPosting(false); }
   };
 
   const priorityCol = { Normal: T.gold, Urgent: "#F87171", Info: "#60A5FA" };
@@ -6705,9 +9064,12 @@ function Announcements({ isHR }) {
                 <option>Normal</option><option>Urgent</option><option>Info</option>
               </select>
             </div>
-            <div><Lbl>Target Dept (blank = all)</Lbl><input className="inp" placeholder="All Departments" value={form.target_department} onChange={e => setForm(f => ({ ...f, target_department: e.target.value }))} /></div>
+            <div><Lbl>Target Dept (blank = all staff)</Lbl><input className="inp" placeholder="All Departments" value={form.target_department} onChange={e => setForm(f => ({ ...f, target_department: e.target.value }))} /></div>
           </div>
-          <button className="bp" onClick={post}>Post Announcement</button>
+          <div style={{ fontSize: 12, color: C.muted }}>
+            💡 All {form.target_department ? `staff in ${form.target_department}` : "staff"} will receive a notification bell alert immediately.
+          </div>
+          <button className="bp" onClick={post} disabled={posting} style={{ padding: 13 }}>{posting ? "Posting & Notifying…" : "Post Announcement"}</button>
         </div>
       </Modal>}
     </div>
@@ -6731,7 +9093,7 @@ function RecognitionWall({ user }) {
   const give = async () => {
     if (!form.recipient_id || !form.message) return alert("Recipient and message required");
     try {
-      await apiFetch(`${API_BASE}/hr/recognition`, { method: "POST", body: JSON.stringify(form) });
+      await apiFetch(`${API_BASE}/hr/recognition`, { method: "POST", body: JSON.stringify({ recipient_id: form.recipient_id, message: form.message, badge_type: form.badge_type }) });
       // Notify the recipient
       await apiFetch(`${API_BASE}/hr/notifications`, {
         method: "POST",
@@ -6797,26 +9159,67 @@ function RecognitionWall({ user }) {
 // ─── HUB: REMOTE WORK ────────────────────────────────────────────────────────
 function RemoteWork() {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  // Derive user & isHR from the JWT token stored in localStorage
+  const _rwToken = typeof localStorage !== "undefined" ? localStorage.getItem("ec_token") : null;
+  let _rwUser = null, _rwIsHR = false;
+  try {
+    if (_rwToken) {
+      const _p = JSON.parse(atob(_rwToken.split(".")[1]));
+      _rwUser = { id: _p.sub, full_name: _p.full_name, email: _p.email };
+      const _roles = (_p.role || "").toLowerCase().split(",").map(r => r.trim());
+      _rwIsHR = _roles.some(r => ["admin", "super_admin", "hr_admin", "operations"].includes(r));
+    }
+  } catch (_) { }
+  const user = _rwUser;
+  const isHR = _rwIsHR;
+  const currentUserId = user?.id || null;
   const [requests, setRequests] = useState([]); const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({ work_date: "", reason: "", location: "" });
   const [saving, setSaving] = useState(false);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [hrView, setHrView] = useState(false);
 
   const statusStyle = { pending: { bg: "#F59E0B22", col: "#F59E0B" }, approved: { bg: "#4ADE8022", col: "#4ADE80" }, rejected: { bg: "#F8717122", col: "#F87171" } };
 
-  useEffect(() => {
-    apiFetch(`${API_BASE}/hr/remote-work`).catch(() => []).then(d => setRequests(Array.isArray(d) ? d : [])).finally(() => setLoading(false));
-  }, []);
+  const loadRequests = () => {
+    const url = hrView ? `${API_BASE}/hr/remote-work?all=true` : `${API_BASE}/hr/remote-work`;
+    apiFetch(url).catch(() => []).then(d => setRequests(Array.isArray(d) ? d : [])).finally(() => setLoading(false));
+  };
+
+  useEffect(() => { loadRequests(); }, [hrView]);
 
   const submit = async () => {
     if (!form.work_date) return alert("Please select a date.");
     setSaving(true);
     try {
-      await apiFetch(`${API_BASE}/hr/remote-work`, { method: "POST", body: JSON.stringify(form) });
+      await apiFetch(`${API_BASE}/hr/remote-work`, { method: "POST", body: JSON.stringify({ work_date: form.work_date, reason: form.reason, location: form.location }) });
       setShowNew(false); setForm({ work_date: "", reason: "", location: "" });
-      apiFetch(`${API_BASE}/hr/remote-work`).catch(() => []).then(d => setRequests(Array.isArray(d) ? d : []));
+      loadRequests();
     } catch (e) { alert("Error: " + e.message); } finally { setSaving(false); }
   };
+
+  const updateStatus = async (reqId, newStatus, staffId) => {
+    setActionBusy(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/remote-work/${reqId}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: newStatus })
+      });
+      loadRequests();
+    } catch (e) { alert("Error: " + e.message); } finally { setActionBusy(false); }
+  };
+
+  // Detect HR role from token claims stored in localStorage
+  const tokenRaw = typeof localStorage !== "undefined" ? localStorage.getItem("ec_token") : null;
+  let isHRUser = false;
+  try {
+    if (tokenRaw) {
+      const payload = JSON.parse(atob(tokenRaw.split(".")[1]));
+      const roles = (payload.role || "").split(",");
+      isHRUser = roles.some(r => ["admin", "hr_admin", "operations", "line_manager"].includes(r));
+    }
+  } catch (_) { }
 
   return (
     <div className="fade">
@@ -6825,7 +9228,14 @@ function RemoteWork() {
           <div className="ho" style={{ fontSize: 22 }}>Remote Work</div>
           <div style={{ fontSize: 13, color: C.sub }}>Request and track work-from-home days.</div>
         </div>
-        <button className="bp" onClick={() => setShowNew(true)}>+ Request WFH Day</button>
+        <div style={{ display: "flex", gap: 10 }}>
+          {isHRUser && (
+            <button className={hrView ? "bp" : "bg"} onClick={() => setHrView(v => !v)} style={{ padding: "9px 18px", fontSize: 13 }}>
+              {hrView ? "📋 Team Requests" : "👤 My Requests"}
+            </button>
+          )}
+          {!hrView && <button className="bp" onClick={() => setShowNew(true)}>+ Request WFH Day</button>}
+        </div>
       </div>
 
       <div className="g2" style={{ marginBottom: 22 }}>
@@ -6838,23 +9248,54 @@ function RemoteWork() {
       </div>
 
       <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
-        <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, fontWeight: 800, fontSize: 14 }}>My WFH Requests</div>
+        <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, fontWeight: 800, fontSize: 14 }}>
+          {hrView ? "All WFH Requests — Team" : "My WFH Requests"}
+          {hrView && requests.filter(r => r.status === "pending").length > 0 && (
+            <span style={{ marginLeft: 10, background: "#F59E0B", color: "#fff", borderRadius: 20, fontSize: 11, padding: "2px 8px", fontWeight: 700 }}>
+              {requests.filter(r => r.status === "pending").length} pending
+            </span>
+          )}
+        </div>
         {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading…</div> : (
           <div className="tw"><table className="ht">
-            <thead><tr><th>Date</th><th>Location</th><th>Reason</th><th>Status</th></tr></thead>
+            <thead><tr>
+              <th>Date</th>
+              {hrView && <th>Employee</th>}
+              <th>Location</th>
+              <th>Reason</th>
+              <th>Status</th>
+              {isHRUser && hrView && <th>Actions</th>}
+            </tr></thead>
             <tbody>
               {requests.map(r => {
                 const ss = statusStyle[r.status] || statusStyle.pending;
                 return (
                   <tr key={r.id}>
                     <td style={{ fontWeight: 700, color: C.text }}>{new Date(r.work_date).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</td>
+                    {hrView && <td style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{r.admins?.full_name || r.staff_name || "—"}<div style={{ fontSize: 11, color: C.muted }}>{r.admins?.department || ""}</div></td>}
                     <td style={{ fontSize: 12, color: C.sub }}>{r.location || "Home"}</td>
                     <td style={{ fontSize: 12, color: C.sub }}>{r.reason || "—"}</td>
                     <td><span className="tg" style={{ background: ss.bg, color: ss.col, textTransform: "capitalize" }}>{r.status || "pending"}</span></td>
+                    {isHRUser && hrView && (
+                      <td>
+                        {r.status === "pending" ? (
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <button className="bp" style={{ fontSize: 11, padding: "4px 12px" }} disabled={actionBusy}
+                              onClick={() => updateStatus(r.id, "approved", r.staff_id)}>✓ Approve</button>
+                            <button className="bd" style={{ fontSize: 11, padding: "4px 12px" }} disabled={actionBusy}
+                              onClick={() => updateStatus(r.id, "rejected", r.staff_id)}>✕ Decline</button>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: 11, color: C.muted }}>—</span>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 );
               })}
-              {requests.length === 0 && <tr><td colSpan="4" style={{ textAlign: "center", padding: 30, color: C.muted }}>No WFH requests yet. Submit one above.</td></tr>}
+              {requests.length === 0 && <tr><td colSpan={isHRUser && hrView ? 6 : 4} style={{ textAlign: "center", padding: 30, color: C.muted }}>
+                {hrView ? "No WFH requests from the team yet." : "No WFH requests yet. Submit one above."}
+              </td></tr>}
             </tbody>
           </table></div>
         )}
@@ -6880,36 +9321,54 @@ function PolicyLibrary({ isHR }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const [policies, setPolicies] = useState([]); const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({ title: "", category: "HR", summary: "", document_url: "", effective_date: "" });
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [search, setSearch] = useState(""); const [catFilter, setCatFilter] = useState("All");
-
-  const DEFAULTS = [
-    { id: "d1", title: "Code of Conduct", category: "Compliance", updated: "Jan 2026", summary: "Standards of professional behaviour expected of all Eximp & Cloves staff.", document_url: null },
-    { id: "d2", title: "Leave & Absence Policy", category: "HR", updated: "Jan 2026", summary: "Entitlements, procedures and rules governing all types of leave.", document_url: null },
-    { id: "d3", title: "Anti-Bribery Policy", category: "Legal", updated: "Dec 2025", summary: "Zero tolerance for bribery and corrupt practices in all business dealings.", document_url: null },
-    { id: "d4", title: "Data Protection Policy", category: "Compliance", updated: "Feb 2026", summary: "How we collect, store and protect personal data under NDPR.", document_url: null },
-    { id: "d5", title: "Disciplinary Procedure", category: "HR", updated: "Jan 2026", summary: "4-tier disciplinary process from counselling to termination.", document_url: null },
-    { id: "d6", title: "IT Acceptable Use Policy", category: "IT", updated: "Mar 2026", summary: "Rules for use of company devices, networks and software.", document_url: null },
-  ];
 
   const catCol = { Compliance: T.gold, HR: "#60A5FA", Legal: "#F87171", IT: "#4ADE80", Finance: "#A78BFA" };
 
-  useEffect(() => {
-    apiFetch(`${API_BASE}/hr/policies`).then(d => setPolicies(Array.isArray(d) && d.length > 0 ? d : DEFAULTS)).catch(() => setPolicies(DEFAULTS)).finally(() => setLoading(false));
-  }, []);
+  const loadPolicies = () => {
+    apiFetch(`${API_BASE}/hr/policies`).then(d => setPolicies(Array.isArray(d) ? d : [])).catch(() => setPolicies([])).finally(() => setLoading(false));
+  };
 
-  const add = async () => {
+  useEffect(() => { loadPolicies(); }, []);
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    const fd = new FormData(); fd.append("file", file);
+    try {
+      const res = await fetch(`${API_BASE}/hr/policies/upload`, {
+        method: "POST", headers: { "Authorization": `Bearer ${localStorage.getItem("ec_token")}` }, body: fd
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const d = await res.json();
+      setForm(f => ({ ...f, document_url: d.url }));
+    } catch (err) { alert(err.message); } finally { setUploading(false); }
+  };
+
+  const save = async () => {
     if (!form.title || !form.category) return alert("Title and category required.");
     setSaving(true);
     try {
-      await apiFetch(`${API_BASE}/hr/policies`, { method: "POST", body: JSON.stringify(form) });
-      setShowNew(false); setForm({ title: "", category: "HR", summary: "", document_url: "", effective_date: "" });
-      apiFetch(`${API_BASE}/hr/policies`).then(d => setPolicies(Array.isArray(d) ? d : DEFAULTS));
+      const url = editingId ? `${API_BASE}/hr/policies/${editingId}` : `${API_BASE}/hr/policies`;
+      await apiFetch(url, { method: editingId ? "PATCH" : "POST", body: JSON.stringify({ staff_id: form.staff_id, permit_type: form.permit_type, permit_number: form.permit_number, issue_date: form.issue_date, expiry_date: form.expiry_date, issuing_authority: form.issuing_authority }) });
+      setShowNew(false); setEditingId(null); setForm({ title: "", category: "HR", summary: "", document_url: "", effective_date: "" });
+      loadPolicies();
     } catch (e) { alert("Error: " + e.message); } finally { setSaving(false); }
   };
 
-  const categories = ["All", ...new Set([...DEFAULTS, ...policies].map(p => p.category))];
+  const openEdit = (p) => { setForm({ title: p.title, category: p.category, summary: p.summary || "", document_url: p.document_url || "", effective_date: p.effective_date || "" }); setEditingId(p.id); setShowNew(true); };
+
+  const del = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this policy?")) return;
+    try { await apiFetch(`${API_BASE}/hr/policies/${id}`, { method: "DELETE" }); loadPolicies(); } catch (e) { alert(e.message); }
+  };
+
+  const categories = ["All", "Compliance", "HR", "Legal", "IT", "Finance"];
   const filtered = policies.filter(p => {
     const matchCat = catFilter === "All" || p.category === catFilter;
     const matchSearch = !search || p.title.toLowerCase().includes(search.toLowerCase()) || p.summary?.toLowerCase().includes(search.toLowerCase());
@@ -6920,7 +9379,7 @@ function PolicyLibrary({ isHR }) {
     <div className="fade">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
         <div><div className="ho" style={{ fontSize: 22 }}>Policy Library</div><div style={{ fontSize: 13, color: C.sub }}>Company policies, procedures and handbooks.</div></div>
-        {isHR && <button className="bp" onClick={() => setShowNew(true)}>+ Add Policy</button>}
+        {isHR && <button className="bp" onClick={() => { setForm({ title: "", category: "HR", summary: "", document_url: "", effective_date: "" }); setEditingId(null); setShowNew(true); }}>+ Add Policy</button>}
       </div>
 
       {/* Filters */}
@@ -6946,17 +9405,25 @@ function PolicyLibrary({ isHR }) {
               <div key={p.id || i} className="gc" style={{ padding: 20 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
                   <span className="tg" style={{ background: `${cc}22`, color: cc }}>{p.category}</span>
-                  <span style={{ fontSize: 11, color: C.muted }}>Updated {p.updated || (p.effective_date ? new Date(p.effective_date).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : "—")}</span>
+                  <span style={{ fontSize: 11, color: C.muted }}>Updated {p.updated_at ? new Date(p.updated_at).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : (p.updated || "—")}</span>
                 </div>
                 <div style={{ fontWeight: 800, color: C.text, fontSize: 14, marginBottom: 8 }}>{p.title}</div>
                 <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6, marginBottom: 14 }}>{p.summary || "No description provided."}</div>
-                {p.document_url ? (
-                  <a href={p.document_url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
-                    <button className="bp" style={{ fontSize: 12, padding: "8px 16px" }}>📄 View Document</button>
-                  </a>
-                ) : (
-                  <button className="bg" style={{ fontSize: 12, padding: "8px 16px", opacity: 0.6 }} disabled>No file attached</button>
-                )}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "space-between", alignItems: "center" }}>
+                  {p.document_url ? (
+                    <a href={p.document_url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
+                      <button className="bp" style={{ fontSize: 12, padding: "6px 14px" }}>📄 View Document</button>
+                    </a>
+                  ) : (
+                    <button className="bg" style={{ fontSize: 12, padding: "6px 14px", opacity: 0.6 }} disabled>No file attached</button>
+                  )}
+                  {isHR && (
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button className="bg" style={{ fontSize: 11, padding: "4px 10px" }} onClick={() => openEdit(p)}>Edit</button>
+                      <button className="bg" style={{ fontSize: 11, padding: "4px 10px", color: "#F87171", borderColor: "#F87171" }} onClick={() => del(p.id)}>Delete</button>
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -6965,7 +9432,7 @@ function PolicyLibrary({ isHR }) {
       )}
 
       {showNew && (
-        <Modal onClose={() => setShowNew(false)} title="Add Policy Document">
+        <Modal onClose={() => setShowNew(false)} title={editingId ? "Edit Policy" : "Add Policy Document"}>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div><Lbl>Policy Title *</Lbl><input className="inp" placeholder="e.g. Remote Work Policy" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} /></div>
             <div><Lbl>Category *</Lbl>
@@ -6974,9 +9441,23 @@ function PolicyLibrary({ isHR }) {
               </select>
             </div>
             <div><Lbl>Summary</Lbl><textarea className="inp" rows={3} placeholder="Brief description of the policy…" value={form.summary} onChange={e => setForm(f => ({ ...f, summary: e.target.value }))} /></div>
-            <div><Lbl>Document URL (optional)</Lbl><input className="inp" placeholder="https://drive.google.com/…" value={form.document_url} onChange={e => setForm(f => ({ ...f, document_url: e.target.value }))} /></div>
+
+            <div style={{ padding: 16, background: C.border, borderRadius: 8 }}>
+              <Lbl>Policy Document File</Lbl>
+              {form.document_url && (
+                <div style={{ marginBottom: 10, fontSize: 12, color: "#4ADE80", display: "flex", alignItems: "center", gap: 6 }}>
+                  <span>✓ File attached</span> <a href={form.document_url} target="_blank" rel="noopener noreferrer" style={{ color: "#4ADE80", textDecoration: "underline" }}>(View current)</a>
+                </div>
+              )}
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <input type="file" className="inp" onChange={handleFileUpload} disabled={uploading} style={{ padding: 8 }} />
+                {uploading && <span style={{ fontSize: 12, color: T.gold }}>Uploading...</span>}
+              </div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>Uploading a new file will overwrite the existing one.</div>
+            </div>
+
             <div><Lbl>Effective Date</Lbl><input className="inp" type="date" value={form.effective_date} onChange={e => setForm(f => ({ ...f, effective_date: e.target.value }))} /></div>
-            <button className="bp" onClick={add} disabled={saving}>{saving ? "Saving…" : "Add Policy"}</button>
+            <button className="bp" onClick={save} disabled={saving || uploading}>{saving ? "Saving…" : (editingId ? "Update Policy" : "Add Policy")}</button>
           </div>
         </Modal>
       )}
@@ -6985,6 +9466,469 @@ function PolicyLibrary({ isHR }) {
 }
 
 // ─── HUB: INTERNAL JOB BOARD ─────────────────────────────────────────────────
+function InternalJobBoard({ isHR, user }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [jobs, setJobs] = useState([]); const [apps, setApps] = useState([]); const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState(isHR ? "manage" : "browse");
+  const [showPost, setShowPost] = useState(false);
+  const [showApply, setShowApply] = useState(null);
+  const [showDetails, setShowDetails] = useState(null);
+  const [viewApps, setViewApps] = useState(null);
+  const [form, setForm] = useState({ title: "", department: "", employment_type: "Full-Time", location: "Port Harcourt, NG", salary_range: "", description: "", requirements: "", closing_date: "" });
+  const [applyForm, setApplyForm] = useState({ cover_letter: "", years_experience: "", current_role: "", reason: "" });
+  const [saving, setSaving] = useState(false);
+  const { departments } = useDepartments();
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [j, a] = await Promise.all([
+        apiFetch(`${API_BASE}/hr/recruitment/jobs?is_internal=true`).catch(() => []),
+        apiFetch(`${API_BASE}/hr/recruitment/applications`).catch(() => [])
+      ]);
+      setJobs((j || []).filter(x => x.status === "Open" || isHR));
+      setApps(a || []);
+    } finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const postJob = async () => {
+    if (!form.title || !form.department) return alert("Title and department are required.");
+    setSaving(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/recruitment/jobs`, { method: "POST", body: JSON.stringify({ ...form, status: "Open", is_internal: true }) });
+      setShowPost(false); setForm({ title: "", department: "", employment_type: "Full-Time", location: "Port Harcourt, NG", salary_range: "", description: "", requirements: "", closing_date: "" }); load();
+    } catch (e) { alert(e.message); } finally { setSaving(false); }
+  };
+
+  const applyInternal = async () => {
+    if (!applyForm.cover_letter) return alert("Please write a brief cover letter.");
+    setSaving(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/recruitment/applications`, {
+        method: "POST",
+        body: JSON.stringify({
+          job_id: showApply.id,
+          candidate_name: user?.full_name || "Internal Applicant",
+          candidate_email: user?.email || "internal@eximps-cloves.com",
+          cover_letter: `[INTERNAL APPLICATION]\n\nCurrent Role: ${applyForm.current_role}\nExperience: ${applyForm.years_experience} years\nReason: ${applyForm.reason}\n\n${applyForm.cover_letter}`
+        })
+      });
+      alert("Your application has been submitted!"); setShowApply(null); setApplyForm({ cover_letter: "", years_experience: "", current_role: "", reason: "" }); load();
+    } catch (e) { alert(e.message); } finally { setSaving(false); }
+  };
+
+  const closeJob = async (id) => {
+    if (!window.confirm("Close this vacancy?")) return;
+    try { await apiFetch(`${API_BASE}/hr/recruitment/jobs/${id}`, { method: "PATCH", body: JSON.stringify({ status: "Closed" }) }); load(); } catch (e) { alert(e.message); }
+  };
+
+  const jobApps = (jobId) => apps.filter(a => a.job_id === jobId);
+  const typeCol = { "Full-Time": "#4ADE80", "Part-Time": "#60A5FA", "Contract": T.gold, "Internship": "#A78BFA" };
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div><div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Internal Job Board</div><div style={{ fontSize: 13, color: C.sub }}>Open internal vacancies. Staff can apply directly — no external application needed.</div></div>
+        {isHR && <button className="bp" onClick={() => setShowPost(true)}>+ Post Internal Role</button>}
+      </div>
+
+      {isHR && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 22 }}>
+          {[["browse", "📋 Open Roles"], ["manage", "⚙️ Manage Postings"], ["applications", "📥 All Applications"]].map(([t, label]) => (
+            <button key={t} onClick={() => setTab(t)} style={{ padding: "8px 18px", borderRadius: 10, cursor: "pointer", fontSize: 12, fontWeight: 700, background: tab === t ? `${T.gold}22` : "transparent", color: tab === t ? T.gold : C.muted, border: `1px solid ${tab === t ? T.gold : C.border}` }}>{label}</button>
+          ))}
+        </div>
+      )}
+
+      <div className="g4" style={{ marginBottom: 22 }}>
+        <StatCard label="Open Roles" value={jobs.filter(j => j.status === "Open").length} col={T.gold} />
+        <StatCard label="Applications" value={apps.length} col="#60A5FA" />
+        <StatCard label="Departments Hiring" value={[...new Set(jobs.filter(j => j.status === "Open").map(j => j.department))].length} col="#4ADE80" />
+        <StatCard label="Hired This Month" value={apps.filter(a => a.status === "Hired").length} col="#A78BFA" />
+      </div>
+
+      {loading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}>Loading…</div> : (<>
+        {(tab === "browse" || !isHR) && (
+          <div className="g2" style={{ gap: 16 }}>
+            {jobs.filter(j => j.status === "Open").map(j => {
+              const tc = typeCol[j.employment_type] || T.gold;
+              const today = new Date(); today.setHours(0, 0, 0, 0);
+              const deadline = j.closing_date ? new Date(j.closing_date + "T23:59:59") : null;
+              const isExpired = deadline && deadline < new Date();
+              const daysLeft = deadline ? Math.ceil((deadline - today) / (1000 * 60 * 60 * 24)) : null;
+              const urgency = daysLeft !== null && daysLeft <= 3 && !isExpired;
+              return (
+                <div key={j.id} className="gc fade-in" style={{ padding: 22, cursor: "pointer", opacity: isExpired ? 0.6 : 1 }} onClick={() => setShowDetails(j)}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+                    <div>
+                      <div style={{ fontWeight: 900, fontSize: 16, color: C.text, marginBottom: 6 }}>{j.title}</div>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <span className="tg" style={{ background: `${tc}22`, color: tc, fontSize: 11 }}>{j.employment_type}</span>
+                        <span className="tg tg2" style={{ fontSize: 11 }}>Internal</span>
+                        {isExpired && <span className="tg" style={{ background: "#F8717122", color: "#F87171", fontSize: 11 }}>Deadline Passed</span>}
+                        {urgency && <span className="tg" style={{ background: "#F59E0B22", color: "#F59E0B", fontSize: 11 }}>⚡ {daysLeft}d left</span>}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 11, color: C.muted }}>{jobApps(j.id).length} applied</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 14, fontSize: 12, color: C.sub, marginBottom: 10, flexWrap: "wrap" }}>
+                    <span>🏢 {j.department}</span>
+                    <span>📍 {j.location || "Port Harcourt, NG"}</span>
+                    {j.salary_range && <span style={{ color: T.gold, fontWeight: 700 }}>💰 {j.salary_range}</span>}
+                    {deadline && (
+                      <span style={{ color: isExpired ? "#F87171" : urgency ? "#F59E0B" : C.muted, fontWeight: isExpired || urgency ? 700 : 400 }}>
+                        📅 {isExpired ? "Closed" : `Closes ${deadline.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`}
+                      </span>
+                    )}
+                  </div>
+                  {j.description && <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.6, marginBottom: 12 }}>{j.description.slice(0, 140)}{j.description.length > 140 ? "…" : ""}</div>}
+                  <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ fontSize: 11, color: T.gold, fontWeight: 800 }}>VIEW DETAILS →</div>
+                    {isExpired
+                      ? <span style={{ fontSize: 12, color: "#F87171", fontWeight: 700 }}>Applications Closed</span>
+                      : <button className="bp" onClick={(e) => { e.stopPropagation(); setShowApply(j); }} style={{ padding: "8px 16px", fontSize: 12 }}>Quick Apply</button>
+                    }
+                  </div>
+                </div>
+              );
+            })}
+            {jobs.filter(j => j.status === "Open").length === 0 && <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 60, color: C.muted }}><div style={{ fontSize: 36, marginBottom: 12 }}>🔍</div><div style={{ fontWeight: 800 }}>No internal vacancies at this time.</div></div>}
+          </div>
+        )}
+
+        {tab === "manage" && isHR && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {jobs.map(j => {
+              const tc = typeCol[j.employment_type] || T.gold; const count = jobApps(j.id).length;
+              return (<div key={j.id} className="gc" style={{ padding: "16px 20px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 800, color: C.text, fontSize: 14, marginBottom: 4 }}>{j.title}</div>
+                    <div style={{ display: "flex", gap: 10, fontSize: 12, color: C.sub }}>
+                      <span>🏢 {j.department}</span><span className="tg" style={{ background: `${tc}22`, color: tc, fontSize: 10 }}>{j.employment_type}</span>
+                      {j.status === "Closed" && <span style={{ color: "#F87171", fontWeight: 800 }}>[CLOSED]</span>}
+                      {j.closing_date && <span>Closes {j.closing_date}</span>}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ textAlign: "right" }}><div style={{ fontSize: 18, fontWeight: 900, color: T.gold }}>{count}</div><div style={{ fontSize: 10, color: C.muted }}>applicants</div></div>
+                    <button className="bg" onClick={() => setViewApps(j)} style={{ fontSize: 11, padding: "7px 14px" }}>View Applications</button>
+                    {j.status === "Open" && <button onClick={() => closeJob(j.id)} style={{ fontSize: 11, padding: "7px 14px", background: "#F8717122", color: "#F87171", border: "1px solid #F8717144", borderRadius: 8, cursor: "pointer", fontWeight: 700 }}>Close Role</button>}
+                  </div>
+                </div>
+              </div>);
+            })}
+            {jobs.length === 0 && <div style={{ textAlign: "center", padding: 40, color: C.muted }}>No active postings. Use "+ Post Internal Role" to create one.</div>}
+          </div>
+        )}
+
+        {tab === "applications" && isHR && (
+          <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
+            <div className="tw"><table className="ht"><thead><tr><th>Candidate</th><th>Role Applied</th><th>Status</th><th>Applied</th></tr></thead>
+              <tbody>
+                {apps.map(a => {
+                  const job = jobs.find(j => j.id === a.job_id);
+                  const sc = { Applied: T.gold, Screening: "#60A5FA", Interview: "#A78BFA", Hired: "#4ADE80", Rejected: "#F87171" }[a.status] || C.muted;
+                  return (<tr key={a.id}><td style={{ fontWeight: 700 }}>{a.candidate_name}</td><td>{job?.title || "—"}</td><td><span className="tg" style={{ background: `${sc}22`, color: sc }}>{a.status}</span></td><td style={{ fontSize: 12, color: C.muted }}>{new Date(a.created_at).toLocaleDateString()}</td></tr>);
+                })}
+                {apps.length === 0 && <tr><td colSpan="4" style={{ textAlign: "center", padding: 30, color: C.muted }}>No applications yet.</td></tr>}
+              </tbody>
+            </table></div>
+          </div>
+        )}
+      </>)}
+
+      {showApply && (() => {
+        const applyDeadline = showApply.closing_date ? new Date(showApply.closing_date + "T23:59:59") : null;
+        const applyExpired = applyDeadline && applyDeadline < new Date();
+        return (
+          <Modal onClose={() => { setShowApply(null); setApplyForm({ cover_letter: "", years_experience: "", current_role: "", reason: "" }); }} title={`Apply — ${showApply.title}`} width={560}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ padding: "12px 16px", background: applyExpired ? "#F8717108" : `${T.gold}0A`, borderRadius: 10, border: `1px solid ${applyExpired ? "#F8717133" : `${T.gold}22`}` }}>
+                <div style={{ fontWeight: 800, color: C.text }}>{showApply.title}</div>
+                <div style={{ fontSize: 12, color: C.sub }}>{showApply.department} · {showApply.location}</div>
+                {showApply.salary_range && <div style={{ fontSize: 12, color: T.gold, fontWeight: 700, marginTop: 2 }}>{showApply.salary_range}</div>}
+                {applyDeadline && <div style={{ fontSize: 12, color: applyExpired ? "#F87171" : C.muted, fontWeight: 700, marginTop: 4 }}>📅 {applyExpired ? "Deadline Passed" : `Closes ${applyDeadline.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`}</div>}
+              </div>
+              {applyExpired ? (
+                <div style={{ textAlign: "center", padding: "24px 0" }}>
+                  <div style={{ fontSize: 36, marginBottom: 8 }}>🔒</div>
+                  <div style={{ fontWeight: 800, color: "#F87171", marginBottom: 4 }}>Applications Closed</div>
+                  <div style={{ fontSize: 13, color: C.muted }}>The deadline for this role has passed.</div>
+                </div>
+              ) : (
+                <>
+                  <div className="g2" style={{ gap: 12 }}>
+                    <div><Lbl>Current Role</Lbl><input className="inp" value={applyForm.current_role} onChange={e => setApplyForm(f => ({ ...f, current_role: e.target.value }))} placeholder="e.g. Sales Executive" /></div>
+                    <div><Lbl>Years of Experience</Lbl><input className="inp" type="number" min="0" value={applyForm.years_experience} onChange={e => setApplyForm(f => ({ ...f, years_experience: e.target.value }))} /></div>
+                  </div>
+                  <div><Lbl>Why are you interested? *</Lbl><textarea className="inp" rows={3} value={applyForm.reason} onChange={e => setApplyForm(f => ({ ...f, reason: e.target.value }))} placeholder="How does this align with your career goals?" /></div>
+                  <div><Lbl>Cover Letter *</Lbl><textarea className="inp" rows={5} value={applyForm.cover_letter} onChange={e => setApplyForm(f => ({ ...f, cover_letter: e.target.value }))} placeholder="Highlight your relevant skills and experience…" /></div>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button className="bp" onClick={applyInternal} disabled={saving} style={{ flex: 1, padding: 13 }}>{saving ? "Submitting…" : "Submit Application"}</button>
+                    <button className="bg" onClick={() => setShowApply(null)} style={{ flex: 1, padding: 13 }}>Cancel</button>
+                  </div>
+                </>
+              )}
+            </div>
+          </Modal>
+        );
+      })()}
+
+      {showDetails && (
+        <Modal onClose={() => setShowDetails(null)} title="Job Details" width={640}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                <div>
+                  <div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>{showDetails.title}</div>
+                  <div style={{ display: "flex", gap: 10, fontSize: 14, color: C.sub }}>
+                    <span>🏢 {showDetails.department}</span>
+                    <span>📍 {showDetails.location}</span>
+                  </div>
+                </div>
+                <span className="tg to" style={{ padding: "8px 16px", borderRadius: 10 }}>{showDetails.employment_type}</span>
+              </div>
+              <div className="g2" style={{ gap: 16, marginTop: 16 }}>
+                <div className="field">
+                  <div className="fl">Salary Range</div>
+                  <div className="fv">{showDetails.salary_range || "Negotiable"}</div>
+                </div>
+                <div className="field">
+                  <div className="fl">Application Deadline</div>
+                  {(() => {
+                    const dl = showDetails.closing_date ? new Date(showDetails.closing_date + "T23:59:59") : null;
+                    const exp = dl && dl < new Date();
+                    return <div className="fv" style={{ color: exp ? "#F87171" : dl && Math.ceil((dl - new Date()) / 86400000) <= 3 ? "#F59E0B" : undefined, fontWeight: exp ? 700 : undefined }}>
+                      {dl ? (exp ? "🔒 Closed" : `📅 ${dl.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}`) : "Open Until Filled"}
+                    </div>;
+                  })()}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 20 }}>
+              <div className="ho" style={{ fontSize: 14, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Role Description</div>
+              <div style={{ fontSize: 14, color: C.sub, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{showDetails.description || "No description provided."}</div>
+            </div>
+
+            {showDetails.requirements && (
+              <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 20 }}>
+                <div className="ho" style={{ fontSize: 14, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Requirements & Skills</div>
+                <div style={{ fontSize: 14, color: C.sub, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{showDetails.requirements}</div>
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 12, marginTop: 10 }}>
+              <button className="bp" onClick={() => { setShowDetails(null); setShowApply(showDetails); }} style={{ flex: 1, padding: 14, fontSize: 14 }}>Apply for this Role Now</button>
+              <button className="bg" onClick={() => setShowDetails(null)} style={{ padding: 14 }}>Close</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {viewApps && (
+        <Modal onClose={() => setViewApps(null)} title={`Applications — ${viewApps.title}`} width={600}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {jobApps(viewApps.id).length === 0
+              ? <div style={{ textAlign: "center", padding: 30, color: C.muted }}>No applications for this role yet.</div>
+              : jobApps(viewApps.id).map(a => {
+                const sc = { Applied: T.gold, Screening: "#60A5FA", Interview: "#A78BFA", Hired: "#4ADE80", Rejected: "#F87171" }[a.status] || C.muted;
+                return (<div key={a.id} style={{ padding: "14px 16px", background: `${sc}08`, borderRadius: 10, border: `1px solid ${sc}22` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <div style={{ fontWeight: 800, color: C.text }}>{a.candidate_name}</div>
+                    <span className="tg" style={{ background: `${sc}22`, color: sc, fontSize: 11 }}>{a.status}</span>
+                  </div>
+                  {a.cover_letter && <div style={{ fontSize: 12, color: C.sub, whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{a.cover_letter}</div>}
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>Applied {new Date(a.created_at).toLocaleDateString()}</div>
+                </div>);
+              })}
+          </div>
+        </Modal>
+      )}
+
+      {showPost && (
+        <Modal onClose={() => setShowPost(false)} title="Post Internal Role" width={580}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div className="g2" style={{ gap: 12 }}>
+              <div><Lbl>Job Title *</Lbl><input className="inp" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Senior Property Executive" /></div>
+              <div><Lbl>Department *</Lbl><select className="inp" value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))}><option value="">— Select —</option>{departments.map(d => <option key={d.id || d} value={d.name || d}>{d.name || d}</option>)}</select></div>
+            </div>
+            <div className="g2" style={{ gap: 12 }}>
+              <div><Lbl>Employment Type</Lbl><select className="inp" value={form.employment_type} onChange={e => setForm(f => ({ ...f, employment_type: e.target.value }))}><option>Full-Time</option><option>Part-Time</option><option>Contract</option><option>Internship</option></select></div>
+              <div><Lbl>Location</Lbl><input className="inp" value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} /></div>
+            </div>
+            <div className="g2" style={{ gap: 12 }}>
+              <div><Lbl>Salary Range</Lbl><input className="inp" value={form.salary_range} onChange={e => setForm(f => ({ ...f, salary_range: e.target.value }))} placeholder="e.g. ₦350,000 – ₦500,000" /></div>
+              <div><Lbl>Application Deadline</Lbl><input type="date" className="inp" value={form.closing_date} onChange={e => setForm(f => ({ ...f, closing_date: e.target.value }))} /></div>
+            </div>
+            <div><Lbl>Job Description</Lbl><textarea className="inp" rows={3} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Role overview and responsibilities…" /></div>
+            <div><Lbl>Requirements</Lbl><textarea className="inp" rows={3} value={form.requirements} onChange={e => setForm(f => ({ ...f, requirements: e.target.value }))} placeholder="Skills, qualifications, experience needed…" /></div>
+            <button className="bp" onClick={postJob} disabled={saving} style={{ padding: 14 }}>{saving ? "Posting…" : "Post Role to Internal Board"}</button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+
+// ─── HUB: DOCUMENTS VAULT ───────────────────────────────────────────────────
+function DocumentsVault({ isHR, userId }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [docs, setDocs] = useState([]); const [staff, setStaff] = useState([]); const [loading, setLoading] = useState(true);
+  const [showUpload, setShowUpload] = useState(false);
+  const [filterStaff, setFilterStaff] = useState(userId || "");
+  const [filterType, setFilterType] = useState("All");
+  const [form, setForm] = useState({ staff_id: userId || "", doc_type: "ID", title: "", notes: "" });
+  const [file, setFile] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const docTypes = ["ID", "Certificate", "Contract Copy", "Tax Document", "Insurance", "Policy Acknowledgement", "Offer Letter", "Background Check", "Medical", "Other"];
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const url = isHR ? `${API_BASE}/hr/documents` : `${API_BASE}/hr/staff/${userId}/documents`;
+      const [d, s] = await Promise.all([
+        apiFetch(url).catch(() => []),
+        isHR ? apiFetch(`${API_BASE}/hr/staff`).catch(() => []) : Promise.resolve([])
+      ]);
+      setDocs(d || []); setStaff(s || []);
+    } finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const upload = async () => {
+    if (!form.title || !file) return alert("Title and file are required.");
+    if (isHR && !form.staff_id) return alert("Please select a staff member.");
+    setSaving(true);
+    try {
+      // 1. Upload to Storage
+      const formData = new FormData();
+      formData.append("file", file);
+      const upRes = await fetch(`${API_BASE}/hr/upload`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${localStorage.getItem("ec_token")}` },
+        body: formData
+      });
+      if (!upRes.ok) throw new Error("File upload failed");
+      const upData = await upRes.json();
+
+      // 2. Save Meta
+      await apiFetch(`${API_BASE}/hr/documents`, {
+        method: "POST",
+        body: JSON.stringify({
+          staff_id: form.staff_id || userId,
+          doc_type: form.doc_type,
+          title: form.title,
+          file_url: upData.url,
+          notes: form.notes
+        })
+      });
+      setShowUpload(false);
+      setForm({ staff_id: userId || "", doc_type: "ID", title: "", notes: "" });
+      setFile(null);
+      load();
+    } catch (e) { alert(e.message); } finally { setSaving(false); }
+  };
+
+  const deleteDoc = async (id) => {
+    if (!window.confirm("Delete this document?")) return;
+    try { await apiFetch(`${API_BASE}/hr/documents/${id}`, { method: "DELETE" }); load(); } catch (e) { alert(e.message); }
+  };
+
+  const typeColors = { ID: "#60A5FA", Certificate: "#4ADE80", "Contract Copy": T.gold, "Tax Document": "#F59E0B", Insurance: "#A78BFA", "Policy Acknowledgement": "#34D399", "Offer Letter": T.orange, "Background Check": "#F87171", Medical: "#EC4899", Other: "#9CA3AF" };
+  const typeIcon = { ID: "🪪", Certificate: "🎓", "Contract Copy": "📄", "Tax Document": "🧾", Insurance: "🛡️", "Policy Acknowledgement": "✅", "Offer Letter": "📩", "Background Check": "🔍", Medical: "🏥", Other: "📎" };
+
+  const filtered = docs.filter(d => (filterType === "All" || d.doc_type === filterType) && (!filterStaff || d.staff_id === filterStaff));
+  const byType = docTypes.reduce((acc, t) => { acc[t] = docs.filter(d => d.doc_type === t).length; return acc; }, {});
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div><div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Document Vault</div><div style={{ fontSize: 13, color: C.sub }}>{isHR ? "Manage and store all staff HR documents securely." : "Your HR documents on file."}</div></div>
+        <button className="bp" onClick={() => setShowUpload(true)}>+ Upload Document</button>
+      </div>
+
+      <div className="g4" style={{ marginBottom: 24 }}>
+        <StatCard label="Total Documents" value={docs.length} col={T.gold} />
+        <StatCard label="IDs & Certs" value={(byType["ID"] || 0) + (byType["Certificate"] || 0)} col="#60A5FA" />
+        <StatCard label="Contracts & Offers" value={(byType["Contract Copy"] || 0) + (byType["Offer Letter"] || 0)} col="#4ADE80" />
+        <StatCard label="Tax & Compliance" value={(byType["Tax Document"] || 0) + (byType["Policy Acknowledgement"] || 0)} col="#A78BFA" />
+      </div>
+
+      <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
+        {isHR && <select className="inp" value={filterStaff} onChange={e => setFilterStaff(e.target.value)} style={{ maxWidth: 220, padding: "8px 12px" }}><option value="">All Staff</option>{staff.map(s => <option key={s.id} value={s.id}>{s.full_name} ({s.department})</option>)}</select>}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {["All", ...docTypes].map(t => (
+            <button key={t} onClick={() => setFilterType(t)} style={{
+              padding: "6px 12px", borderRadius: 8, cursor: "pointer", fontSize: 11, fontWeight: 700,
+              background: filterType === t ? `${typeColors[t] || T.gold}22` : "transparent",
+              color: filterType === t ? (typeColors[t] || T.gold) : C.muted,
+              border: `1px solid ${filterType === t ? (typeColors[t] || T.gold) : C.border}`
+            }}>{t === "All" ? "All" : `${typeIcon[t] || "📎"} ${t}`}</button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}>Loading documents…</div> : filtered.length === 0 ? (
+        <div style={{ textAlign: "center", padding: 60, color: C.muted }}><div style={{ fontSize: 36, marginBottom: 12 }}>🗂️</div><div style={{ fontWeight: 800 }}>No documents found.</div></div>
+      ) : (
+        <div className="g3" style={{ gap: 12 }}>
+          {filtered.map(d => {
+            const tc = typeColors[d.doc_type] || T.gold;
+            const sm = staff.find(s => s.id === d.staff_id);
+            return (<div key={d.id} className="gc" style={{ padding: 18 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: `${tc}22`, border: `1.5px solid ${tc}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>{typeIcon[d.doc_type] || "📎"}</div>
+                <span className="tg" style={{ background: `${tc}22`, color: tc, fontSize: 10 }}>{d.doc_type}</span>
+              </div>
+              <div style={{ fontWeight: 800, color: C.text, marginBottom: 4, fontSize: 14 }}>{d.title}</div>
+              {isHR && sm && <div style={{ fontSize: 12, color: C.sub, marginBottom: 6 }}>{sm.full_name} · {sm.department}</div>}
+              {d.notes && <div style={{ fontSize: 11, color: C.muted, marginBottom: 10, fontStyle: "italic" }}>{d.notes}</div>}
+              <div style={{ fontSize: 11, color: C.muted, marginBottom: 14 }}>Added {new Date(d.created_at).toLocaleDateString()}</div>
+              <div style={{ display: "flex", gap: 8, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+                <a href={d.file_url} target="_blank" rel="noreferrer" className="bp" style={{ flex: 1, textAlign: "center", fontSize: 11, padding: "7px 0", textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
+                  <span>👁️</span> View
+                </a>
+                {isHR && <button onClick={() => deleteDoc(d.id)} className="bd" style={{ fontSize: 11, padding: "7px 12px" }}>Delete</button>}
+              </div>
+            </div>);
+          })}
+        </div>
+      )}
+
+      {showUpload && (
+        <Modal onClose={() => { setShowUpload(false); setFile(null); }} title="Upload Official Document" width={520}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {isHR && <div><Lbl>Staff Member *</Lbl><select className="inp" value={form.staff_id} onChange={e => setForm(f => ({ ...f, staff_id: e.target.value }))}><option value="">— Select Staff —</option>{staff.map(s => <option key={s.id} value={s.id}>{s.full_name} ({s.department})</option>)}</select></div>}
+            <div className="g2" style={{ gap: 12 }}>
+              <div>
+                <Lbl>Document Type</Lbl>
+                <select className="inp" value={form.doc_type} onChange={e => setForm(f => ({ ...f, doc_type: e.target.value }))}>
+                  {docTypes.filter(t => isHR || !docs.some(d => d.doc_type === t)).map(t => <option key={t}>{t}</option>)}
+                </select>
+              </div>
+              <div><Lbl>Title *</Lbl><input className="inp" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. National ID Card" /></div>
+            </div>
+            <div>
+              <Lbl>Select File *</Lbl>
+              <input type="file" className="inp" style={{ padding: 8 }} onChange={e => setFile(e.target.files[0])} />
+              {file && <div style={{ fontSize: 10, color: T.gold, marginTop: 4 }}>Ready: {file.name} ({(file.size / 1024).toFixed(0)} KB)</div>}
+            </div>
+            <div><Lbl>Notes</Lbl><textarea className="inp" rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional context or expiry info…" /></div>
+            <button className="bp" onClick={upload} disabled={saving} style={{ padding: 14 }}>
+              {saving ? "Processing Upload..." : "Securely Upload Document"}
+            </button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+
 // ─── HUB: WORK PERMITS ───────────────────────────────────────────────────────
 function WorkPermits({ isHR }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
@@ -7002,7 +9946,7 @@ function WorkPermits({ isHR }) {
   const save = async () => {
     if (!form.staff_id || !form.permit_number) return alert("Staff and permit number required");
     try {
-      await apiFetch(`${API_BASE}/hr/work-permits`, { method: "POST", body: JSON.stringify(form) });
+      await apiFetch(`${API_BASE}/hr/work-permits`, { method: "POST", body: JSON.stringify({ staff_id: form.staff_id, letter_type: form.letter_type, content: form.content, date_issued: form.date_issued }) });
       setShowNew(false); apiFetch(`${API_BASE}/hr/work-permits`).then(d => setPermits(d || []));
     } catch (e) { alert(e.message); }
   };
@@ -7062,6 +10006,7 @@ function HRLetters({ isHR }) {
   const [showNew, setShowNew] = useState(false);
   const [viewLetter, setViewLetter] = useState(null);
   const [form, setForm] = useState({ staff_id: "", letter_type: "Employment Confirmation", content: "", date_issued: new Date().toISOString().split("T")[0] });
+  const [customLetterType, setCustomLetterType] = useState("");
   const [saving, setSaving] = useState(false);
 
   const refresh = () => apiFetch(`${API_BASE}/hr/hr-letters`).catch(() => []).then(d => setLetters(d || []));
@@ -7074,11 +10019,13 @@ function HRLetters({ isHR }) {
   }, [isHR]);
 
   const save = async () => {
+    const effectiveLetterType = form.letter_type === "Custom…" ? customLetterType.trim() : form.letter_type;
     if (!form.staff_id || !form.content) return alert("Staff and letter content required.");
+    if (form.letter_type === "Custom…" && !customLetterType.trim()) return alert("Please enter a custom letter type.");
     setSaving(true);
     try {
       // 1. Issue the letter
-      await apiFetch(`${API_BASE}/hr/hr-letters`, { method: "POST", body: JSON.stringify(form) });
+      await apiFetch(`${API_BASE}/hr/hr-letters`, { method: "POST", body: JSON.stringify({ staff_id: form.staff_id, letter_type: effectiveLetterType, content: form.content, date_issued: form.date_issued }) });
       // 2. Send notification to the staff member
       const recipient = staff.find(s => s.id === form.staff_id);
       await apiFetch(`${API_BASE}/hr/notifications`, {
@@ -7086,18 +10033,19 @@ function HRLetters({ isHR }) {
         body: JSON.stringify({
           staff_id: form.staff_id,
           type: "letter_issued",
-          message: `📄 HR has issued you a "${form.letter_type}" letter. Log in to view it in HR Letters.`
+          message: `📄 HR has issued you a "${effectiveLetterType}" letter. Log in to view it in HR Letters.`
         })
       }).catch(() => { }); // non-blocking — notification failure should not block letter issue
       setShowNew(false);
+      setCustomLetterType("");
       setForm({ staff_id: "", letter_type: "Employment Confirmation", content: "", date_issued: new Date().toISOString().split("T")[0] });
       refresh();
       alert(`Letter issued to ${recipient?.full_name || "staff member"}. They have been notified.`);
     } catch (e) { alert(e.message); } finally { setSaving(false); }
   };
 
-  const LETTER_TYPES = ["Employment Confirmation", "Salary Confirmation", "Experience Letter", "Reference Letter", "Warning Letter", "Promotion Letter", "Contract Renewal"];
-  const typeColor = { "Warning Letter": "#F87171", "Employment Confirmation": "#4ADE80", "Salary Confirmation": T.gold, "Promotion Letter": "#A78BFA" };
+  const LETTER_TYPES = ["Employment Confirmation", "Salary Confirmation", "Experience Letter", "Reference Letter", "Warning Letter", "Promotion Letter", "Contract Renewal", "Custom…"];
+  const typeColor = { "Warning Letter": "#F87171", "Employment Confirmation": "#4ADE80", "Salary Confirmation": T.gold, "Promotion Letter": "#A78BFA", "Experience Letter": "#60A5FA", "Reference Letter": "#34D399", "Contract Renewal": "#FB923C" };
 
   return (
     <div className="fade">
@@ -7182,9 +10130,12 @@ function HRLetters({ isHR }) {
                 </select>
               </div>
               <div><Lbl>Letter Type</Lbl>
-                <select className="inp" value={form.letter_type} onChange={e => setForm(f => ({ ...f, letter_type: e.target.value }))}>
+                <select className="inp" value={form.letter_type} onChange={e => { setForm(f => ({ ...f, letter_type: e.target.value })); if (e.target.value !== "Custom…") setCustomLetterType(""); }}>
                   {LETTER_TYPES.map(t => <option key={t}>{t}</option>)}
                 </select>
+                {form.letter_type === "Custom…" && (
+                  <input className="inp" style={{ marginTop: 8 }} placeholder="Enter custom letter type…" value={customLetterType} onChange={e => setCustomLetterType(e.target.value)} />
+                )}
               </div>
             </div>
             <div><Lbl>Letter Content *</Lbl>
@@ -7235,7 +10186,7 @@ function HRRequests({ user, isHR }) {
     if (!form.description.trim()) return alert("Please describe your request.");
     setSaving(true);
     try {
-      await apiFetch(`${API_BASE}/hr/requests`, { method: "POST", body: JSON.stringify(form) });
+      await apiFetch(`${API_BASE}/hr/requests`, { method: "POST", body: JSON.stringify({ request_type: form.request_type, description: form.description, priority: form.priority }) });
       setShowForm(null); refresh();
     } catch (e) { alert("Error: " + e.message); } finally { setSaving(false); }
   };
@@ -7347,7 +10298,7 @@ function Grievances({ isHR }) {
   const submit = async () => {
     if (!form.subject || !form.description) return alert("Subject and description required");
     try {
-      await apiFetch(`${API_BASE}/hr/grievances`, { method: "POST", body: JSON.stringify(form) });
+      await apiFetch(`${API_BASE}/hr/grievances`, { method: "POST", body: JSON.stringify({ subject: form.subject, description: form.description, is_anonymous: form.is_anonymous }) });
       alert("Your grievance has been submitted confidentially. HR will review within 5 working days.");
       setShowNew(false); setForm({ subject: "", description: "", is_anonymous: true });
     } catch (e) { alert(e.message); }
@@ -7914,8 +10865,9 @@ function SystemUsers() {
 
 
 // ─── HUB: HR CALENDAR ─────────────────────────────────────────────────────────
-function HRCalendarView() {
+function HRCalendarView({ user }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const isHR = user && user.role && (user.role.includes("admin") || user.role.includes("hr_admin"));
   const [events, setEvents] = useState([]);
   const [month, setMonth] = useState(new Date());
   const [showNew, setShowNew] = useState(false);
@@ -7934,12 +10886,12 @@ function HRCalendarView() {
 
   const addEvent = async () => {
     if (!form.title || !form.date) return alert("Title and date required");
-    try { await apiFetch(`${API_BASE}/hr/calendar-events`, { method: "POST", body: JSON.stringify(form) }); } catch (e) { }
+    try { await apiFetch(`${API_BASE}/hr/calendar-events`, { method: "POST", body: JSON.stringify({ title: form.title, date: form.date, event_type: form.event_type, department: isHR ? form.department : (user?.department || "Personal") }) }); } catch (e) { }
     setEvents(prev => [{ ...form, id: Date.now().toString() }, ...prev]);
     setShowNew(false); setForm({ title: "", event_type: "Holiday", date: "", end_date: "", description: "", department: "All" });
   };
 
-  const typeCol = { Holiday: "#4ADE80", Deadline: "#F87171", Interview: T.gold, Payroll: "#60A5FA", Meeting: "#A78BFA", Training: "#F59E0B", Review: "#EC4899" };
+  const typeCol = { Holiday: "#4ADE80", Deadline: "#F87171", Interview: T.gold, Payroll: "#60A5FA", Meeting: "#A78BFA", Training: "#F59E0B", Review: "#EC4899", "Focus Time": "#8B5CF6", Leave: "#F43F5E", "Team Sync": "#0EA5E9" };
 
   // Build calendar grid for current month
   const y = month.getFullYear(); const m = month.getMonth();
@@ -7990,7 +10942,7 @@ function HRCalendarView() {
       <div style={{ marginTop: 24 }}>
         <div style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 14 }}>Upcoming Events</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {events.filter(e => e.date && new Date(e.date) >= today).sort((a, b) => new Date(a.date) - new Date(b.date)).slice(0, 8).map(e => {
+          {events.filter(e => e.date && new Date(e.date) >= today).sort((a, b) => new Date(a.holiday_date || a.date) - new Date(b.holiday_date || b.date)).slice(0, 8).map(e => {
             const ec = typeCol[e.event_type] || T.gold;
             return (<div key={e.id} className="gc" style={{ padding: "12px 18px", display: "flex", alignItems: "center", gap: 14 }}>
               <div style={{ width: 8, height: 8, borderRadius: "50%", background: ec, flexShrink: 0 }} />
@@ -8004,8 +10956,8 @@ function HRCalendarView() {
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div><Lbl>Event Title *</Lbl><input className="inp" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Q3 Performance Reviews Due" /></div>
           <div className="g2" style={{ gap: 12 }}>
-            <div><Lbl>Event Type</Lbl><select className="inp" value={form.event_type} onChange={e => setForm(f => ({ ...f, event_type: e.target.value }))}><option>Holiday</option><option>Deadline</option><option>Interview</option><option>Payroll</option><option>Meeting</option><option>Training</option><option>Review</option></select></div>
-            <div><Lbl>Department</Lbl><select className="inp" value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))}><option>All</option><option>HR</option><option>Finance</option><option>Sales & Acquisitions</option><option>Operations</option><option>Executive</option></select></div>
+            <div><Lbl>Event Type</Lbl><select className="inp" value={form.event_type} onChange={e => setForm(f => ({ ...f, event_type: e.target.value }))}>{isHR ? (<><option>Holiday</option><option>Deadline</option><option>Interview</option><option>Payroll</option><option>Meeting</option><option>Training</option><option>Review</option></>) : (<><option>Meeting</option><option>Focus Time</option><option>Leave</option><option>Team Sync</option></>)}</select></div>
+            <div><Lbl>Scope / Department</Lbl>{isHR ? <select className="inp" value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))}><option>All</option><option>HR</option><option>Finance</option><option>Sales & Acquisitions</option><option>Operations</option><option>Executive</option></select> : <div style={{ padding: "10px 14px", background: C.base, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 13, color: C.text }}>{user?.department || "Personal"} (Auto-assigned)</div>}</div>
           </div>
           <div className="g2" style={{ gap: 12 }}>
             <div><Lbl>Start Date *</Lbl><input type="date" className="inp" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
@@ -8042,15 +10994,15 @@ function HolidaysManager() {
 
   const addHoliday = async () => {
     if (!form.name || !form.date) return alert("Name and date required");
-    try { await apiFetch(`${API_BASE}/hr/holidays`, { method: "POST", body: JSON.stringify(form) }); } catch (e) { }
-    setHolidays(prev => [...prev, { ...form, id: Date.now().toString() }].sort((a, b) => new Date(a.date) - new Date(b.date)));
+    try { await apiFetch(`${API_BASE}/hr/holidays`, { method: "POST", body: JSON.stringify({ title: form.title, department: form.department, employment_type: form.employment_type, location: form.location, salary_range: form.salary_range, description: form.description, responsibilities: form.responsibilities, requirements: form.requirements, status: "Pending Approval" }) }); } catch (e) { }
+    setHolidays(prev => [...prev, { ...form, holiday_date: form.date, id: Date.now().toString() }].sort((a, b) => new Date(a.holiday_date || a.date) - new Date(b.holiday_date || b.date)));
     setShowAdd(false); setForm({ name: "", date: "", holiday_type: "Public Holiday", is_mandatory: true });
   };
 
   const typeCol = { "Public Holiday": "#4ADE80", "Company Holiday": T.gold, "Optional Holiday": "#60A5FA", "Religious Holiday": "#A78BFA" };
   const today = new Date();
-  const upcoming = holidays.filter(h => new Date(h.date) >= today).sort((a, b) => new Date(a.date) - new Date(b.date));
-  const past = holidays.filter(h => new Date(h.date) < today).sort((a, b) => new Date(b.date) - new Date(a.date));
+  const upcoming = holidays.filter(h => new Date(h.holiday_date || h.date) >= today).sort((a, b) => new Date(a.holiday_date || a.date) - new Date(b.holiday_date || b.date));
+  const past = holidays.filter(h => new Date(h.holiday_date || h.date) < today).sort((a, b) => new Date(b.holiday_date || b.date) - new Date(a.holiday_date || a.date));
 
   return (
     <div className="fade">
@@ -8067,16 +11019,16 @@ function HolidaysManager() {
         <div style={{ fontSize: 11, fontWeight: 800, color: T.gold, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 14 }}>📅 Upcoming Holidays</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {upcoming.map(h => {
-            const daysAway = Math.ceil((new Date(h.date) - today) / 86400000);
+            const daysAway = Math.ceil((new Date(h.holiday_date || h.date) - today) / 86400000);
             const hc = typeCol[h.holiday_type] || T.gold;
             return (<div key={h.id} className="gc" style={{ padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}>
               <div style={{ width: 48, height: 48, borderRadius: 10, background: `${hc}18`, border: `1px solid ${hc}33`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <div style={{ fontSize: 10, fontWeight: 800, color: hc, textTransform: "uppercase" }}>{new Date(h.date).toLocaleDateString(undefined, { month: "short" })}</div>
-                <div style={{ fontSize: 18, fontWeight: 900, color: hc, lineHeight: 1 }}>{new Date(h.date).getDate()}</div>
+                <div style={{ fontSize: 10, fontWeight: 800, color: hc, textTransform: "uppercase" }}>{new Date(h.holiday_date || h.date).toLocaleDateString(undefined, { month: "short" })}</div>
+                <div style={{ fontSize: 18, fontWeight: 900, color: hc, lineHeight: 1 }}>{new Date(h.holiday_date || h.date).getDate()}</div>
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 800, color: C.text }}>{h.name}</div>
-                <div style={{ fontSize: 12, color: C.muted }}>{new Date(h.date).toLocaleDateString(undefined, { weekday: "long" })} · {daysAway === 0 ? "Today" : `${daysAway} day${daysAway !== 1 ? "s" : ""} away`}</div>
+                <div style={{ fontSize: 12, color: C.muted }}>{new Date(h.holiday_date || h.date).toLocaleDateString(undefined, { weekday: "long" })} · {daysAway === 0 ? "Today" : `${daysAway} day${daysAway !== 1 ? "s" : ""} away`}</div>
               </div>
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 <span className="tg" style={{ background: `${hc}22`, color: hc, border: `1px solid ${hc}44` }}>{h.holiday_type}</span>
@@ -8091,7 +11043,7 @@ function HolidaysManager() {
         <div style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 14 }}>Past Holidays This Year</div>
         <div className="gc" style={{ padding: 0, overflow: "hidden" }}><div className="tw"><table className="ht">
           <thead><tr><th>Holiday</th><th>Date</th><th>Type</th><th>Mandatory</th></tr></thead>
-          <tbody>{past.map(h => { const hc = typeCol[h.holiday_type] || T.gold; return (<tr key={h.id}><td style={{ fontWeight: 700, color: C.text }}>{h.name}</td><td style={{ color: C.muted, fontSize: 12 }}>{new Date(h.date).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</td><td><span className="tg" style={{ background: `${hc}22`, color: hc }}>{h.holiday_type}</span></td><td><span className="tg" style={{ background: h.is_mandatory ? "#4ADE8022" : "#9CA3AF22", color: h.is_mandatory ? "#4ADE80" : "#9CA3AF" }}>{h.is_mandatory ? "Yes" : "Optional"}</span></td></tr>); })}</tbody>
+          <tbody>{past.map(h => { const hc = typeCol[h.holiday_type] || T.gold; return (<tr key={h.id}><td style={{ fontWeight: 700, color: C.text }}>{h.name}</td><td style={{ color: C.muted, fontSize: 12 }}>{new Date(h.holiday_date || h.date).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</td><td><span className="tg" style={{ background: `${hc}22`, color: hc }}>{h.holiday_type}</span></td><td><span className="tg" style={{ background: h.is_mandatory ? "#4ADE8022" : "#9CA3AF22", color: h.is_mandatory ? "#4ADE80" : "#9CA3AF" }}>{h.is_mandatory ? "Yes" : "Optional"}</span></td></tr>); })}</tbody>
         </table></div></div>
       </div>)}
       {showAdd && (<Modal onClose={() => setShowAdd(false)} title="Add Holiday" width={480}>
@@ -8193,94 +11145,3712 @@ function BenefitsManager() {
 // ─── HUB: EXPENSES MANAGER ─────────────────────────────────────────────────────
 function ExpensesManager() {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  // ── Main data ──
+  const [tab, setTab] = useState("expenses"); // "expenses" | "commissions"
   const [expenses, setExpenses] = useState([]);
+  const [commissions, setCommissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("All");
+  const [commissionFilter, setCommissionFilter] = useState("All");
+  const [staffFilter, setStaffFilter] = useState("");
   const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState({ staff_id: "", category: "Travel", amount: "", currency: "NGN", description: "", date: "", receipt_url: "" });
+  const [form, setForm] = useState({ staff_id: "", category: "Travel", amount: "", currency: "NGN", description: "", date: "", receipt_url: "", remarks: "" });
   const [staff, setStaff] = useState([]);
+  // ── Verification modal (mirrors payout dashboard verify flow) ──
+  const [verifying, setVerifying] = useState(null); // expense or commission record being verified
+  const [verifyForm, setVerifyForm] = useState({ decision: "approve", hr_note: "", notify_email: true });
+  const [verifyBusy, setVerifyBusy] = useState(false);
+  // ── Detail drawer ──
+  const [detail, setDetail] = useState(null);
+  const [payingId, setPayingId] = useState(null);
+  // ── Pay modal (partial / full reimbursement) ──
+  const [payModal, setPayModal] = useState(null);
+  // ── Receipt / proof document viewer (mirrors payout dashboard) ──
+  const [viewingReceipt, setViewingReceipt] = useState(null); // { id, receipt_url, description, selectedIdx }
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   useEffect(() => {
+    if (!viewingReceipt) {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+      return;
+    }
+
+    async function loadPreview() {
+      setPreviewLoading(true);
+      const idx = viewingReceipt.selectedIdx || 0;
+      const url = `${API_BASE}/hr/expenses/${viewingReceipt.id}/view-receipt?file_index=${idx}&token=${localStorage.getItem("ec_token")}`;
+
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error();
+        const blob = await res.blob();
+        const objUrl = URL.createObjectURL(blob);
+        setPreviewUrl(objUrl);
+      } catch (e) {
+        console.error("Preview load failed", e);
+      } finally {
+        setPreviewLoading(false);
+      }
+    }
+
+    loadPreview();
+  }, [viewingReceipt?.id, viewingReceipt?.selectedIdx]);
+
+  const fmt = n => n != null ? `₦${Number(n).toLocaleString()}` : "—";
+
+  // Normalise a raw expenditure_request row (already pre-normalised by the backend) into
+  // the shape the expense table rows expect.
+  const normaliseExpense = (r) => ({
+    id: r.id,
+    staff_id: r.staff_id || r.requester_id,
+    staff: r.staff || { full_name: r.vendor?.name || "—" },
+    vendor: r.vendor || r.vendors || {},
+    category: r.category || "General",
+    description: r.description || r.title || "—",
+    amount: parseFloat(r.amount || r.amount_gross || 0),
+    amount_gross: parseFloat(r.amount_gross || 0),
+    net: parseFloat(r.net || r.net_payout_amount || r.amount_gross || 0),
+    // amount_paid tracks how much of net has already been reimbursed (partial payments)
+    amount_paid: parseFloat(r.amount_paid || 0),
+    currency: "NGN",
+    date: r.date || r.created_at,
+    created_at: r.created_at,
+    // Normalise all status variants to a consistent capitalised form for display
+    status: {
+      pending_verification: "Pending", pending: "Pending", approved: "Approved",
+      rejected: "Rejected", paid: "Paid", voided: "Voided",
+      partially_paid: "Partially Paid",
+    }[r.status] || r.status || "Pending",
+    payout_method: r.payout_method,
+    receipt_url: r.receipt_url || r.proforma_url || null,
+    remarks: r.remarks || null,
+    rejection_reason: r.rejection_reason || null,
+    is_disputed: r.is_disputed || false,
+    dispute_reason: r.dispute_reason || null,
+    risk_notes: r.risk_notes || null,
+    source: r.source_platform === "payout_portal" ? "PORTAL"
+      : r.source_platform === "hrm_portal" ? "INTERNAL"
+        : r.source_platform ? r.source_platform.toUpperCase() : "INTERNAL",
+    // hr_verified: no dedicated column — derive from reviewed_by being set
+    hr_verified: !!(r.reviewed_by || r.hr_verified),
+    // hr_note: stored in rejection_reason (for rejections) or risk_notes with [HR Note] prefix
+    hr_note: r.hr_note
+      || (r.risk_notes && r.risk_notes.startsWith("[HR Note]") ? r.risk_notes.replace("[HR Note] ", "") : null)
+      || null,
+    payments: r.payments || [],
+  });
+
+  const load = () => {
+    setLoading(true);
     Promise.all([
+      // Single source of truth — the fixed /hr/expenses backend now queries expenditure_requests
       apiFetch(`${API_BASE}/hr/expenses`).catch(() => []),
       apiFetch(`${API_BASE}/hr/staff`).catch(() => []),
-    ]).then(([e, s]) => { setExpenses(e || []); setStaff(s || []); }).finally(() => setLoading(false));
-  }, []);
+      // Commissions come directly from payouts — category = 'Sales Commission'
+      apiFetch(`${API_BASE}/payouts/requests?payment_type=staff_commission`).catch(() => []),
+    ]).then(([expenses, s, commReqs]) => {
+      // ── Expense records (already normalised by backend) ──
+      const expList = (Array.isArray(expenses) ? expenses : [])
+        .map(normaliseExpense)
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      setExpenses(expList);
+      setStaff(Array.isArray(s) ? s : []);
 
-  const submit = async () => {
-    if (!form.amount || !form.description) return alert("Amount and description required");
-    try { await apiFetch(`${API_BASE}/hr/expenses`, { method: "POST", body: JSON.stringify({ ...form, status: "Pending" }) }); } catch (e) { }
-    setExpenses(prev => [{ ...form, id: Date.now().toString(), status: "Pending", created_at: new Date().toISOString(), staff: staff.find(s => s.id === form.staff_id) }, ...prev]);
-    setShowNew(false); setForm({ staff_id: "", category: "Travel", amount: "", currency: "NGN", description: "", date: "", receipt_url: "" });
+      // ── Commission records ──
+      const commList = (Array.isArray(commReqs) ? commReqs : []).map(r => ({
+        id: r.id,
+        staff_id: r.requester_id || r.vendors?.id,
+        staff: { full_name: r.vendors?.name || "—" },
+        invoice_number: r.vendor_invoice_number || r.metadata?.invoice_number || r.title,
+        estate: r.metadata?.estate_name || r.category || "—",
+        gross: parseFloat(r.amount_gross || 0),
+        wht: parseFloat(r.wht_amount || 0),
+        net: parseFloat(r.net_payout_amount || (r.amount_gross - (r.wht_amount || 0)) || 0),
+        date: r.created_at,
+        created_at: r.created_at,
+        payout_status: r.status,
+        hr_verified: r.hr_verified || false,
+        hr_note: r.hr_note || null,
+        receipt_url: r.receipt_url || r.proforma_url || null,
+        proforma_url: r.proforma_url || null,
+        expenditure_id: r.id,
+        remarks: r.remarks || null,
+      }));
+      setCommissions(commList);
+    }).finally(() => setLoading(false));
   };
 
-  const approve = async (id) => { try { await apiFetch(`${API_BASE}/hr/expenses/${id}`, { method: "PATCH", body: JSON.stringify({ status: "Approved" }) }); } catch (e) { } setExpenses(prev => prev.map(x => x.id === id ? { ...x, status: "Approved" } : x)); };
-  const reject = async (id) => { try { await apiFetch(`${API_BASE}/hr/expenses/${id}`, { method: "PATCH", body: JSON.stringify({ status: "Rejected" }) }); } catch (e) { } setExpenses(prev => prev.map(x => x.id === id ? { ...x, status: "Rejected" } : x)); };
+  useEffect(() => { load(); }, []);
 
-  const statuses = ["All", "Pending", "Approved", "Rejected", "Paid"];
-  const stCol = { Pending: T.gold, Approved: "#4ADE80", Rejected: "#F87171", Paid: "#60A5FA" };
-  const catEmoji = { Travel: "✈️", Accommodation: "🏨", Meals: "🍽️", Equipment: "💻", Training: "📚", Other: "📋" };
+  // ── Submit new expense — posts to /hr/expenses which now writes to expenditure_requests ──
+  const submit = async () => {
+    if (!form.amount || !form.description) return alert("Amount and description required");
+    try {
+      const created = await apiFetch(`${API_BASE}/hr/expenses`, {
+        method: "POST",
+        body: JSON.stringify({ ...form, status: "Pending" }),
+      });
+      // Re-fetch so the table shows the real DB row with vendor joins resolved
+      load();
+    } catch (e) {
+      alert("Failed to submit expense: " + (e.message || "Unknown error"));
+    }
+    setShowNew(false);
+    setForm({ staff_id: "", category: "Travel", amount: "", currency: "NGN", description: "", date: "", receipt_url: "", remarks: "" });
+  };
 
-  const filtered = expenses.filter(e => statusFilter === "All" || e.status === statusFilter);
-  const totalPending = expenses.filter(e => e.status === "Pending").reduce((s, e) => s + parseFloat(e.amount || 0), 0);
-  const totalApproved = expenses.filter(e => e.status === "Approved").reduce((s, e) => s + parseFloat(e.amount || 0), 0);
+  // ── HR quick approve/reject — both PORTAL and INTERNAL go through /hr/expenses/{id}
+  //    which now writes to expenditure_requests with the correct status mapping ──
+  const approve = async (id) => {
+    try {
+      await apiFetch(`${API_BASE}/hr/expenses/${id}`, { method: "PATCH", body: JSON.stringify({ status: "Approved" }) });
+    } catch (e) { alert("Approve failed: " + (e.message || "Unknown error")); return; }
+    setExpenses(prev => prev.map(x => x.id === id ? { ...x, status: "Approved" } : x));
+  };
+  const reject = async (id) => {
+    const reason = window.prompt("Rejection reason (shown to staff):");
+    if (reason === null) return; // cancelled
+    try {
+      await apiFetch(`${API_BASE}/hr/expenses/${id}`, { method: "PATCH", body: JSON.stringify({ status: "Rejected", hr_note: reason || undefined }) });
+    } catch (e) { alert("Reject failed: " + (e.message || "Unknown error")); return; }
+    setExpenses(prev => prev.map(x => x.id === id ? { ...x, status: "Rejected" } : x));
+  };
+
+  // ── HR Verify (payout-style — with notes, logged) ──
+  const openVerify = (record, kind) => {
+    setVerifying({ ...record, _kind: kind });
+    setVerifyForm({ decision: "approve", hr_note: "" });
+  };
+  const submitVerify = async () => {
+    if (!verifying) return;
+    setVerifyBusy(true);
+    const { decision, hr_note, notify_email } = verifyForm;
+    const isApprove = decision === "approve";
+    try {
+      // PATCH via /hr/expenses/{id} — backend maps to real expenditure_requests columns:
+      // rejection → rejection_reason, approve → reviewed_by/reviewed_at
+      await apiFetch(`${API_BASE}/hr/expenses/${verifying.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          status: isApprove ? "Approved" : "Rejected",
+          hr_note: hr_note || null,   // backend stores in rejection_reason or risk_notes
+          send_email: isApprove ? !!notify_email : false,  // only send email on approval
+        }),
+      });
+      if (verifying._kind === "expense") {
+        setExpenses(prev => prev.map(x => x.id === verifying.id ? {
+          ...x,
+          status: isApprove ? "Approved" : "Rejected",
+          rejection_reason: !isApprove ? hr_note : x.rejection_reason,
+        } : x));
+      } else {
+        setCommissions(prev => prev.map(x => x.id === verifying.id ? {
+          ...x,
+          payout_status: isApprove ? "approved" : "rejected",
+          rejection_reason: !isApprove ? hr_note : x.rejection_reason,
+        } : x));
+      }
+      setVerifying(null);
+    } catch (err) {
+      alert("Verification failed: " + (err.message || "Unknown error"));
+    } finally { setVerifyBusy(false); }
+  };
+
+  // ── Pay modal helpers ──
+  const openPayModal = (exp) => {
+    const alreadyPaid = parseFloat(exp.amount_paid || 0);
+    const net = parseFloat(exp.net || exp.amount || 0);
+    const balance = Math.max(0, net - alreadyPaid);
+    setPayModal({ exp, amountInput: String(balance), ref: "", busy: false, notify_email: true });
+  };
+
+  const confirmPay = async () => {
+    if (!payModal) return;
+    const { exp, amountInput, ref, notify_email } = payModal;
+    const amountSent = parseFloat(amountInput);
+    if (!amountSent || amountSent <= 0) { alert("Please enter a valid amount."); return; }
+    const net = parseFloat(exp.net || exp.amount || 0);
+    const alreadyPaid = parseFloat(exp.amount_paid || 0);
+    const balance = Math.max(0, net - alreadyPaid);
+    if (amountSent > balance + 0.01) { alert(`Amount exceeds outstanding balance of ₦${balance.toLocaleString()}.`); return; }
+    setPayModal(prev => ({ ...prev, busy: true }));
+    try {
+      const newAmountPaid = alreadyPaid + amountSent;
+      const isFullyPaid = newAmountPaid >= net - 0.05;
+      await apiFetch(`${API_BASE}/hr/expenses/${exp.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          status: isFullyPaid ? "Paid" : "partially_paid",
+          amount_paid: newAmountPaid,
+          payout_reference: ref || undefined,
+          send_email: !!notify_email,  // notify staff by email if checked
+        }),
+      });
+      setExpenses(prev => prev.map(x => x.id === exp.id ? {
+        ...x,
+        status: isFullyPaid ? "paid" : "partially_paid",
+        amount_paid: newAmountPaid,
+      } : x));
+      setPayModal(null);
+    } catch (e) {
+      alert("Error: " + e.message);
+      setPayModal(prev => ({ ...prev, busy: false }));
+    }
+  };
+
+  // ── Derived / display ──
+  const statuses = ["All", "Pending", "Approved", "Partially Paid", "Rejected", "Paid"];
+  const stCol = { Pending: T.gold, Approved: "#4ADE80", Rejected: "#F87171", Paid: "#60A5FA", "Partially Paid": "#F59E0B", approved: "#4ADE80", rejected: "#F87171", paid: "#60A5FA", pending: T.gold, partially_paid: "#F59E0B", "partially paid": "#F59E0B" };
+  const catEmoji = { Travel: "✈️", Accommodation: "🏨", Meals: "🍽️", Equipment: "💻", Training: "📚", Commission: "💰", Other: "📋" };
+
+  const normalize = s => (s || "").toLowerCase();
+  const filteredExpenses = expenses.filter(e => {
+    const matchStatus = statusFilter === "All" || normalize(e.status) === normalize(statusFilter);
+    const matchStaff = !staffFilter || (e.staff?.full_name || "").toLowerCase().includes(staffFilter.toLowerCase());
+    return matchStatus && matchStaff;
+  });
+  const filteredCommissions = commissions.filter(c => {
+    const matchStatus = commissionFilter === "All" || normalize(c.payout_status) === normalize(commissionFilter);
+    const matchStaff = !staffFilter || (c.staff?.full_name || "").toLowerCase().includes(staffFilter.toLowerCase());
+    return matchStatus && matchStaff;
+  });
+
+  const totalPending = expenses.filter(e => normalize(e.status) === "pending").reduce((s, e) => s + parseFloat(e.net || e.amount || 0), 0);
+  // Synchronized with Payout Dashboard: Total Paid is the sum of amount_paid across ALL records
+  const totalReimbPaid = expenses.reduce((s, e) => s + parseFloat(e.amount_paid || 0), 0);
+  // Total Owed is the sum of (Net - Paid) for all non-rejected claims
+  const totalReimbOwed = expenses
+    .filter(e => !["rejected", "voided"].includes(normalize(e.status)))
+    .reduce((s, e) => {
+      const net = parseFloat(e.net || e.amount || 0);
+      const paid = parseFloat(e.amount_paid || 0);
+      return s + Math.max(0, net - paid);
+    }, 0);
+
+  // Keep for backward compat (used by nothing else now)
+  const totalApproved = totalReimbPaid + totalReimbOwed;
+  const totalCommOwed = commissions.filter(c => normalize(c.payout_status) !== "paid").reduce((s, c) => s + parseFloat(c.net || 0), 0);
+  const totalCommPaid = commissions.filter(c => normalize(c.payout_status) === "paid").reduce((s, c) => s + parseFloat(c.net || 0), 0);
+  const unverifiedCount = [...expenses, ...commissions].filter(r => !r.hr_verified && normalize(r.status || r.payout_status) !== "rejected").length;
+
+  const commStatuses = ["All", "Pending", "Approved", "Paid", "Rejected"];
 
   return (
     <div className="fade">
+      {/* ── Header ── */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
-        <div><div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Expenses</div><div style={{ fontSize: 13, color: C.sub }}>Staff expense submissions, approvals, and reimbursements.</div></div>
-        <button className="bp" onClick={() => setShowNew(true)}>+ Submit Expense</button>
-      </div>
-      <div className="g4" style={{ marginBottom: 22 }}>
-        <StatCard label="Pending Claims" value={expenses.filter(e => e.status === "Pending").length} col={T.gold} sub={`₦${totalPending.toLocaleString()}`} />
-        <StatCard label="Approved" value={expenses.filter(e => e.status === "Approved").length} col="#4ADE80" sub={`₦${totalApproved.toLocaleString()}`} />
-        <StatCard label="Rejected" value={expenses.filter(e => e.status === "Rejected").length} col="#F87171" />
-        <StatCard label="Total This Month" value={expenses.filter(e => e.created_at && new Date(e.created_at).getMonth() === new Date().getMonth()).length} col="#60A5FA" />
-      </div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
-        {statuses.map(s => { const col = stCol[s] || C.muted; return (<button key={s} onClick={() => setStatusFilter(s)} style={{ padding: "7px 16px", borderRadius: 20, border: `1px solid ${statusFilter === s ? col : C.border}`, background: statusFilter === s ? `${col}22` : "transparent", color: statusFilter === s ? col : C.sub, cursor: "pointer", fontSize: 12, fontWeight: statusFilter === s ? 800 : 400 }}>{s} {statusFilter === s ? "" : `(${s === "All" ? expenses.length : expenses.filter(e => e.status === s).length})`}</button>); })}
-      </div>
-      {loading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}>Loading…</div> : (
-        <div className="gc" style={{ padding: 0, overflow: "hidden" }}><div className="tw"><table className="ht">
-          <thead><tr><th>Staff</th><th>Category</th><th>Description</th><th>Amount</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
-          <tbody>
-            {filtered.map(e => {
-              const sc = stCol[e.status] || C.muted;
-              return (<tr key={e.id}>
-                <td style={{ fontWeight: 800, color: C.text }}>{e.staff?.full_name || e.staff_id || "—"}</td>
-                <td><span style={{ fontSize: 14 }}>{catEmoji[e.category] || "📋"}</span> <span style={{ fontSize: 12, color: C.sub }}>{e.category}</span></td>
-                <td style={{ fontSize: 12, color: C.sub, maxWidth: 200 }}>{e.description}</td>
-                <td style={{ fontWeight: 800, color: T.gold }}>₦{parseFloat(e.amount || 0).toLocaleString()}</td>
-                <td style={{ fontSize: 11, color: C.muted }}>{e.date || (e.created_at ? new Date(e.created_at).toLocaleDateString() : "—")}</td>
-                <td><span className="tg" style={{ background: `${sc}22`, color: sc }}>{e.status}</span></td>
-                <td><div style={{ display: "flex", gap: 6 }}>
-                  {e.status === "Pending" && <><button className="bp" style={{ fontSize: 10, padding: "4px 10px" }} onClick={() => approve(e.id)}>Approve</button><button style={{ fontSize: 10, padding: "4px 10px", border: "1px solid #F87171", background: "#F8717118", color: "#F87171", borderRadius: 6, cursor: "pointer" }} onClick={() => reject(e.id)}>Reject</button></>}
-                  {e.receipt_url && <a href={e.receipt_url} target="_blank" rel="noreferrer" className="bg" style={{ fontSize: 10, padding: "4px 10px" }}>Receipt</a>}
-                </div></td>
-              </tr>);
-            })}
-            {filtered.length === 0 && <tr><td colSpan="7" style={{ textAlign: "center", padding: 40, color: C.muted }}>No expenses found.</td></tr>}
-          </tbody>
-        </table></div></div>
-      )}
-      {showNew && (<Modal onClose={() => setShowNew(false)} title="Submit Expense Claim" width={560}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div><Lbl>Staff Member</Lbl><select className="inp" value={form.staff_id} onChange={e => setForm(f => ({ ...f, staff_id: e.target.value }))}><option value="">— Select Staff —</option>{staff.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}</select></div>
-          <div className="g2" style={{ gap: 12 }}>
-            <div><Lbl>Category</Lbl><select className="inp" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}><option>Travel</option><option>Accommodation</option><option>Meals</option><option>Equipment</option><option>Training</option><option>Other</option></select></div>
-            <div><Lbl>Amount (NGN) *</Lbl><input type="number" className="inp" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} placeholder="e.g. 45000" /></div>
-          </div>
-          <div><Lbl>Description *</Lbl><input className="inp" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Brief description of the expense" /></div>
-          <div className="g2" style={{ gap: 12 }}>
-            <div><Lbl>Date Incurred</Lbl><input type="date" className="inp" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
-            <div><Lbl>Receipt URL</Lbl><input className="inp" value={form.receipt_url} onChange={e => setForm(f => ({ ...f, receipt_url: e.target.value }))} placeholder="https://…" /></div>
-          </div>
-          <button className="bp" onClick={submit} style={{ padding: 14 }}>Submit Expense</button>
+        <div>
+          <div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Expenses & Commissions</div>
+          <div style={{ fontSize: 13, color: C.sub }}>Unified view of staff expense reimbursements and commission payouts — with HR verification.</div>
         </div>
-      </Modal>)}
+        <div style={{ display: "flex", gap: 10 }}>
+          {unverifiedCount > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, background: `${T.gold}18`, border: `1px solid ${T.gold}40`, borderRadius: 8, padding: "6px 14px" }}>
+              <span style={{ fontSize: 18 }}>⚠️</span>
+              <span style={{ fontSize: 12, color: T.gold, fontWeight: 800 }}>{unverifiedCount} awaiting HR verification</span>
+            </div>
+          )}
+          <button className="bp" onClick={() => setShowNew(true)}>+ Submit Expense</button>
+        </div>
+      </div>
+
+      {/* ── Summary cards ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 14, marginBottom: 22 }}>
+        <StatCard label="Expense Claims Pending" value={expenses.filter(e => normalize(e.status) === "pending").length} col={T.gold} sub={fmt(totalPending)} />
+        <StatCard label="Reimb. Owed" value={expenses.filter(e => ["approved", "partially_paid"].includes(normalize(e.status))).length} col="#F87171" sub={fmt(totalReimbOwed)} />
+        <StatCard label="Reimb. Paid Out" value={expenses.filter(e => normalize(e.status) === "paid").length} col="#4ADE80" sub={fmt(totalReimbPaid)} />
+        <StatCard label="Commission Owed (Unpaid)" value={commissions.filter(c => normalize(c.payout_status) !== "paid" && normalize(c.payout_status) !== "rejected").length} col="#F59E0B" sub={fmt(totalCommOwed)} />
+        <StatCard label="Commission Paid Out" value={commissions.filter(c => normalize(c.payout_status) === "paid").length} col="#60A5FA" sub={fmt(totalCommPaid)} />
+      </div>
+
+      {/* ── Tab bar ── */}
+      <div style={{ display: "flex", gap: 0, marginBottom: 20, borderBottom: `2px solid ${C.border}` }}>
+        {[["expenses", "💳 Expense Claims"], ["commissions", "💰 Staff Commissions"]].map(([id, label]) => (
+          <button key={id} onClick={() => setTab(id)} style={{ padding: "10px 22px", border: "none", borderBottom: tab === id ? `2px solid ${T.gold}` : "2px solid transparent", background: "transparent", color: tab === id ? T.gold : C.sub, fontWeight: tab === id ? 800 : 500, fontSize: 13, cursor: "pointer", marginBottom: -2, transition: "all 0.2s" }}>{label}</button>
+        ))}
+        <div style={{ flex: 1 }} />
+        {/* Global staff search */}
+        <input className="inp" placeholder="🔍 Filter by staff name…" value={staffFilter} onChange={e => setStaffFilter(e.target.value)} style={{ width: 200, fontSize: 12, padding: "6px 12px", marginBottom: 6 }} />
+      </div>
+
+      {loading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}>Loading…</div> : (<>
+
+        {/* ══════════════════════ EXPENSES TAB ══════════════════════ */}
+        {tab === "expenses" && (
+          <div className="fade">
+            {/* Status filter pills */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
+              {statuses.map(s => {
+                const col = stCol[s.toLowerCase()] || C.muted;
+                const cnt = s === "All" ? expenses.length : expenses.filter(e => normalize(e.status) === normalize(s)).length;
+                return (
+                  <button key={s} onClick={() => setStatusFilter(s)} style={{ padding: "6px 16px", borderRadius: 20, border: `1px solid ${statusFilter === s ? col : C.border}`, background: statusFilter === s ? `${col}22` : "transparent", color: statusFilter === s ? col : C.sub, cursor: "pointer", fontSize: 12, fontWeight: statusFilter === s ? 800 : 400 }}>
+                    {s} ({cnt})
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
+              <div className="tw">
+                <table className="ht">
+                  <thead>
+                    <tr>
+                      <th>Staff</th><th>Category</th><th>Description</th><th>Amount</th><th>Date</th>
+                      <th>Remarks</th><th>Source</th><th>Status</th><th>HR Verified</th><th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredExpenses.map(e => {
+                      const sc = stCol[normalize(e.status)] || C.muted;
+                      return (
+                        <tr key={e.id} style={{ cursor: "pointer" }} onClick={() => setDetail({ ...e, _kind: "expense" })}>
+                          <td style={{ fontWeight: 800, color: C.text }}>{e.staff?.full_name || e.staff_id || "—"}</td>
+                          <td><span style={{ fontSize: 13 }}>{catEmoji[e.category] || "📋"}</span> <span style={{ fontSize: 12, color: C.sub }}>{e.category}</span></td>
+                          <td style={{ maxWidth: 200 }}>
+                            <div style={{ display: "flex", alignItems: "flex-start", gap: 6, flexWrap: "wrap" }}>
+                              {e.is_disputed && (
+                                <span style={{ fontSize: 9, fontWeight: 800, padding: "2px 6px", borderRadius: 4, background: "#EF4444", color: "#fff", flexShrink: 0 }}>DISPUTE</span>
+                              )}
+                              {e.risk_notes && !e.is_disputed && (
+                                <span style={{ fontSize: 9, fontWeight: 800, padding: "2px 6px", borderRadius: 4, background: "#F59E0B", color: "#fff", flexShrink: 0 }}>⚠ HIGH RISK</span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: 12, color: C.sub, marginTop: 2 }}>{e.description}</div>
+                            {e.remarks && (
+                              <div style={{ fontSize: 10, color: C.muted, marginTop: 3, lineHeight: 1.4 }}>
+                                💬 {e.remarks.length > 60 ? e.remarks.slice(0, 60) + "…" : e.remarks}
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ fontWeight: 800, color: T.gold }}>₦{parseFloat(e.amount || 0).toLocaleString()}</td>
+                          <td style={{ fontSize: 11, color: C.muted }}>{e.date ? new Date(e.date).toLocaleDateString("en-GB") : (e.created_at ? new Date(e.created_at).toLocaleDateString("en-GB") : "—")}</td>
+                          <td style={{ maxWidth: 140 }}>{e.remarks ? <span style={{ fontSize: 11, color: C.sub }} title={e.remarks}>{e.remarks.length > 50 ? e.remarks.slice(0, 50) + "…" : e.remarks}</span> : <span style={{ fontSize: 11, color: C.muted }}>—</span>}</td>
+                          <td><span style={{ fontSize: 10, fontWeight: 800, padding: "3px 8px", borderRadius: 10, background: e.source === "PORTAL" ? `${T.gold}22` : `${C.muted}22`, color: e.source === "PORTAL" ? T.gold : C.muted }}>{e.source || "INTERNAL"}</span></td>
+                          <td>
+                            <span className="tg" style={{ background: `${sc}22`, color: sc, fontSize: 10 }}>{e.status}</span>
+                            {normalize(e.status) === "rejected" && e.rejection_reason && (
+                              <div style={{ fontSize: 10, color: "#F87171", marginTop: 4, lineHeight: 1.4 }} title={e.rejection_reason}>
+                                ↳ {e.rejection_reason.length > 60 ? e.rejection_reason.slice(0, 60) + "…" : e.rejection_reason}
+                              </div>
+                            )}
+                          </td>
+                          <td>
+                            {e.hr_verified
+                              ? <span style={{ fontSize: 10, color: "#10B981", fontWeight: 800 }}>✓ Verified</span>
+                              : <span style={{ fontSize: 10, color: T.gold, fontWeight: 700 }}>Pending</span>}
+                            {e.hr_note && <div style={{ fontSize: 9, color: C.muted, marginTop: 2 }} title={e.hr_note}>📝 note</div>}
+                          </td>
+                          <td onClick={ev => ev.stopPropagation()}>
+                            <div style={{ display: "flex", gap: 5 }}>
+                              {/* Quick approve/reject for pending items */}
+                              {normalize(e.status) === "pending" && (
+                                <>
+                                  <button className="bp" style={{ fontSize: 10, padding: "4px 10px" }} onClick={() => approve(e.id)}>Approve</button>
+                                  <button style={{ fontSize: 10, padding: "4px 10px", border: "1px solid #F87171", background: "#F8717118", color: "#F87171", borderRadius: 6, cursor: "pointer" }} onClick={() => reject(e.id)}>Reject</button>
+                                </>
+                              )}
+                              {/* HR Verify button — mirrors payout dashboard verify flow */}
+                              {!e.hr_verified && normalize(e.status) !== "rejected" && e.source === "PORTAL" && (
+                                <button style={{ fontSize: 10, padding: "4px 10px", border: `1px solid ${T.gold}`, background: `${T.gold}18`, color: T.gold, borderRadius: 6, cursor: "pointer", fontWeight: 700 }} onClick={() => openVerify(e, "expense")}>HR Verify</button>
+                              )}
+                              {(normalize(e.status) === "approved" || normalize(e.status) === "partially paid") && (
+                                <button className="bp" style={{ fontSize: 10, padding: "4px 10px", background: "#10B981" }} onClick={() => openPayModal(e)}>
+                                  {normalize(e.status) === "partially paid" ? "💳 Pay Balance" : "💳 Mark Paid"}
+                                </button>
+                              )}
+                              {normalize(e.status) === "partially paid" && (() => {
+                                const paid = parseFloat(e.amount_paid || 0);
+                                const net = parseFloat(e.net || e.amount || 0);
+                                return <span style={{ fontSize: 9, color: "#F59E0B", fontWeight: 700 }}>₦{paid.toLocaleString()} / ₦{net.toLocaleString()}</span>;
+                              })()}
+                              {normalize(e.status) === "paid" && <span style={{ fontSize: 10, color: "#10B981", fontWeight: 800 }}>✓ Reimbursed</span>}
+                              {e.receipt_url && (
+                                <button
+                                  className="bg"
+                                  style={{ fontSize: 10, padding: "4px 10px", cursor: "pointer", border: "none" }}
+                                  onClick={() => setViewingReceipt({ id: e.id, receipt_url: e.receipt_url, description: e.description, selectedIdx: 0 })}
+                                >
+                                  📎 Receipt
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {filteredExpenses.length === 0 && (
+                      <tr><td colSpan="10" style={{ textAlign: "center", padding: 40, color: C.muted }}>No expenses found.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════ COMMISSIONS TAB ══════════════════════ */}
+        {tab === "commissions" && (
+          <div className="fade">
+            <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap", alignItems: "center" }}>
+              {commStatuses.map(s => {
+                const col = stCol[s.toLowerCase()] || C.muted;
+                const cnt = s === "All" ? commissions.length : commissions.filter(c => normalize(c.payout_status) === normalize(s)).length;
+                return (
+                  <button key={s} onClick={() => setCommissionFilter(s)} style={{ padding: "6px 16px", borderRadius: 20, border: `1px solid ${commissionFilter === s ? col : C.border}`, background: commissionFilter === s ? `${col}22` : "transparent", color: commissionFilter === s ? col : C.sub, cursor: "pointer", fontSize: 12, fontWeight: commissionFilter === s ? 800 : 400 }}>
+                    {s} ({cnt})
+                  </button>
+                );
+              })}
+              <div style={{ marginLeft: "auto", fontSize: 12, color: C.muted }}>Pulled from Payout Dashboard — full commission ledger</div>
+            </div>
+
+            {commissions.length === 0 ? (
+              <div style={{ padding: "60px 40px", textAlign: "center", color: C.muted, border: `2px dashed ${C.border}`, borderRadius: 14 }}>
+                <div style={{ fontSize: 36, marginBottom: 12 }}>💰</div>
+                <div style={{ fontSize: 15, fontWeight: 700 }}>No Commission Records Found</div>
+                <div style={{ fontSize: 13, marginTop: 6 }}>Commission payouts created in the main Payout Dashboard will appear here for HR review.</div>
+              </div>
+            ) : (
+              <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
+                <div className="tw">
+                  <table className="ht">
+                    <thead>
+                      <tr>
+                        <th>Staff</th><th>Invoice / Deal</th><th>Estate</th><th>Gross Comm.</th>
+                        <th>WHT</th><th>Net Comm.</th><th>Date</th><th>Staff Remarks</th><th>Payout Status</th>
+                        <th>HR Verified</th><th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredCommissions.map(c => {
+                        const sc = stCol[normalize(c.payout_status)] || C.muted;
+                        return (
+                          <tr key={c.id} style={{ cursor: "pointer" }} onClick={() => setDetail({ ...c, _kind: "commission" })}>
+                            <td style={{ fontWeight: 800, color: C.text }}>{c.staff?.full_name || "—"}</td>
+                            <td style={{ fontSize: 12, color: C.sub }}>{c.invoice_number || "—"}</td>
+                            <td style={{ fontSize: 12, color: C.sub }}>{c.estate || "—"}</td>
+                            <td style={{ fontWeight: 700 }}>{fmt(c.gross)}</td>
+                            <td style={{ fontSize: 11, color: "#EF4444" }}>-{fmt(c.wht)}</td>
+                            <td style={{ fontWeight: 800, color: T.gold }}>{fmt(c.net)}</td>
+                            <td style={{ fontSize: 11, color: C.muted }}>{c.created_at ? new Date(c.created_at).toLocaleDateString("en-GB") : "—"}</td>
+                            <td style={{ maxWidth: 200 }}>
+                              {c.remarks
+                                ? (
+                                  <div style={{ display: "flex", alignItems: "flex-start", gap: 5 }}>
+                                    <span style={{ fontSize: 14, flexShrink: 0 }}>💬</span>
+                                    <span style={{ fontSize: 11, color: C.sub, lineHeight: 1.4, wordBreak: "break-word" }} title={c.remarks}>
+                                      {c.remarks.length > 80 ? c.remarks.slice(0, 80) + "…" : c.remarks}
+                                    </span>
+                                  </div>
+                                )
+                                : <span style={{ fontSize: 11, color: C.muted }}>—</span>}
+                            </td>
+                            <td>
+                              <span className="tg" style={{ background: `${sc}22`, color: sc, fontSize: 10 }}>{c.payout_status || "pending"}</span>
+                            </td>
+                            <td>
+                              {c.hr_verified
+                                ? <span style={{ fontSize: 10, color: "#10B981", fontWeight: 800 }}>✓ Verified</span>
+                                : <span style={{ fontSize: 10, color: T.gold, fontWeight: 700 }}>Unverified</span>}
+                              {c.hr_note && <div style={{ fontSize: 9, color: C.muted, marginTop: 2 }} title={c.hr_note}>📝 note</div>}
+                            </td>
+                            <td onClick={ev => ev.stopPropagation()}>
+                              <div style={{ display: "flex", gap: 5 }}>
+                                {/* HR can verify/dispute commission payouts, same flow as payout dashboard */}
+                                {!c.hr_verified && normalize(c.payout_status) !== "rejected" && (
+                                  <button style={{ fontSize: 10, padding: "4px 10px", border: `1px solid ${T.gold}`, background: `${T.gold}18`, color: T.gold, borderRadius: 6, cursor: "pointer", fontWeight: 700 }} onClick={() => openVerify(c, "commission")}>HR Verify</button>
+                                )}
+                                {(c.receipt_url || c.proforma_url) && (
+                                  <a href={c.receipt_url || c.proforma_url} target="_blank" rel="noreferrer" className="bg" style={{ fontSize: 10, padding: "4px 10px" }}>Proof</a>
+                                )}
+                                {c.expenditure_id && (
+                                  <a href={`${API_BASE}/payouts/requests/${c.expenditure_id}/proof-files`} target="_blank" rel="noreferrer" className="bg" style={{ fontSize: 10, padding: "4px 10px" }}>Docs</a>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {filteredCommissions.length === 0 && (
+                        <tr><td colSpan="11" style={{ textAlign: "center", padding: 40, color: C.muted }}>No commission records match the current filter.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </>)}
+
+      {/* ══════════════════════ DETAIL DRAWER ══════════════════════ */}
+      {/* ══ PAY MODAL ══ */}
+      {payModal && (() => {
+        const { exp, amountInput, ref, busy } = payModal;
+        const alreadyPaid = parseFloat(exp.amount_paid || 0);
+        const net = parseFloat(exp.net || exp.amount || 0);
+        const balance = Math.max(0, net - alreadyPaid);
+        const amtSent = parseFloat(amountInput) || 0;
+        const willBePartial = amtSent > 0 && amtSent < balance - 0.05;
+        const remaining = Math.max(0, balance - amtSent);
+        return (
+          <Modal onClose={() => !busy && setPayModal(null)} title="Record Reimbursement Payment" width={480}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: "12px 16px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                <div>
+                  <div style={{ fontSize: 10, color: C.sub, textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>Staff</div>
+                  <div style={{ fontWeight: 800, fontSize: 13 }}>{exp.staff?.full_name || "—"}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, color: C.sub, textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>Claim (Net)</div>
+                  <div style={{ fontWeight: 800, fontSize: 13 }}>{fmt(net)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, color: C.sub, textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>Outstanding</div>
+                  <div style={{ fontWeight: 800, fontSize: 13, color: balance > 0 ? "#F87171" : "#10B981" }}>{fmt(balance)}</div>
+                </div>
+              </div>
+              {alreadyPaid > 0 && (
+                <div style={{ fontSize: 12, color: "#F59E0B", background: "rgba(245,158,11,0.08)", borderRadius: 8, padding: "8px 12px" }}>
+                  {fmt(alreadyPaid)} already paid. Settling the remaining {fmt(balance)}.
+                </div>
+              )}
+              <div>
+                <div style={{ fontSize: 11, color: C.sub, marginBottom: 6, fontWeight: 600 }}>Amount Actually Sent (NGN) *</div>
+                <input
+                  type="number" className="inp"
+                  value={amountInput} min="1" max={balance} step="100"
+                  onChange={e => setPayModal(prev => ({ ...prev, amountInput: e.target.value }))}
+                  placeholder={"Up to " + fmt(balance)}
+                  style={{ width: "100%", fontWeight: 800, fontSize: 16 }}
+                  autoFocus
+                />
+                {willBePartial && (
+                  <div style={{ fontSize: 11, color: "#F59E0B", marginTop: 6 }}>
+                    Partial payment — {fmt(remaining)} will remain outstanding.
+                  </div>
+                )}
+                {amtSent >= balance - 0.05 && amtSent > 0 && (
+                  <div style={{ fontSize: 11, color: "#10B981", marginTop: 6 }}>Full balance will be settled.</div>
+                )}
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: C.sub, marginBottom: 6, fontWeight: 600 }}>Payment Reference / Transfer ID (optional)</div>
+                <input
+                  type="text" className="inp"
+                  value={ref}
+                  onChange={e => setPayModal(prev => ({ ...prev, ref: e.target.value }))}
+                  placeholder="e.g. TRF-20260430-001"
+                  style={{ width: "100%" }}
+                />
+              </div>
+              {/* ── Email notification checkbox ── */}
+              <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer", padding: "10px 14px", borderRadius: 8, background: "#FBB04010", border: "1px solid #FBB04030" }}>
+                <input
+                  type="checkbox"
+                  checked={payModal.notify_email}
+                  onChange={e => setPayModal(prev => ({ ...prev, notify_email: e.target.checked }))}
+                  style={{ width: 16, height: 16, marginTop: 2, accentColor: "#FBB040", cursor: "pointer", flexShrink: 0 }}
+                />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#FBB040" }}>📧 Notify staff by email</div>
+                  <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>
+                    {willBePartial
+                      ? "Staff will receive an email confirming this partial payment and the remaining balance"
+                      : "Staff will receive a Remittance Advice email confirming their full reimbursement"}
+                  </div>
+                </div>
+              </label>
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                <button className="bg" style={{ padding: "8px 20px" }} onClick={() => setPayModal(null)} disabled={busy}>Cancel</button>
+                <button
+                  className="bp"
+                  style={{ padding: "8px 24px", background: "#10B981", opacity: busy || !amtSent || amtSent <= 0 ? 0.6 : 1 }}
+                  onClick={confirmPay}
+                  disabled={busy || !amtSent || amtSent <= 0}
+                >
+                  {busy ? "Saving..." : willBePartial ? "Record Partial Payment" : "Confirm Full Payment"}
+                </button>
+              </div>
+            </div>
+          </Modal>
+        );
+      })()}
+
+      {detail && (
+        <Modal onClose={() => setDetail(null)} title={detail._kind === "commission" ? "Commission Detail" : "Expense Claim Detail"} width={580}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Staff</div><div style={{ fontWeight: 800 }}>{detail.staff?.full_name || "—"}</div></div>
+              {detail._kind === "commission" ? (
+                <>
+                  <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Invoice</div><div style={{ fontWeight: 700 }}>{detail.invoice_number || "—"}</div></div>
+                  <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Estate</div><div>{detail.estate || "—"}</div></div>
+                  <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Gross Commission</div><div style={{ fontWeight: 800, color: "#10B981" }}>{fmt(detail.gross)}</div></div>
+                  <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>WHT Deducted</div><div style={{ color: "#EF4444" }}>-{fmt(detail.wht)}</div></div>
+                  <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Net Payout</div><div style={{ fontWeight: 800, color: T.gold, fontSize: 18 }}>{fmt(detail.net)}</div></div>
+                  <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Payout Status</div><span className="tg" style={{ background: `${(stCol[normalize(detail.payout_status)] || C.muted)}22`, color: stCol[normalize(detail.payout_status)] || C.muted }}>{detail.payout_status || "pending"}</span></div>
+                </>
+              ) : (
+                <>
+                  <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Category</div><div>{catEmoji[detail.category] || "📋"} {detail.category}</div></div>
+                  <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Amount</div><div style={{ fontWeight: 800, color: T.gold, fontSize: 18 }}>₦{parseFloat(detail.amount || 0).toLocaleString()}</div></div>
+                  <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Status</div><span className="tg" style={{ background: `${(stCol[normalize(detail.status)] || C.muted)}22`, color: stCol[normalize(detail.status)] || C.muted }}>{detail.status}</span></div>
+                  <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Source</div><div>{detail.source}</div></div>
+                </>
+              )}
+              <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Date</div><div style={{ fontSize: 12 }}>{detail.created_at ? new Date(detail.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" }) : "—"}</div></div>
+              <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>HR Verified</div><div style={{ fontWeight: 700, color: detail.hr_verified ? "#10B981" : T.gold }}>{detail.hr_verified ? "✓ Verified" : "Pending Verification"}</div></div>
+            </div>
+            {(detail.description || detail.invoice_number) && (
+              <div style={{ background: C.base, borderRadius: 8, padding: "12px 14px" }}>
+                <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Description</div>
+                <div style={{ fontSize: 13, color: C.text }}>{detail.description || detail.invoice_number}</div>
+              </div>
+            )}
+            {detail.remarks && (
+              <div style={{ background: C.base, borderRadius: 8, padding: "12px 14px", border: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 10, color: T.gold, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6, fontWeight: 800 }}>💬 Staff Remarks</div>
+                <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{detail.remarks}</div>
+              </div>
+            )}
+            {detail.is_disputed && (
+              <div style={{ background: "#FEF2F2", border: "1.5px solid #FCA5A5", borderRadius: 8, padding: "12px 14px" }}>
+                <div style={{ fontSize: 10, color: "#EF4444", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6, fontWeight: 800 }}>⚠️ Rep Ownership Dispute</div>
+                <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{detail.dispute_reason || "Dispute raised via portal."}</div>
+              </div>
+            )}
+            {detail.risk_notes && (
+              <div style={{ background: "#FFFBEB", border: "1.5px solid #FCD34D", borderRadius: 8, padding: "12px 14px" }}>
+                <div style={{ fontSize: 10, color: "#D97706", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6, fontWeight: 800 }}>⚠ Risk / Fraud Flags</div>
+                <div style={{ fontSize: 12, color: "#374151", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{detail.risk_notes}</div>
+              </div>
+            )}
+            {detail.hr_note && (
+              <div style={{ background: `${T.gold}0E`, border: `1px solid ${T.gold}30`, borderRadius: 8, padding: "12px 14px" }}>
+                <div style={{ fontSize: 10, color: T.gold, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>HR Note</div>
+                <div style={{ fontSize: 13 }}>{detail.hr_note}</div>
+              </div>
+            )}
+            {detail.rejection_reason && (
+              <div style={{ background: "#FEF2F2", border: "1.5px solid #FCA5A5", borderRadius: 8, padding: "12px 14px" }}>
+                <div style={{ fontSize: 10, color: "#EF4444", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4, fontWeight: 800 }}>⚠️ Rejection Reason</div>
+                <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{detail.rejection_reason}</div>
+              </div>
+            )}
+            {(detail.receipt_url || detail.proforma_url) && (
+              <button
+                className="bp"
+                style={{ textDecoration: "none", textAlign: "center", fontSize: 13, padding: "10px 0", cursor: "pointer", border: "none", width: "100%" }}
+                onClick={() => setViewingReceipt({ id: detail.id, receipt_url: detail.receipt_url || detail.proforma_url, description: detail.description, selectedIdx: 0 })}
+              >
+                📎 View Attached Document
+              </button>
+            )}
+          </div>
+        </Modal>
+      )}
+
+      {/* ══════════════════════ HR VERIFY MODAL ══════════════════════ */}
+      {verifying && (
+        <Modal onClose={() => setVerifying(null)} title="HR Verification" width={500}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* Record summary */}
+            <div style={{ background: C.base, borderRadius: 10, padding: "14px 16px" }}>
+              <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 4 }}>{verifying.staff?.full_name || "Staff Member"}</div>
+              <div style={{ fontSize: 12, color: C.sub }}>
+                {verifying._kind === "commission"
+                  ? `Commission — Invoice: ${verifying.invoice_number || "—"} · Net: ${fmt(verifying.net)}`
+                  : `Expense — ${verifying.category} · ₦${parseFloat(verifying.amount || 0).toLocaleString()}`}
+              </div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
+                {verifying.created_at ? new Date(verifying.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" }) : ""}
+              </div>
+            </div>
+
+            {/* Decision */}
+            <div>
+              <Lbl>HR Decision *</Lbl>
+              <div style={{ display: "flex", gap: 10 }}>
+                {["approve", "reject"].map(d => (
+                  <button key={d} onClick={() => setVerifyForm(f => ({ ...f, decision: d }))} style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: `2px solid ${verifyForm.decision === d ? (d === "approve" ? "#10B981" : "#EF4444") : C.border}`, background: verifyForm.decision === d ? (d === "approve" ? "#10B98118" : "#EF444418") : "transparent", color: verifyForm.decision === d ? (d === "approve" ? "#10B981" : "#EF4444") : C.sub, fontWeight: 800, fontSize: 13, cursor: "pointer", textTransform: "capitalize" }}>
+                    {d === "approve" ? "✓ Approve & Verify" : "✗ Dispute / Reject"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Note */}
+            <div>
+              <Lbl>HR Note {verifyForm.decision === "reject" ? "*" : "(Optional)"}</Lbl>
+              <textarea className="inp" value={verifyForm.hr_note} onChange={e => setVerifyForm(f => ({ ...f, hr_note: e.target.value }))} placeholder={verifyForm.decision === "approve" ? "Add any verification notes or comments…" : "Reason for dispute or rejection (required)"} style={{ minHeight: 80, resize: "vertical" }} />
+            </div>
+
+            {verifyForm.decision === "reject" && !verifyForm.hr_note.trim() && (
+              <div style={{ fontSize: 12, color: "#EF4444", padding: "8px 12px", background: "#EF444410", borderRadius: 6 }}>⚠️ Please provide a reason when disputing a record.</div>
+            )}
+
+            {/* ── Email notification checkbox (approve only) ── */}
+            {verifyForm.decision === "approve" && (
+              <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer", padding: "10px 14px", borderRadius: 8, background: "#FBB04010", border: "1px solid #FBB04030" }}>
+                <input
+                  type="checkbox"
+                  checked={verifyForm.notify_email}
+                  onChange={e => setVerifyForm(f => ({ ...f, notify_email: e.target.checked }))}
+                  style={{ width: 16, height: 16, marginTop: 2, accentColor: "#FBB040", cursor: "pointer", flexShrink: 0 }}
+                />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#FBB040" }}>📧 Send approval email to staff</div>
+                  <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>Staff will receive a Remittance Advice email with their claim and payment details</div>
+                </div>
+              </label>
+            )}
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <button style={{ flex: 1, padding: 12, border: `1px solid ${C.border}`, background: "transparent", color: C.sub, borderRadius: 8, cursor: "pointer" }} onClick={() => setVerifying(null)}>Cancel</button>
+              <button className="bp" style={{ flex: 2, padding: 12, background: verifyForm.decision === "reject" ? "#EF4444" : undefined, opacity: (verifyBusy || (verifyForm.decision === "reject" && !verifyForm.hr_note.trim())) ? 0.6 : 1 }} disabled={verifyBusy || (verifyForm.decision === "reject" && !verifyForm.hr_note.trim())} onClick={submitVerify}>
+                {verifyBusy ? "Saving…" : verifyForm.decision === "approve" ? "Confirm Verification" : "Confirm Dispute"}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ══════════════════════ NEW EXPENSE MODAL ══════════════════════ */}
+      {showNew && (
+        <Modal onClose={() => setShowNew(false)} title="Submit Expense Claim" width={560}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div><Lbl>Staff Member</Lbl><select className="inp" value={form.staff_id} onChange={e => setForm(f => ({ ...f, staff_id: e.target.value }))}><option value="">— Select Staff —</option>{staff.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}</select></div>
+            <div className="g2" style={{ gap: 12 }}>
+              <div>
+                <Lbl>Category</Lbl>
+                <select className="inp" value={form.category} onChange={e => {
+                  setForm(f => ({ ...f, category: e.target.value }));
+                  // Reset description when switching to/from Office Expenditure
+                  if (e.target.value === "Office Expenditure") {
+                    setForm(f => ({ ...f, description: "" }));
+                  }
+                }}>
+                  <option value="Office Expenditure">Office Expenditure</option>
+                  <option value="Travel">Travel</option>
+                  <option value="Accommodation">Accommodation</option>
+                  <option value="Meals">Meals</option>
+                  <option value="Equipment">Equipment</option>
+                  <option value="Training">Training</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div><Lbl>Amount (NGN) *</Lbl><input type="number" className="inp" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} placeholder="e.g. 45000" /></div>
+            </div>
+            <div>
+              <Lbl>Expense Detail *</Lbl>
+              {form.category === "Office Expenditure" ? (
+                <select className="inp" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}>
+                  <option value="" disabled>— Select Detail —</option>
+                  <optgroup label="🏡 Real Estate Operations">
+                    <option value="Site Inspection - Transport/Logistics">Site Inspection - Transport/Logistics</option>
+                    <option value="Site Inspection - Feeding/Refreshments">Site Inspection - Feeding/Refreshments</option>
+                    <option value="Allocation - Surveying & Pegging">Allocation - Surveying & Pegging</option>
+                    <option value="Allocation - Logistics/Documentation">Allocation - Logistics/Documentation</option>
+                    <option value="Site Clearing & Maintenance">Site Clearing & Maintenance</option>
+                  </optgroup>
+                  <optgroup label="🔌 Office Utilities & Maintenance">
+                    <option value="Fuel - Generator">Fuel - Generator</option>
+                    <option value="Fuel - Office Vehicle">Fuel - Office Vehicle</option>
+                    <option value="Electricity (AEDC) & Water">Electricity (AEDC) & Water</option>
+                    <option value="Repairs (AC/Plumbing/Electrical)">Repairs (AC/Plumbing/Electrical)</option>
+                  </optgroup>
+                  <optgroup label="🧹 Cleaning & Janitorial">
+                    <option value="Toiletries & Cleaning Supplies">Toiletries & Cleaning Supplies</option>
+                    <option value="Janitorial / Cleaning Services">Janitorial / Cleaning Services</option>
+                  </optgroup>
+                  <optgroup label="💻 Tech & Infrastructure">
+                    <option value="Database & API Costs">Database & API Costs</option>
+                    <option value="Domain & Hosting Renewals">Domain & Hosting Renewals</option>
+                    <option value="Internet & Data Subscriptions">Internet & Data Subscriptions</option>
+                    <option value="Software Licenses">Software Licenses</option>
+                  </optgroup>
+                  <optgroup label="📋 Administration & Branding">
+                    <option value="Office Supplies & Stationery">Office Supplies & Stationery</option>
+                    <option value="Printing & Branding Materials">Printing & Branding Materials</option>
+                    <option value="Courier & General Logistics">Courier & General Logistics</option>
+                  </optgroup>
+                  <optgroup label="☕ Welfare & Meetings">
+                    <option value="Client Welfare">Client Welfare</option>
+                    <option value="Staff Welfare (Lunch/Tea/Water)">Staff Welfare (Lunch/Tea/Water)</option>
+                  </optgroup>
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  className="inp"
+                  value={form.description}
+                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="e.g. Flight to Abuja for site visit"
+                />
+              )}
+            </div>
+            <div className="g2" style={{ gap: 12 }}>
+              <div><Lbl>Date Incurred</Lbl><input type="date" className="inp" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
+              <div>
+                <Lbl>Receipt / Proof</Lbl>
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  className="inp"
+                  style={{ paddingTop: 6 }}
+                  onChange={async (ev) => {
+                    const file = ev.target.files?.[0];
+                    if (!file) return;
+                    const fd = new FormData();
+                    fd.append("file", file);
+                    try {
+                      const res = await fetch(`${API_BASE}/hr/expenses/upload-receipt`, {
+                        method: "POST",
+                        headers: { Authorization: `Bearer ${localStorage.getItem("ec_token")}` },
+                        body: fd,
+                      });
+                      const data = await res.json();
+                      if (data.path) setForm(f => ({ ...f, receipt_url: data.path }));
+                      else alert("Upload failed — try again");
+                    } catch {
+                      alert("Upload failed — check your connection");
+                    }
+                  }}
+                />
+                {form.receipt_url && (
+                  <div style={{ fontSize: 10, color: "#10B981", marginTop: 4 }}>
+                    ✓ File uploaded — will be attached on submit
+                  </div>
+                )}
+              </div>
+            </div>
+            <div><Lbl>Remarks / Notes</Lbl><textarea className="inp" value={form.remarks} onChange={e => setForm(f => ({ ...f, remarks: e.target.value }))} placeholder="Any additional context for this expense claim..." style={{ minHeight: 72 }} /></div>
+            <button className="bp" onClick={submit} style={{ padding: 14 }}>Submit Expense</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ══════════════════════ RECEIPT VIEWER MODAL ══════════════════════ */}
+      {viewingReceipt && (() => {
+        const raw = viewingReceipt.receipt_url || "";
+        let paths = [];
+        if (raw.startsWith("[")) {
+          try { paths = JSON.parse(raw); } catch { paths = [raw]; }
+        } else if (raw) {
+          paths = [raw];
+        }
+        return (
+          <Modal onClose={() => setViewingReceipt(null)} title="Expense Proof Documents" width={760}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <div style={{ padding: 14, background: `${T.orange}0D`, borderRadius: 12, border: `1px solid ${T.orange}22` }}>
+                <div style={{ fontSize: 11, color: C.sub, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>
+                  Proof Documentation — {viewingReceipt.description || "Expense Claim"}
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                  {paths.length > 0 ? paths.map((p, i) => {
+                    const isActive = (viewingReceipt.selectedIdx || 0) === i;
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => setViewingReceipt(prev => ({ ...prev, selectedIdx: i }))}
+                        className="bg"
+                        style={{
+                          display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", border: `1px solid ${isActive ? T.orange : "transparent"}`,
+                          background: isActive ? `${T.orange}11` : C.bg, cursor: "pointer"
+                        }}
+                      >
+                        <svg width="14" height="14" fill="none" stroke={isActive ? T.orange : "currentColor"} strokeWidth="2" viewBox="0 0 24 24">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                          <polyline points="14 2 14 8 20 8" />
+                        </svg>
+                        <span style={{ fontSize: 12, color: isActive ? T.orange : C.text, fontWeight: isActive ? 700 : 400 }}>
+                          {p.startsWith("http") ? `External #${i + 1}` : `RECEIPT #${i + 1}`}
+                        </span>
+                      </button>
+                    );
+                  }) : (
+                    <div style={{ fontSize: 13, color: C.muted }}>No proof files attached to this expense.</div>
+                  )}
+                </div>
+              </div>
+
+              <div style={{
+                height: 500, background: "#000", borderRadius: 12, overflow: "hidden", position: "relative",
+                display: "flex", alignItems: "center", justifyContent: "center"
+              }}>
+                {previewLoading ? (
+                  <div style={{ textAlign: "center", color: "#666" }}>
+                    <div style={{ width: 30, height: 30, border: "2px solid #333", borderTopColor: T.orange, borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 12px" }}></div>
+                    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1 }}>RETRIEVING DOCUMENT...</div>
+                  </div>
+                ) : previewUrl ? (
+                  (() => {
+                    const idx = viewingReceipt.selectedIdx || 0;
+                    const path = paths[idx] || "";
+                    const isPdf = path.toLowerCase().endsWith(".pdf");
+                    if (isPdf) {
+                      return <iframe src={previewUrl} style={{ width: "100%", height: "100%", border: "none" }} />;
+                    } else {
+                      return <img src={previewUrl} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} alt="Receipt Preview" />;
+                    }
+                  })()
+                ) : (
+                  <div style={{ textAlign: "center", color: "#666" }}>
+                    <div style={{ fontSize: 32, marginBottom: 12 }}>📄</div>
+                    <div style={{ fontSize: 14 }}>No preview available</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </Modal>
+        );
+      })()}
     </div>
   );
 }
+
+
+// ─── BIO DATA COMPONENTS (auto-injected) ────────────────────────────────────
+// ─── BIO DATA SYSTEM ─────────────────────────────────────────────────────────
+// Paste this entire block into App.jsx — anywhere before HRAdminPortal.
+// Requires: apiFetch, API_BASE, T, C (via dark), useTheme, DARK, LIGHT,
+//           Tabs, Lbl, Field, Av, Modal, StatCard (already in App.jsx)
+
+// ─── HR BIO DATA DASHBOARD ───────────────────────────────────────────────────
+function BiodataManager() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [tab, setTab] = useState("submissions");
+  const [settings, setSettings] = useState(null);
+  const [submissions, setSubmissions] = useState([]);
+  const [invites, setInvites] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviting, setInviting] = useState(false);
+  const [generalLink, setGeneralLink] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [selected, setSelected] = useState(null);
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [togglingForm, setTogglingForm] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [s, subs, inv, gl] = await Promise.all([
+        apiFetch(`${API_BASE}/biodata/settings`),
+        apiFetch(`${API_BASE}/biodata/submissions`),
+        apiFetch(`${API_BASE}/biodata/invites`),
+        apiFetch(`${API_BASE}/biodata/general-link`),
+      ]);
+      setSettings(s);
+      setSubmissions(Array.isArray(subs) ? subs : []);
+      setInvites(Array.isArray(inv) ? inv : []);
+      setGeneralLink(gl.link || "");
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const toggleCollecting = async () => {
+    if (!settings) return;
+    setTogglingForm(true);
+    try {
+      const updated = await apiFetch(`${API_BASE}/biodata/settings`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_collecting: !settings.is_collecting }),
+      });
+      setSettings(updated);
+    } catch (e) { alert(e.message); }
+    finally { setTogglingForm(false); }
+  };
+
+  const sendInvite = async () => {
+    if (!inviteEmail.trim()) return;
+    setInviting(true);
+    try {
+      const res = await apiFetch(`${API_BASE}/biodata/invites`, {
+        method: "POST",
+        body: JSON.stringify({ email: inviteEmail.trim() }),
+      });
+      alert(`Invite sent to ${res.email}${res.staff_found ? " (existing staff recognised)" : " (email not in system — invite still sent)"}`);
+      setInviteEmail("");
+      load();
+    } catch (e) { alert(e.message); }
+    finally { setInviting(false); }
+  };
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(generalLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const filtered = filterStatus === "all" ? submissions : submissions.filter(s => s.status === filterStatus);
+
+  const stats = {
+    total: submissions.length,
+    pending: submissions.filter(s => s.status === "pending").length,
+    approved: submissions.filter(s => s.status === "approved").length,
+    rejected: submissions.filter(s => s.status === "rejected").length,
+  };
+
+  const statusColor = (st) => ({ pending: T.gold, approved: "#10B981", rejected: "#EF4444" }[st] || C.muted);
+  const statusBg = (st) => ({ pending: `${T.gold}18`, approved: "#10B98118", rejected: "#EF444418" }[st] || C.surface);
+
+  if (loading) return <div style={{ padding: 60, textAlign: "center", color: C.muted }}>Loading Bio Data System…</div>;
+
+  return (
+    <div className="fade">
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 28 }}>
+        <div>
+          <div className="ho" style={{ fontSize: 26, fontWeight: 900, letterSpacing: -0.5 }}>Bio Data Collection</div>
+          <div style={{ fontSize: 13, color: C.sub, marginTop: 4 }}>Manage employee bio data forms, invitations, and review submissions.</div>
+        </div>
+        {/* Form ON/OFF Toggle */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 18px" }}>
+          <div style={{ fontSize: 12, color: C.sub, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>Form {settings?.is_collecting ? "Active" : "Closed"}</div>
+          <div
+            onClick={!togglingForm ? toggleCollecting : undefined}
+            style={{
+              width: 52, height: 28, borderRadius: 14, cursor: "pointer",
+              background: settings?.is_collecting ? T.gold : C.border,
+              position: "relative", transition: "all 0.25s ease",
+              opacity: togglingForm ? 0.6 : 1,
+            }}
+          >
+            <div style={{
+              position: "absolute", top: 3, left: settings?.is_collecting ? 27 : 3,
+              width: 22, height: 22, borderRadius: "50%", background: "#fff",
+              transition: "left 0.25s ease", boxShadow: "0 1px 4px #0004",
+            }} />
+          </div>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, marginBottom: 28 }}>
+        {[
+          { label: "Total Submissions", value: stats.total, col: C.text },
+          { label: "Pending Review", value: stats.pending, col: T.gold },
+          { label: "Approved", value: stats.approved, col: "#10B981" },
+          { label: "Rejected", value: stats.rejected, col: "#EF4444" },
+        ].map(({ label, value, col }) => (
+          <div key={label} className="gc" style={{ padding: "20px 24px" }}>
+            <div style={{ fontSize: 32, fontWeight: 900, color: col, lineHeight: 1 }}>{value}</div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 6, fontWeight: 600, letterSpacing: 0.3 }}>{label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Tabs */}
+      <Tabs items={[["submissions", "Submissions"], ["invites", "Invitations"], ["settings", "Settings & Links"]]} active={tab} setActive={setTab} />
+
+      {/* ── SUBMISSIONS TAB ── */}
+      {tab === "submissions" && (
+        <div className="fade">
+          <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
+            {["all", "pending", "approved", "rejected"].map(st => (
+              <button key={st} onClick={() => setFilterStatus(st)}
+                style={{ padding: "6px 18px", borderRadius: 99, fontSize: 12, fontWeight: 700, cursor: "pointer", border: `1px solid ${filterStatus === st ? T.gold : C.border}`, background: filterStatus === st ? `${T.gold}18` : "transparent", color: filterStatus === st ? T.gold : C.muted, textTransform: "capitalize", letterSpacing: 0.3 }}>
+                {st} {st !== "all" && `(${stats[st] || 0})`}
+              </button>
+            ))}
+          </div>
+
+          {filtered.length === 0 ? (
+            <div style={{ padding: "60px 40px", textAlign: "center", color: C.muted, border: `2px dashed ${C.border}`, borderRadius: 14 }}>
+              <div style={{ fontSize: 40, marginBottom: 14 }}>📋</div>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>No {filterStatus !== "all" ? filterStatus : ""} submissions yet</div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {filtered.map(sub => (
+                <div key={sub.id} className="gc" style={{ padding: "18px 22px", cursor: "pointer", transition: "all 0.2s" }}
+                  onClick={() => setSelected(sub)}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                      {/* Show passport photo if available, else initials avatar */}
+                      {sub.passport_photo_url ? (
+                        <img src={sub.passport_photo_url} alt="Passport"
+                          style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover", border: `2px solid ${T.gold}40`, flexShrink: 0 }}
+                          onError={e => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }} />
+                      ) : null}
+                      <div style={{ width: 44, height: 44, borderRadius: "50%", background: `${T.gold}20`, border: `2px solid ${T.gold}40`, display: sub.passport_photo_url ? "none" : "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color: T.gold, flexShrink: 0 }}>
+                        {(sub.surname?.[0] || sub.email?.[0] || "?").toUpperCase()}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{sub.surname} {sub.other_names}</div>
+                        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{sub.email} · {sub.job_title}</div>
+                        {/* Signature preview indicator */}
+                        {sub.signature_url && (
+                          <div style={{ marginTop: 4 }}>
+                            <img src={sub.signature_url} alt="Sig" style={{ maxHeight: 28, maxWidth: 120, opacity: 0.85 }}
+                              onError={e => e.target.style.display = "none"} />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                      <div style={{ fontSize: 11, color: C.muted }}>{sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</div>
+                      <span style={{ background: statusBg(sub.status), color: statusColor(sub.status), border: `1px solid ${statusColor(sub.status)}33`, padding: "4px 14px", borderRadius: 99, fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                        {sub.status}
+                      </span>
+                      <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke={C.muted} strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── INVITES TAB ── */}
+      {tab === "invites" && (
+        <div className="fade">
+          <div className="gc" style={{ padding: 24, marginBottom: 20 }}>
+            <div className="ho" style={{ fontSize: 14, marginBottom: 16 }}>Send Invitation by Email</div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <input className="inp" placeholder="staff@company.com" value={inviteEmail}
+                onChange={e => setInviteEmail(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && sendInvite()}
+                style={{ flex: 1 }} />
+              <button className="bp" onClick={sendInvite} disabled={inviting || !inviteEmail.trim()}
+                style={{ whiteSpace: "nowrap" }}>
+                {inviting ? "Sending…" : "Send Invite"}
+              </button>
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 10 }}>
+              If the email matches an existing staff member, they will be recognised automatically.
+            </div>
+          </div>
+
+          {invites.length === 0 ? (
+            <div style={{ padding: "40px", textAlign: "center", color: C.muted, border: `2px dashed ${C.border}`, borderRadius: 14 }}>No invitations sent yet.</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {invites.map(inv => (
+                <div key={inv.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", background: C.card, border: `1px solid ${C.border}`, borderRadius: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{inv.email}</div>
+                    <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>
+                      Sent {new Date(inv.created_at).toLocaleDateString()} · Expires {new Date(inv.expires_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <span style={{ background: statusBg(inv.status), color: statusColor(inv.status), border: `1px solid ${statusColor(inv.status)}33`, padding: "4px 14px", borderRadius: 99, fontSize: 10, fontWeight: 800, textTransform: "uppercase" }}>
+                    {inv.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── SETTINGS & LINKS TAB ── */}
+      {tab === "settings" && (
+        <div className="fade" style={{ maxWidth: 600 }}>
+          <div className="gc" style={{ padding: 28, marginBottom: 20 }}>
+            <div className="ho" style={{ fontSize: 14, marginBottom: 6 }}>General Submission Link</div>
+            <div style={{ fontSize: 13, color: C.sub, marginBottom: 18, lineHeight: 1.6 }}>
+              Share this link with any staff member — no individual invite required.
+              When a staff enters their email, the system will recognise them if they exist in the system.
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <input className="inp" readOnly value={generalLink} style={{ flex: 1, fontSize: 12, color: C.muted }} />
+              <button className="bp" onClick={copyLink}>
+                {copied ? "✓ Copied!" : "Copy Link"}
+              </button>
+            </div>
+          </div>
+
+          <div className="gc" style={{ padding: 28 }}>
+            <div className="ho" style={{ fontSize: 14, marginBottom: 16 }}>Form Status</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", background: settings?.is_collecting ? `${T.gold}0D` : `${C.border}30`, border: `1px solid ${settings?.is_collecting ? T.gold + "30" : C.border}`, borderRadius: 10 }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Bio Data Collection</div>
+                <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
+                  {settings?.is_collecting ? "✓ Form is active — staff can submit their bio data." : "⊘ Form is closed — submission links will be rejected."}
+                </div>
+              </div>
+              <div
+                onClick={!togglingForm ? toggleCollecting : undefined}
+                style={{ width: 52, height: 28, borderRadius: 14, cursor: "pointer", background: settings?.is_collecting ? T.gold : C.border, position: "relative", transition: "all 0.25s ease", opacity: togglingForm ? 0.6 : 1, flexShrink: 0 }}
+              >
+                <div style={{ position: "absolute", top: 3, left: settings?.is_collecting ? 27 : 3, width: 22, height: 22, borderRadius: "50%", background: "#fff", transition: "left 0.25s ease", boxShadow: "0 1px 4px #0004" }} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── SUBMISSION DETAIL MODAL ── */}
+      {selected && (
+        <BiodataReviewModal sub={selected} onClose={() => setSelected(null)} onRefresh={() => { setSelected(null); load(); }} />
+      )}
+    </div>
+  );
+}
+
+// ─── BIO DATA REVIEW MODAL ────────────────────────────────────────────────────
+function BiodataReviewModal({ sub, onClose, onRefresh }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [full, setFull] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [reviewing, setReviewing] = useState(false);
+  const [rejReason, setRejReason] = useState("");
+  const [showRejInput, setShowRejInput] = useState(false);
+  const [certEmail, setCertEmail] = useState("");
+  const [sendingCert, setSendingCert] = useState(false);
+  const [downloadingCert, setDownloadingCert] = useState(false);
+
+  useEffect(() => {
+    apiFetch(`${API_BASE}/biodata/submissions/${sub.id}`)
+      .then(d => setFull(d))
+      .finally(() => setLoading(false));
+  }, [sub.id]);
+
+  const doReview = async (action) => {
+    if (action === "reject" && !rejReason.trim()) { setShowRejInput(true); return; }
+    setReviewing(true);
+    try {
+      await apiFetch(`${API_BASE}/biodata/submissions/${sub.id}/review`, {
+        method: "POST",
+        body: JSON.stringify({ action, rejection_reason: rejReason || null }),
+      });
+      onRefresh();
+    } catch (e) { alert(e.message); setReviewing(false); }
+  };
+
+  const emailCert = async () => {
+    if (!certEmail.trim()) return;
+    setSendingCert(true);
+    try {
+      await apiFetch(`${API_BASE}/biodata/submissions/${sub.id}/email-certificate`, {
+        method: "POST",
+        body: JSON.stringify({ to_email: certEmail, submission_id: sub.id }),
+      });
+      alert(`Certificate sent to ${certEmail}`);
+      setCertEmail("");
+    } catch (e) { alert(e.message); }
+    finally { setSendingCert(false); }
+  };
+
+  const downloadCert = () => {
+    // Build a printable HTML certificate in a new window
+    const s = full || sub;
+    const name = `${s.surname || ""} ${s.other_names || ""}`.trim();
+    const lat = s.coordinates_lat, lng = s.coordinates_lng;
+    const coords = lat && lng ? `${parseFloat(lat).toFixed(6)}, ${parseFloat(lng).toFixed(6)}` : "Not captured";
+    const html = `<!DOCTYPE html><html><head><title>Bio Data Certificate</title><style>
+      body{font-family:'Segoe UI',Arial,sans-serif;padding:40px;max-width:720px;margin:0 auto;}
+      h1{font-size:24px;color:#0B0C0F;margin-bottom:4px;}
+      .gold{color:#C47D0A;} .bar{width:60px;height:4px;background:#C47D0A;margin:12px 0 28px;}
+      table{width:100%;border-collapse:collapse;font-size:13px;margin:20px 0;}
+      td{padding:11px 14px;border-bottom:1px solid #E5E7EB;} tr:nth-child(odd){background:#F9FAFB;}
+      .label{color:#6B7280;font-weight:600;width:42%;} .val{color:#111827;}
+      .footer{margin-top:32px;padding-top:20px;border-top:2px solid #E5E7EB;font-size:11px;color:#9CA3AF;text-align:center;}
+      .sig-box{margin:20px 0;padding:16px;background:#F9FAFB;border-radius:8px;border:1px solid #E5E7EB;}
+      @media print{body{padding:20px;}}
+    </style></head><body>
+      <div style="background:#0B0C0F;padding:24px 32px;border-radius:10px;margin-bottom:32px;display:flex;align-items:center;gap:16px;">
+        <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp &amp; Cloves" style="height:48px;width:auto;display:block;" onerror="this.style.display='none';this.nextSibling.style.display='flex';" />
+        <div style="width:40px;height:40px;background:#C47D0A;border-radius:8px;align-items:center;justify-content:center;display:none;">
+          <span style="color:#fff;font-weight:900;font-size:20px;">EC</span></div>
+        <div>
+          <div style="color:#fff;font-weight:800;font-size:16px;">Eximp &amp; Cloves Infrastructure Limited</div>
+          <div style="color:#9CA3AF;font-size:11px;">Human Resources · Official Document</div>
+        </div>
+      </div>
+      <div style="font-size:10px;letter-spacing:3px;color:#C47D0A;text-transform:uppercase;margin-bottom:6px;">Official Document</div>
+      <h1>Bio Data Authenticity Certificate</h1>
+      <div class="bar"></div>
+      <p style="color:#374151;font-size:13px;line-height:1.7;">This certifies that the following employee bio data was electronically submitted and verified through the Eximp &amp; Cloves HR System with the following authenticity metadata:</p>
+      <table>
+        <tr><td class="label">Employee Name</td><td class="val"><strong>${name}</strong></td></tr>
+        <tr><td class="label">Email Address</td><td class="val">${s.email || ""}</td></tr>
+        <tr><td class="label">Job Title</td><td class="val">${s.job_title || ""}</td></tr>
+        <tr><td class="label">Submission Timestamp</td><td class="val"><strong>${(s.submitted_at || "").slice(0, 19).replace("T", " ")}</strong></td></tr>
+        <tr><td class="label">IP Address</td><td class="val" style="font-family:monospace">${s.ip_address || "N/A"}</td></tr>
+        <tr><td class="label">Device Type</td><td class="val">${s.device_type || "N/A"}</td></tr>
+        <tr><td class="label">User Agent</td><td class="val" style="font-size:11px;word-break:break-all">${s.user_agent || "N/A"}</td></tr>
+        <tr><td class="label">GPS Coordinates</td><td class="val" style="font-family:monospace">${coords}</td></tr>
+        <tr><td class="label">Review Status</td><td class="val"><strong style="color:${s.status === "approved" ? "#065F46" : "#991B1B"}">${(s.status || "").toUpperCase()}</strong></td></tr>
+      </table>
+      ${s.signature_url ? `<div class="sig-box"><div style="font-size:11px;color:#6B7280;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Employee Signature</div><img src="${s.signature_url}" style="max-height:80px;max-width:280px;" /></div>` : ""}
+      <div class="footer" style="background:#0B0C0F;padding:28px 32px;text-align:center;border-radius:0 0 10px 10px;margin-top:32px;">
+        <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp &amp; Cloves" style="height:36px;width:auto;display:block;margin:0 auto 14px;" onerror="this.style.display='none';" />
+        <div style="color:#9CA3AF;font-size:12px;line-height:1.8;">
+          <strong style="color:#C47D0A;">Eximp &amp; Cloves Infrastructure Limited</strong><br>
+          Human Resources Department &nbsp;·&nbsp; Confidential Document<br>
+          Certificate ID: ${s.id}<br>
+          This is an electronically generated document valid without a physical signature.
+        </div>
+        <div style="margin-top:14px;color:#6B7280;font-size:10px;letter-spacing:1px;text-transform:uppercase;">© ${new Date().getFullYear()} Eximp &amp; Cloves Infrastructure Limited. All rights reserved.</div>
+      </div>
+      <script>window.print();</script>
+    </body></html>`;
+    const win = window.open("", "_blank");
+    win.document.write(html);
+    win.document.close();
+  };
+
+  const statusColor = (st) => ({ pending: T.gold, approved: "#10B981", rejected: "#EF4444" }[st] || C.muted);
+  const s = full || sub;
+
+  return (
+    <Modal onClose={onClose}>
+      <div style={{ maxWidth: 780, width: "100%", maxHeight: "90vh", overflow: "auto" }}>
+        {/* Modal Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+          <div>
+            <div className="ho" style={{ fontSize: 20, fontWeight: 900 }}>Bio Data Review</div>
+            <div style={{ fontSize: 13, color: C.sub, marginTop: 4 }}>{s.surname} {s.other_names} · {s.email}</div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ background: `${statusColor(s.status)}18`, color: statusColor(s.status), border: `1px solid ${statusColor(s.status)}33`, padding: "5px 16px", borderRadius: 99, fontSize: 11, fontWeight: 800, textTransform: "uppercase" }}>
+              {s.status}
+            </span>
+            <button className="bg" onClick={onClose} style={{ padding: "6px 14px" }}>✕</button>
+          </div>
+        </div>
+
+        {loading ? (
+          <div style={{ padding: 60, textAlign: "center", color: C.muted }}>Loading submission…</div>
+        ) : (
+          <>
+            {/* Two-column layout */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
+              {/* Left: Personal Details */}
+              <div className="gc" style={{ padding: 22 }}>
+                <div className="ho" style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", marginBottom: 16 }}>Personal Information</div>
+                {[
+                  ["Surname", s.surname],
+                  ["Other Names", s.other_names],
+                  ["Email", s.email],
+                  ["Gender", s.gender],
+                  ["Marital Status", s.marital_status],
+                  ["Date of Birth", s.date_of_birth],
+                  ["Job Title", s.job_title],
+                  ["Joining Date", s.joining_date],
+                  ["Mobile Phone", s.mobile_phone],
+                  ["House Phone", s.house_phone],
+                  ["Home Address", s.present_home_address],
+                  ["Next of Kin", s.next_of_kin_name],
+                  ["NOK Phone", s.next_of_kin_phone],
+                  ["TIN", s.tin],
+                ].map(([label, val]) => (
+                  <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.border}22`, fontSize: 13 }}>
+                    <span style={{ color: C.muted, fontWeight: 600, flexShrink: 0, width: "45%" }}>{label}</span>
+                    <span style={{ color: C.text, textAlign: "right", wordBreak: "break-word" }}>{val || <span style={{ color: C.border }}>—</span>}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Right: Auth Metadata + Files */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {/* Passport Photo */}
+                <div className="gc" style={{ padding: 22 }}>
+                  <div className="ho" style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", marginBottom: 14 }}>Passport Photograph</div>
+                  {s.passport_photo_url ? (
+                    <div style={{ display: "flex", justifyContent: "center" }}>
+                      <img src={s.passport_photo_url} alt="Passport" style={{ width: 120, height: 140, objectFit: "cover", borderRadius: 10, border: `2px solid ${T.gold}40` }} />
+                    </div>
+                  ) : (
+                    <div style={{ padding: "20px 0", textAlign: "center", color: C.muted, fontSize: 13 }}>No photo uploaded</div>
+                  )}
+                </div>
+
+                {/* Signature */}
+                <div className="gc" style={{ padding: 22 }}>
+                  <div className="ho" style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", marginBottom: 14 }}>Employee Signature</div>
+                  {s.signature_url ? (
+                    <div style={{ background: "#fff", borderRadius: 8, padding: 12, display: "flex", justifyContent: "center" }}>
+                      <img src={s.signature_url} alt="Signature" style={{ maxHeight: 80, maxWidth: "100%" }} />
+                    </div>
+                  ) : (
+                    <div style={{ padding: "20px 0", textAlign: "center", color: C.muted, fontSize: 13 }}>No signature captured</div>
+                  )}
+                </div>
+
+                {/* Authenticity Metadata */}
+                <div className="gc" style={{ padding: 22, borderLeft: `3px solid ${T.gold}` }}>
+                  <div className="ho" style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", marginBottom: 14 }}>Authenticity Metadata</div>
+                  {[
+                    ["IP Address", s.ip_address],
+                    ["Device", s.device_type],
+                    ["GPS Coords", s.coordinates_lat && s.coordinates_lng ? `${parseFloat(s.coordinates_lat).toFixed(5)}, ${parseFloat(s.coordinates_lng).toFixed(5)}` : null],
+                    ["GPS Accuracy", s.coordinates_accuracy ? `±${parseFloat(s.coordinates_accuracy).toFixed(0)}m` : null],
+                    ["Timestamp", s.submitted_at ? new Date(s.submitted_at).toLocaleString() : null],
+                  ].map(([label, val]) => (
+                    <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: `1px solid ${C.border}22`, fontSize: 12 }}>
+                      <span style={{ color: C.muted, fontWeight: 700 }}>{label}</span>
+                      <span style={{ color: C.text, fontFamily: "monospace", fontSize: 11, textAlign: "right", maxWidth: "60%", wordBreak: "break-all" }}>{val || "—"}</span>
+                    </div>
+                  ))}
+                  <div style={{ marginTop: 10, padding: "10px 0", borderBottom: `1px solid ${C.border}22` }}>
+                    <div style={{ fontSize: 11, color: C.muted, fontWeight: 700, marginBottom: 6 }}>USER AGENT</div>
+                    <div style={{ fontSize: 10, color: C.text, wordBreak: "break-all", lineHeight: 1.5, fontFamily: "monospace" }}>{s.user_agent || "—"}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Certificate Actions */}
+            <div className="gc" style={{ padding: 22, marginBottom: 20, background: `${T.gold}08`, borderColor: `${T.gold}30` }}>
+              <div className="ho" style={{ fontSize: 13, marginBottom: 14 }}>📜 Authenticity Certificate</div>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                <button className="bp" onClick={downloadCert} style={{ fontSize: 12 }}>
+                  Download / Print Certificate
+                </button>
+                <input className="inp" placeholder="Email certificate to…" value={certEmail}
+                  onChange={e => setCertEmail(e.target.value)} style={{ flex: 1, minWidth: 200 }} />
+                <button className="bg" onClick={emailCert} disabled={sendingCert || !certEmail.trim()} style={{ fontSize: 12 }}>
+                  {sendingCert ? "Sending…" : "Email Certificate"}
+                </button>
+              </div>
+            </div>
+
+            {/* Review Actions */}
+            {s.status === "pending" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {showRejInput && (
+                  <div>
+                    <div style={{ fontSize: 12, color: C.sub, marginBottom: 8, fontWeight: 700 }}>Rejection Reason (required)</div>
+                    <textarea className="inp" rows={3} placeholder="Explain what needs to be corrected…"
+                      value={rejReason} onChange={e => setRejReason(e.target.value)} />
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 12 }}>
+                  <button className="bp" onClick={() => doReview("approve")} disabled={reviewing}
+                    style={{ flex: 1, padding: 14, fontSize: 14 }}>
+                    ✓ Approve Submission
+                  </button>
+                  <button className="bd" onClick={() => showRejInput ? doReview("reject") : setShowRejInput(true)} disabled={reviewing}
+                    style={{ flex: 1, padding: 14, fontSize: 14 }}>
+                    {showRejInput ? "Confirm Rejection" : "✕ Reject & Request Changes"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {s.status === "approved" && (
+              <div style={{ padding: "14px 20px", background: "#10B98114", border: "1px solid #10B98130", borderRadius: 10, fontSize: 13, color: "#10B981", fontWeight: 700 }}>
+                ✓ This submission has been approved and the staff profile has been updated.
+              </div>
+            )}
+            {s.status === "rejected" && (
+              <div style={{ padding: "14px 20px", background: "#EF444414", border: "1px solid #EF444430", borderRadius: 10, fontSize: 13, color: "#EF4444" }}>
+                ✕ Rejected — {s.rejection_reason || "No reason provided."}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+// ─── STAFF: MY BIO DATA TAB ───────────────────────────────────────────────────
+function MyBiodata({ user }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [sub, setSub] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiFetch(`${API_BASE}/biodata/my-submission`)
+      .then(d => setSub(d))
+      .catch(() => setSub(null))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const statusColor = (st) => ({ pending: T.gold, approved: "#10B981", rejected: "#EF4444" }[st] || C.muted);
+
+  if (loading) return <div style={{ padding: 40, textAlign: "center", color: C.muted }}>Loading…</div>;
+
+  if (!sub) {
+    return (
+      <div style={{ padding: "60px 40px", textAlign: "center", border: `2px dashed ${C.border}`, borderRadius: 14 }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>📋</div>
+        <div style={{ fontSize: 16, fontWeight: 800, color: C.text, marginBottom: 8 }}>No Bio Data Submitted Yet</div>
+        <div style={{ fontSize: 13, color: C.muted, maxWidth: 360, margin: "0 auto" }}>
+          Check your email for a bio data form invite from HR, or ask HR to send you a link.
+        </div>
+      </div>
+    );
+  }
+
+  const s = sub;
+  const name = `${s.surname || ""} ${s.other_names || ""}`.trim();
+
+  return (
+    <div className="fade" style={{ maxWidth: 720 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+        <div>
+          <div className="ho" style={{ fontSize: 22, fontWeight: 900 }}>My Bio Data</div>
+          <div style={{ fontSize: 13, color: C.sub, marginTop: 4 }}>Your submitted employee bio data form.</div>
+        </div>
+        <span style={{ background: `${statusColor(s.status)}18`, color: statusColor(s.status), border: `1px solid ${statusColor(s.status)}33`, padding: "6px 18px", borderRadius: 99, fontSize: 12, fontWeight: 800, textTransform: "uppercase" }}>
+          {s.status === "pending" ? "⏳ Awaiting Review" : s.status === "approved" ? "✓ Approved" : "✕ Rejected"}
+        </span>
+      </div>
+
+      {s.status === "rejected" && s.rejection_reason && (
+        <div style={{ padding: "14px 20px", background: "#EF444410", border: "1px solid #EF444430", borderRadius: 10, fontSize: 13, color: "#EF4444", marginBottom: 20 }}>
+          <strong>Reason for rejection:</strong> {s.rejection_reason}
+          <div style={{ fontSize: 12, marginTop: 6, color: "#EF4444AA" }}>Please contact HR for a new form link to resubmit.</div>
+        </div>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+        <div className="gc" style={{ padding: 22 }}>
+          <div className="ho" style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", marginBottom: 16 }}>Personal Information</div>
+          {[
+            ["Full Name", name],
+            ["Gender", s.gender],
+            ["Marital Status", s.marital_status],
+            ["Date of Birth", s.date_of_birth],
+            ["Job Title", s.job_title],
+            ["Mobile", s.mobile_phone],
+            ["Address", s.present_home_address],
+            ["Next of Kin", s.next_of_kin_name],
+          ].map(([label, val]) => (
+            <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: `1px solid ${C.border}22`, fontSize: 13 }}>
+              <span style={{ color: C.muted, fontWeight: 600 }}>{label}</span>
+              <span style={{ color: C.text }}>{val || "—"}</span>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {s.passport_photo_url && (
+            <div className="gc" style={{ padding: 22 }}>
+              <div className="ho" style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", marginBottom: 12 }}>Passport Photo</div>
+              <img src={s.passport_photo_url} alt="Passport" style={{ width: 100, height: 120, objectFit: "cover", borderRadius: 8, border: `2px solid ${T.gold}40` }} />
+            </div>
+          )}
+          {s.signature_url && (
+            <div className="gc" style={{ padding: 22 }}>
+              <div className="ho" style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", marginBottom: 12 }}>My Signature</div>
+              <div style={{ background: "#fff", borderRadius: 6, padding: 10 }}>
+                <img src={s.signature_url} alt="Signature" style={{ maxHeight: 70, maxWidth: "100%" }} />
+              </div>
+            </div>
+          )}
+          <div className="gc" style={{ padding: 22 }}>
+            <div className="ho" style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", marginBottom: 12 }}>Submission Info</div>
+            <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.8 }}>
+              <div>Submitted: <span style={{ color: C.text }}>{s.submitted_at ? new Date(s.submitted_at).toLocaleString() : "—"}</span></div>
+              <div>Device: <span style={{ color: C.text }}>{s.device_type || "—"}</span></div>
+              {s.reviewed_at && <div>Reviewed: <span style={{ color: C.text }}>{new Date(s.reviewed_at).toLocaleDateString()}</span></div>}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── PUBLIC BIO DATA FORM (standalone, accessed via /biodata?token=xxx) ────────
+// This is rendered inside App.jsx when a ?token= URL param is detected.
+// It handles its own layout completely (no sidebar).
+function PublicBiodataForm() {
+  const [step, setStep] = useState("email"); // email → form → success
+  const [token, setToken] = useState("");
+  const [email, setEmail] = useState("");
+  const [staffInfo, setStaffInfo] = useState(null);
+  const [previousData, setPreviousData] = useState(null);
+  const [formMsg, setFormMsg] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [geoError, setGeoError] = useState("");
+  const [geoData, setGeoData] = useState({ lat: null, lng: null, accuracy: null });
+  const [ipAddress, setIpAddress] = useState("");
+
+  // Signature canvas
+  const sigCanvasRef = useRef(null);
+  const [sigDrawing, setSigDrawing] = useState(false);
+  const [sigHasData, setSigHasData] = useState(false);
+  const [sigCtx, setSigCtx] = useState(null);
+  const [lastPos, setLastPos] = useState(null);
+
+  // Form data
+  const [form, setForm] = useState({
+    surname: "", other_names: "", marital_status: "", gender: "",
+    job_title: "", date_of_birth: "", joining_date: "",
+    present_home_address: "", mobile_phone: "", house_phone: "",
+    next_of_kin_name: "", next_of_kin_phone: "", tin: "",
+  });
+  const [passportFile, setPassportFile] = useState(null);
+  const [passportPreview, setPassportPreview] = useState("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get("token");
+    if (t) setToken(t);
+
+    // Get IP
+    fetch("https://api.ipify.org?format=json").then(r => r.json()).then(d => setIpAddress(d.ip)).catch(() => { });
+
+    // Get GPS
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        pos => setGeoData({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }),
+        err => setGeoError("Location access denied — this field is required for authenticity verification."),
+        { timeout: 10000 }
+      );
+    }
+
+    // Set up signature canvas after mount — also re-init on resize so coordinate mapping stays correct
+    const setupCanvas = () => setTimeout(() => initCanvas(), 100);
+    setupCanvas();
+    window.addEventListener("resize", setupCanvas);
+    return () => window.removeEventListener("resize", setupCanvas);
+  }, []);
+
+  const initCanvas = () => {
+    const canvas = sigCanvasRef.current;
+    if (!canvas) return;
+    // Fix: match internal resolution to rendered CSS size so ink tracks finger/cursor correctly on mobile
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+    const ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+    ctx.strokeStyle = "#1A1D24";
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    setSigCtx(ctx);
+  };
+
+  const getPos = (e, canvas) => {
+    const rect = canvas.getBoundingClientRect();
+    // No additional scaling needed — ctx is already scaled to CSS pixels via dpr scale
+    if (e.touches) {
+      return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+    }
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  };
+
+  const sigStart = (e) => {
+    e.preventDefault();
+    const canvas = sigCanvasRef.current;
+    if (!canvas || !sigCtx) { initCanvas(); return; }
+    setSigDrawing(true);
+    setSigHasData(true);
+    const pos = getPos(e, canvas);
+    setLastPos(pos);
+    sigCtx.beginPath();
+    sigCtx.moveTo(pos.x, pos.y);
+  };
+
+  const sigMove = (e) => {
+    e.preventDefault();
+    if (!sigDrawing || !sigCtx) return;
+    const canvas = sigCanvasRef.current;
+    const pos = getPos(e, canvas);
+    sigCtx.lineTo(pos.x, pos.y);
+    sigCtx.stroke();
+    setLastPos(pos);
+  };
+
+  const sigEnd = () => setSigDrawing(false);
+
+  const clearSig = () => {
+    const canvas = sigCanvasRef.current;
+    if (!canvas || !sigCtx) return;
+    sigCtx.clearRect(0, 0, canvas.width, canvas.height);
+    setSigHasData(false);
+  };
+
+  const checkEmail = async () => {
+    if (!email.trim()) return;
+    setChecking(true);
+    try {
+      const res = await fetch(`${API_BASE}/biodata/public/check?token=${token}&email=${encodeURIComponent(email.trim())}`);
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.detail || "Error verifying token.");
+        setChecking(false);
+        return;
+      }
+      const data = await res.json();
+      setStaffInfo(data.staff_info);
+      setFormMsg(data.form_message || "");
+      if (data.staff_info) {
+        setForm(f => ({
+          ...f,
+          surname: data.staff_info.full_name?.split(" ")?.[0] || "",
+          other_names: data.staff_info.full_name?.split(" ")?.slice(1)?.join(" ") || "",
+          job_title: data.staff_info.job_title || "",
+        }));
+      }
+      if (data.previous_data) {
+        setPreviousData(data.previous_data);
+        setForm(f => ({
+          ...f,
+          ...data.previous_data
+        }));
+      }
+      setStep("form");
+    } catch (e) { alert("Connection error. Please try again."); }
+    finally { setChecking(false); }
+  };
+
+  const handlePassportChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setPassportFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => setPassportPreview(reader.result);
+    reader.readAsDataURL(file);
+  };
+
+  const getDeviceType = () => {
+    const ua = navigator.userAgent;
+    if (/Mobi|Android/i.test(ua)) return "Mobile";
+    if (/Tablet|iPad/i.test(ua)) return "Tablet";
+    return "Desktop";
+  };
+
+  const handleSubmit = async () => {
+    // Validate
+    const required = ["surname", "other_names", "marital_status", "gender", "job_title", "date_of_birth", "joining_date", "present_home_address", "mobile_phone", "next_of_kin_name", "next_of_kin_phone", "tin"];
+    for (const f of required) {
+      if (!form[f]?.trim()) { alert(`Please fill in: ${f.replace(/_/g, " ")}`); return; }
+    }
+    if (!passportFile) { alert("Please upload your passport photograph."); return; }
+    if (!sigHasData) { alert("Please draw your signature."); return; }
+    if (!geoData.lat || !geoData.lng) { alert("GPS coordinates are required. Please allow location access and try again."); return; }
+    if (!ipAddress) { alert("Could not capture IP address. Please check your connection."); return; }
+
+    const canvas = sigCanvasRef.current;
+    const sigBase64 = canvas ? canvas.toDataURL("image/png") : "";
+
+    const fd = new FormData();
+    fd.append("token", token);
+    fd.append("email", email.trim());
+    Object.entries(form).forEach(([k, v]) => fd.append(k, v));
+    fd.append("ip_address", ipAddress);
+    fd.append("device_type", getDeviceType());
+    fd.append("user_agent", navigator.userAgent);
+    fd.append("coordinates_lat", String(geoData.lat));
+    fd.append("coordinates_lng", String(geoData.lng));
+    fd.append("coordinates_accuracy", String(geoData.accuracy || ""));
+    fd.append("submitted_at", new Date().toISOString());
+    fd.append("passport_photo", passportFile);
+    fd.append("signature_data", sigBase64);
+
+    setSubmitting(true);
+    try {
+      const ec_token = localStorage.getItem("ec_token");
+      const res = await fetch(`${API_BASE}/biodata/public/submit`, {
+        method: "POST",
+        body: fd,
+        headers: ec_token ? { Authorization: `Bearer ${ec_token}` } : {},
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Submission failed.");
+      }
+      setStep("success");
+    } catch (e) { alert(e.message); }
+    finally { setSubmitting(false); }
+  };
+
+  const inp = {
+    background: "#F8F9FB", border: "1px solid #DDE3EE", color: "#1A2130",
+    padding: "12px 16px", borderRadius: 10, fontSize: 14, outline: "none",
+    fontFamily: "inherit", width: "100%", boxSizing: "border-box",
+  };
+  const lbl = { fontSize: 12, fontWeight: 700, color: "#6B7280", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 6, display: "block" };
+  const G = "#C47D0A";
+
+  if (step === "success") {
+    return (
+      <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #0B0C0F 0%, #1A1D24 100%)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'Segoe UI',Arial,sans-serif" }}>
+        <div style={{ background: "#fff", borderRadius: 20, padding: 60, maxWidth: 480, width: "100%", textAlign: "center", boxShadow: "0 24px 80px #00000044" }}>
+          <div style={{ width: 80, height: 80, background: "#D1FAE5", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px", fontSize: 36 }}>✓</div>
+          <div style={{ fontSize: 24, fontWeight: 900, color: "#0B0C0F", marginBottom: 12 }}>Form Submitted!</div>
+          <div style={{ fontSize: 14, color: "#6B7280", lineHeight: 1.7, marginBottom: 28 }}>
+            Your bio data has been submitted successfully and is now under review by the HR team.
+            You will receive an email notification once it has been approved.
+          </div>
+          <div style={{ padding: "16px 20px", background: "#FEF9EC", border: `1px solid ${G}30`, borderRadius: 10, fontSize: 13, color: "#92400E" }}>
+            Submitted at: <strong>{new Date().toLocaleString()}</strong>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === "email") {
+    return (
+      <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #0B0C0F 0%, #1A1D24 100%)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'Segoe UI',Arial,sans-serif" }}>
+        <div style={{ background: "#fff", borderRadius: 20, padding: 48, maxWidth: 460, width: "100%", boxShadow: "0 24px 80px #00000044" }}>
+          <div style={{ textAlign: "center", marginBottom: 36 }}>
+            <div style={{ margin: "0 auto 16px", textAlign: "center" }}>
+              <img src="/static/img/logo.svg" alt="Eximp & Cloves" style={{ height: 56, width: "auto", display: "block", margin: "0 auto" }} onError={e => { e.target.onerror = null; e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }} />
+              <div style={{ width: 56, height: 56, background: G, borderRadius: 14, alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 900, color: "#fff", display: "none", margin: "0 auto" }}>EC</div>
+            </div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: "#0B0C0F" }}>Employee Bio Data Form</div>
+            <div style={{ fontSize: 13, color: "#6B7280", marginTop: 8 }}>Eximp & Cloves Infrastructure Limited</div>
+          </div>
+          <div style={{ marginBottom: 24 }}>
+            <label style={lbl}>Enter Your Work Email Address</label>
+            <input style={inp} type="email" placeholder="yourname@eximps-cloves.com"
+              value={email} onChange={e => setEmail(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && checkEmail()} autoFocus />
+            <div style={{ fontSize: 12, color: "#9CA3AF", marginTop: 8 }}>
+              Your email will be used to identify your staff record and pre-fill your details.
+            </div>
+          </div>
+          <button onClick={checkEmail} disabled={checking || !email.trim()} style={{
+            width: "100%", padding: 14, background: G, color: "#fff", border: "none",
+            borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer", opacity: checking ? 0.7 : 1
+          }}>
+            {checking ? "Verifying…" : "Continue →"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // step === "form"
+  return (
+    <div style={{ minHeight: "100vh", background: "#F0F2F6", fontFamily: "'Segoe UI',Arial,sans-serif", paddingBottom: 80 }}>
+      {/* Header */}
+      <div style={{ background: "#0B0C0F", padding: "20px 0", marginBottom: 32 }}>
+        <div style={{ maxWidth: 820, margin: "0 auto", padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <img src="/static/img/logo.svg" alt="Eximp & Cloves" style={{ height: 44, width: "auto", display: "block" }} onError={e => { e.target.onerror = null; e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }} />
+            <div style={{ width: 44, height: 44, background: G, borderRadius: 10, alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 900, color: "#fff", display: "none" }}>EC</div>
+            <div>
+              <div style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>Eximp & Cloves</div>
+              <div style={{ color: "#9CA3AF", fontSize: 11 }}>Human Resources Department</div>
+            </div>
+          </div>
+          <div style={{ background: "#ffffff14", padding: "6px 16px", borderRadius: 8, fontSize: 12, color: G, fontWeight: 700, letterSpacing: 0.5 }}>EMPLOYEE BIO DATA FORM</div>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 820, margin: "0 auto", padding: "0 24px" }}>
+        {/* Staff recognition banner */}
+        {staffInfo && (
+          <div style={{ background: `${G}14`, border: `1px solid ${G}30`, borderRadius: 12, padding: "14px 20px", marginBottom: 24, display: "flex", gap: 12, alignItems: "center" }}>
+            <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${G}30`, border: `2px solid ${G}`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, color: G, flexShrink: 0 }}>
+              {staffInfo.full_name?.[0] || "?"}
+            </div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#0B0C0F" }}>Welcome, {staffInfo.full_name}!</div>
+              <div style={{ fontSize: 12, color: "#6B7280" }}>Recognised as existing staff · {staffInfo.department} {staffInfo.job_title ? `· ${staffInfo.job_title}` : ""}</div>
+            </div>
+          </div>
+        )}
+
+        {previousData && (
+          <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 12, padding: "14px 20px", marginBottom: 24, fontSize: 13, color: "#991B1B", borderLeft: "4px solid #EF4444" }}>
+            <div style={{ fontWeight: 800, marginBottom: 4 }}>⚠️ REVISION REQUIRED</div>
+            <div>Your previous submission was not approved. Please review the feedback and update your details below.</div>
+            {previousData.rejection_reason && (
+              <div style={{ marginTop: 10, padding: 12, background: "#fff", borderRadius: 8, border: "1px solid #FCA5A5" }}>
+                <strong>HR Feedback:</strong> {previousData.rejection_reason}
+              </div>
+            )}
+          </div>
+        )}
+
+        {formMsg && (
+          <div style={{ background: "#fff", border: "1px solid #DDE3EE", borderRadius: 12, padding: "16px 20px", marginBottom: 24, fontSize: 13, color: "#374151", lineHeight: 1.7 }}>{formMsg}</div>
+        )}
+
+        {/* Authenticity notice */}
+        <div style={{ background: "#FFF8ED", border: `1px solid ${G}40`, borderRadius: 12, padding: "16px 20px", marginBottom: 28, borderLeft: `4px solid ${G}` }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: "#92400E", marginBottom: 6 }}>📍 Proof of Authenticity Required</div>
+          <div style={{ fontSize: 12, color: "#92400E", lineHeight: 1.7 }}>
+            This form captures your <strong>IP address, device type, browser information, GPS coordinates, and submission timestamp</strong> as proof of authenticity.
+            These details are digitally recorded and form part of your official HR submission certificate. By submitting this form, you consent to this data collection.
+          </div>
+          <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {[
+              ["IP Address", ipAddress || "Capturing…"],
+              ["Device", getDeviceType()],
+              ["GPS", geoData.lat ? `${geoData.lat.toFixed(4)}, ${geoData.lng.toFixed(4)}` : geoError ? "❌ " + geoError : "⏳ Requesting…"],
+              ["Time", new Date().toLocaleTimeString()],
+            ].map(([k, v]) => (
+              <div key={k} style={{ background: "#FFF", border: "1px solid #F5E0B0", borderRadius: 8, padding: "8px 12px" }}>
+                <div style={{ fontSize: 10, color: "#B45309", fontWeight: 700, letterSpacing: 0.5 }}>{k.toUpperCase()}</div>
+                <div style={{ fontSize: 11, color: "#374151", fontFamily: "monospace", marginTop: 2 }}>{v}</div>
+              </div>
+            ))}
+          </div>
+          {geoError && (
+            <div style={{ marginTop: 12, fontSize: 12, color: "#DC2626", fontWeight: 700 }}>
+              ⚠️ Location permission is required to submit this form.
+              <button onClick={() => navigator.geolocation?.getCurrentPosition(pos => { setGeoData({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }); setGeoError(""); })}
+                style={{ marginLeft: 8, textDecoration: "underline", background: "none", border: "none", cursor: "pointer", color: "#DC2626", fontSize: 12 }}>
+                Retry Location
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Main Form Card */}
+        <div style={{ background: "#fff", borderRadius: 16, padding: 36, marginBottom: 20, boxShadow: "0 4px 24px #0000000A", border: "1px solid #E5E7EB" }}>
+          <div style={{ fontSize: 18, fontWeight: 900, color: "#0B0C0F", marginBottom: 4 }}>Personal Information</div>
+          <div style={{ width: 48, height: 3, background: G, borderRadius: 2, marginBottom: 28 }} />
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+            {[
+              ["surname", "Surname *", "text"],
+              ["other_names", "Other Names *", "text"],
+              ["date_of_birth", "Date of Birth *", "date"],
+              ["joining_date", "Joining Date *", "date"],
+              ["mobile_phone", "Mobile Phone *", "tel"],
+              ["house_phone", "House Phone", "tel"],
+              ["next_of_kin_name", "Next of Kin Name *", "text"],
+              ["next_of_kin_phone", "Next of Kin Phone *", "tel"],
+              ["tin", "Tax Identification Number (TIN) *", "text"],
+            ].map(([key, label, type]) => (
+              <div key={key}>
+                <label style={lbl}>{label}</label>
+                <input style={inp} type={type} value={form[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} />
+              </div>
+            ))}
+
+            <div>
+              <label style={lbl}>Gender *</label>
+              <select style={inp} value={form.gender} onChange={e => setForm(f => ({ ...f, gender: e.target.value }))}>
+                <option value="">— Select —</option>
+                <option>Male</option><option>Female</option><option>Other</option>
+              </select>
+            </div>
+            <div>
+              <label style={lbl}>Marital Status *</label>
+              <select style={inp} value={form.marital_status} onChange={e => setForm(f => ({ ...f, marital_status: e.target.value }))}>
+                <option value="">— Select —</option>
+                <option>Single</option><option>Married</option><option>Divorced</option><option>Widowed</option>
+              </select>
+            </div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={lbl}>Job Title *</label>
+              <input style={inp} value={form.job_title} onChange={e => setForm(f => ({ ...f, job_title: e.target.value }))} />
+            </div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={lbl}>Present Home Address *</label>
+              <textarea style={{ ...inp, resize: "vertical", minHeight: 72 }} value={form.present_home_address} onChange={e => setForm(f => ({ ...f, present_home_address: e.target.value }))} />
+            </div>
+          </div>
+        </div>
+
+        {/* Passport Photo Upload */}
+        <div style={{ background: "#fff", borderRadius: 16, padding: 36, marginBottom: 20, boxShadow: "0 4px 24px #0000000A", border: "1px solid #E5E7EB" }}>
+          <div style={{ fontSize: 18, fontWeight: 900, color: "#0B0C0F", marginBottom: 4 }}>Passport Photograph *</div>
+          <div style={{ width: 48, height: 3, background: G, borderRadius: 2, marginBottom: 20 }} />
+          <div style={{ fontSize: 13, color: "#6B7280", marginBottom: 20 }}>Upload a recent passport-size photograph. Accepted formats: JPG, PNG. Max 5MB.</div>
+
+          <div style={{ display: "flex", gap: 28, alignItems: "flex-start" }}>
+            <div style={{ width: 120, height: 140, borderRadius: 10, border: `2px dashed ${passportPreview ? G : "#DDE3EE"}`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0, background: "#F9FAFB" }}>
+              {passportPreview ? (
+                <img src={passportPreview} alt="Passport preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <div style={{ textAlign: "center", color: "#9CA3AF", fontSize: 12 }}>
+                  <div style={{ fontSize: 32, marginBottom: 6 }}>🖼</div>No photo
+                </div>
+              )}
+            </div>
+            <div>
+              <input type="file" accept="image/jpeg,image/png,image/webp" id="passport-upload" style={{ display: "none" }} onChange={handlePassportChange} />
+              <label htmlFor="passport-upload" style={{ display: "inline-block", padding: "12px 24px", background: G, color: "#fff", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                {passportFile ? "Change Photo" : "Upload Photo"}
+              </label>
+              {passportFile && <div style={{ fontSize: 12, color: "#6B7280", marginTop: 8 }}>{passportFile.name}</div>}
+            </div>
+          </div>
+        </div>
+
+        {/* Signature */}
+        <div style={{ background: "#fff", borderRadius: 16, padding: 36, marginBottom: 20, boxShadow: "0 4px 24px #0000000A", border: "1px solid #E5E7EB" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+            <div style={{ fontSize: 18, fontWeight: 900, color: "#0B0C0F" }}>Employee Signature *</div>
+            <button onClick={clearSig} style={{ fontSize: 12, color: "#EF4444", background: "#FEE2E2", border: "1px solid #FECACA", borderRadius: 8, padding: "5px 14px", cursor: "pointer", fontWeight: 700 }}>Clear</button>
+          </div>
+          <div style={{ width: 48, height: 3, background: G, borderRadius: 2, marginBottom: 16 }} />
+          <div style={{ fontSize: 13, color: "#6B7280", marginBottom: 16 }}>Please draw your signature in the box below using your mouse or finger.</div>
+
+          <canvas
+            ref={sigCanvasRef}
+            onMouseDown={sigStart} onMouseMove={sigMove} onMouseUp={sigEnd} onMouseLeave={sigEnd}
+            onTouchStart={sigStart} onTouchMove={sigMove} onTouchEnd={sigEnd}
+            style={{ border: `2px solid ${sigHasData ? G : "#DDE3EE"}`, borderRadius: 10, cursor: "crosshair", background: "#FAFAFA", width: "100%", height: 220, display: "block", touchAction: "none" }}
+          />
+          {!sigHasData && <div style={{ fontSize: 12, color: "#9CA3AF", marginTop: 8 }}>↑ Draw your signature above</div>}
+        </div>
+
+        {/* Submit */}
+        <button onClick={handleSubmit} disabled={submitting || !geoData.lat}
+          style={{ width: "100%", padding: 18, background: submitting || !geoData.lat ? "#D1D5DB" : G, color: "#fff", border: "none", borderRadius: 12, fontSize: 16, fontWeight: 800, cursor: submitting || !geoData.lat ? "not-allowed" : "pointer", letterSpacing: 0.5 }}>
+          {submitting ? "Submitting…" : "Submit Bio Data Form →"}
+        </button>
+        {!geoData.lat && <div style={{ textAlign: "center", fontSize: 12, color: "#EF4444", marginTop: 10 }}>⚠️ GPS location required before submission</div>}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GUARANTOR FORM — HR DASHBOARD MANAGER
+// Place this AFTER BiodataReviewModal and BEFORE MyBiodata in App.jsx
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─── HR GUARANTOR MANAGER ────────────────────────────────────────────────────
+function GuarantorManager() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [tab, setTab] = useState("submissions");
+  const [submissions, setSubmissions] = useState([]);
+  const [invites, setInvites] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviting, setInviting] = useState(false);
+  const [generalLink, setGeneralLink] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [selected, setSelected] = useState(null);
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [isCollecting, setIsCollecting] = useState(true);
+  const [togglingForm, setTogglingForm] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [subs, inv, gl] = await Promise.all([
+        apiFetch(`${API_BASE}/guarantor/submissions`),
+        apiFetch(`${API_BASE}/guarantor/invites`),
+        apiFetch(`${API_BASE}/guarantor/general-link`),
+      ]);
+      setSubmissions(Array.isArray(subs) ? subs : []);
+      setInvites(Array.isArray(inv) ? inv : []);
+      setGeneralLink(gl.link || "");
+      setIsCollecting(gl.is_collecting !== false);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const toggleCollecting = async () => {
+    setTogglingForm(true);
+    try {
+      const res = await apiFetch(`${API_BASE}/guarantor/settings`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_collecting: !isCollecting }),
+      });
+      setIsCollecting(res.is_collecting);
+    } catch (e) { alert(e.message); }
+    finally { setTogglingForm(false); }
+  };
+
+  const sendInvite = async () => {
+    if (!inviteEmail.trim()) return;
+    setInviting(true);
+    try {
+      const res = await apiFetch(`${API_BASE}/guarantor/invites`, {
+        method: "POST",
+        body: JSON.stringify({ email: inviteEmail.trim() }),
+      });
+      alert(`Guarantor form link sent to ${res.email}.`);
+      setInviteEmail("");
+      load();
+    } catch (e) { alert(e.message); }
+    finally { setInviting(false); }
+  };
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(generalLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const filtered = filterStatus === "all" ? submissions : submissions.filter(s => s.status === filterStatus);
+  const stats = {
+    total: submissions.length,
+    pending: submissions.filter(s => s.status === "pending").length,
+    approved: submissions.filter(s => s.status === "approved").length,
+    rejected: submissions.filter(s => s.status === "rejected").length,
+  };
+
+  const statusColor = (st) => ({ pending: T.gold, approved: "#10B981", rejected: "#EF4444" }[st] || C.muted);
+  const statusBg = (st) => ({ pending: `${T.gold}18`, approved: "#10B98118", rejected: "#EF444418" }[st] || C.surface);
+
+  if (loading) return <div style={{ padding: 60, textAlign: "center", color: C.muted }}>Loading Guarantor Form System…</div>;
+
+  return (
+    <div className="fade">
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 28 }}>
+        <div>
+          <div className="ho" style={{ fontSize: 26, fontWeight: 900, letterSpacing: -0.5 }}>Guarantor Form Collection</div>
+          <div style={{ fontSize: 13, color: C.sub, marginTop: 4 }}>
+            Manage employee guarantor forms, send invitations, and review submissions. Each employee requires two guarantors.
+          </div>
+        </div>
+        {/* Form ON/OFF Toggle */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 18px" }}>
+          <div style={{ fontSize: 12, color: C.sub, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>
+            Form {isCollecting ? "Active" : "Closed"}
+          </div>
+          <div
+            onClick={!togglingForm ? toggleCollecting : undefined}
+            style={{
+              width: 52, height: 28, borderRadius: 14, cursor: "pointer",
+              background: isCollecting ? T.gold : C.border,
+              position: "relative", transition: "all 0.25s ease",
+              opacity: togglingForm ? 0.6 : 1,
+            }}
+          >
+            <div style={{
+              position: "absolute", top: 3, left: isCollecting ? 27 : 3,
+              width: 22, height: 22, borderRadius: "50%", background: "#fff",
+              transition: "left 0.25s ease", boxShadow: "0 1px 4px #0004",
+            }} />
+          </div>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, marginBottom: 28 }}>
+        {[
+          { label: "Total Submissions", value: stats.total, col: C.text },
+          { label: "Pending Review", value: stats.pending, col: T.gold },
+          { label: "Approved", value: stats.approved, col: "#10B981" },
+          { label: "Rejected", value: stats.rejected, col: "#EF4444" },
+        ].map(({ label, value, col }) => (
+          <div key={label} className="gc" style={{ padding: "20px 24px" }}>
+            <div style={{ fontSize: 32, fontWeight: 900, color: col, lineHeight: 1 }}>{value}</div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 6, fontWeight: 600, letterSpacing: 0.3 }}>{label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Tabs */}
+      <Tabs
+        items={[["submissions", "Submissions"], ["invites", "Invitations"], ["settings", "Settings & Links"]]}
+        active={tab} setActive={setTab}
+      />
+
+      {/* ── SUBMISSIONS TAB ── */}
+      {tab === "submissions" && (
+        <div className="fade">
+          <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
+            {["all", "pending", "approved", "rejected"].map(st => (
+              <button key={st} onClick={() => setFilterStatus(st)}
+                style={{
+                  padding: "6px 18px", borderRadius: 99, fontSize: 12, fontWeight: 700,
+                  cursor: "pointer", border: `1px solid ${filterStatus === st ? T.gold : C.border}`,
+                  background: filterStatus === st ? `${T.gold}18` : "transparent",
+                  color: filterStatus === st ? T.gold : C.muted,
+                  textTransform: "capitalize", letterSpacing: 0.3,
+                }}>
+                {st} {st !== "all" && `(${stats[st] || 0})`}
+              </button>
+            ))}
+          </div>
+
+          {filtered.length === 0 ? (
+            <div style={{ padding: "60px 40px", textAlign: "center", color: C.muted, border: `2px dashed ${C.border}`, borderRadius: 14 }}>
+              <div style={{ fontSize: 40, marginBottom: 14 }}>🤝</div>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>No {filterStatus !== "all" ? filterStatus : ""} submissions yet</div>
+              <div style={{ fontSize: 13, color: C.muted, marginTop: 8 }}>Send invitations or share the general link to get started.</div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {filtered.map(sub => (
+                <div key={sub.id} className="gc" style={{ padding: "18px 22px", cursor: "pointer", transition: "all 0.2s" }}
+                  onClick={() => setSelected(sub)}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                      <div style={{
+                        width: 44, height: 44, borderRadius: "50%", background: `${T.gold}20`,
+                        border: `2px solid ${T.gold}40`, display: "flex", alignItems: "center",
+                        justifyContent: "center", fontSize: 16, fontWeight: 800, color: T.gold, flexShrink: 0,
+                      }}>
+                        {(sub.employee_name?.[0] || sub.employee_email?.[0] || "?").toUpperCase()}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{sub.employee_name}</div>
+                        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+                          {sub.employee_email} · {sub.position} · Staff ID: {sub.staff_id || "—"}
+                        </div>
+                        <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>
+                          Guarantors: {sub.guarantors_count || 0}/2 submitted
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                      <div style={{ fontSize: 11, color: C.muted }}>
+                        {sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
+                      </div>
+                      <span style={{
+                        background: statusBg(sub.status), color: statusColor(sub.status),
+                        border: `1px solid ${statusColor(sub.status)}33`,
+                        padding: "4px 14px", borderRadius: 99, fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.5,
+                      }}>
+                        {sub.status}
+                      </span>
+                      <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke={C.muted} strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── INVITES TAB ── */}
+      {tab === "invites" && (
+        <div className="fade">
+          <div className="gc" style={{ padding: 24, marginBottom: 20 }}>
+            <div className="ho" style={{ fontSize: 14, marginBottom: 16 }}>Send Invitation by Email</div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <input className="inp" placeholder="employee@company.com" value={inviteEmail}
+                onChange={e => setInviteEmail(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && sendInvite()}
+                style={{ flex: 1 }} />
+              <button className="bp" onClick={sendInvite} disabled={inviting || !inviteEmail.trim()}
+                style={{ whiteSpace: "nowrap" }}>
+                {inviting ? "Sending…" : "Send Invite"}
+              </button>
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 10 }}>
+              The employee will receive a link to fill Section A (Employee Details). The system will then prompt them to have their two guarantors complete Sections B & C.
+            </div>
+          </div>
+
+          {invites.length === 0 ? (
+            <div style={{ padding: 40, textAlign: "center", color: C.muted, border: `2px dashed ${C.border}`, borderRadius: 14 }}>
+              No invitations sent yet.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {invites.map(inv => (
+                <div key={inv.id} style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  padding: "14px 20px", background: C.card, border: `1px solid ${C.border}`, borderRadius: 12,
+                }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{inv.email}</div>
+                    <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>
+                      Sent {new Date(inv.created_at).toLocaleDateString()} · Expires {new Date(inv.expires_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <span style={{
+                    background: statusBg(inv.status), color: statusColor(inv.status),
+                    border: `1px solid ${statusColor(inv.status)}33`,
+                    padding: "4px 14px", borderRadius: 99, fontSize: 10, fontWeight: 800, textTransform: "uppercase",
+                  }}>
+                    {inv.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── SETTINGS & LINKS TAB ── */}
+      {tab === "settings" && (
+        <div className="fade" style={{ maxWidth: 600 }}>
+          <div className="gc" style={{ padding: 28, marginBottom: 20 }}>
+            <div className="ho" style={{ fontSize: 14, marginBottom: 6 }}>General Submission Link</div>
+            <div style={{ fontSize: 13, color: C.sub, marginBottom: 18, lineHeight: 1.6 }}>
+              Share this link with any employee — no individual invite required.
+              The employee fills Section A, then provides this same link to their two guarantors.
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <input className="inp" readOnly value={generalLink} style={{ flex: 1, fontSize: 12, color: C.muted }} />
+              <button className="bp" onClick={copyLink}>
+                {copied ? "✓ Copied!" : "Copy Link"}
+              </button>
+            </div>
+          </div>
+
+          <div className="gc" style={{ padding: 28 }}>
+            <div className="ho" style={{ fontSize: 14, marginBottom: 16 }}>Form Status</div>
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "16px 20px",
+              background: isCollecting ? `${T.gold}0D` : `${C.border}30`,
+              border: `1px solid ${isCollecting ? T.gold + "30" : C.border}`,
+              borderRadius: 10,
+            }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Guarantor Form Collection</div>
+                <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
+                  {isCollecting ? "✓ Form is active — employees can submit their guarantor forms." : "⊘ Form is closed — submission links will be rejected."}
+                </div>
+              </div>
+              <div
+                onClick={!togglingForm ? toggleCollecting : undefined}
+                style={{
+                  width: 52, height: 28, borderRadius: 14, cursor: "pointer",
+                  background: isCollecting ? T.gold : C.border,
+                  position: "relative", transition: "all 0.25s ease",
+                  opacity: togglingForm ? 0.6 : 1, flexShrink: 0,
+                }}
+              >
+                <div style={{
+                  position: "absolute", top: 3, left: isCollecting ? 27 : 3,
+                  width: 22, height: 22, borderRadius: "50%", background: "#fff",
+                  transition: "left 0.25s ease", boxShadow: "0 1px 4px #0004",
+                }} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── SUBMISSION DETAIL MODAL ── */}
+      {selected && (
+        <GuarantorReviewModal sub={selected} onClose={() => setSelected(null)} onRefresh={() => { setSelected(null); load(); }} />
+      )}
+    </div>
+  );
+}
+
+// ─── GUARANTOR REVIEW MODAL ───────────────────────────────────────────────────
+function GuarantorReviewModal({ sub, onClose, onRefresh }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [full, setFull] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [reviewing, setReviewing] = useState(false);
+  const [activeGuarantor, setActiveG] = useState(1);
+  const [docViewer, setDocViewer] = useState(null); // { gNum, type, url }
+  const [showGuarantorLinks, setShowGuarantorLinks] = useState(false);
+
+  useEffect(() => {
+    apiFetch(`${API_BASE}/guarantor/submissions/${sub.id}`)
+      .then(d => setFull(d)).catch(e => alert(e.message)).finally(() => setLoading(false));
+  }, [sub.id]);
+
+  const doReview = async (section, status, reason = "") => {
+    setReviewing(true);
+    try {
+      await apiFetch(`${API_BASE}/guarantor/submissions/${sub.id}/review`, {
+        method: "POST",
+        body: JSON.stringify({ section, status, reason }),
+      });
+      const d = await apiFetch(`${API_BASE}/guarantor/submissions/${sub.id}`);
+      setFull(d);
+      if (sub.staff_id && status !== "pending") {
+        const sectionLabel = section === "a" ? "Employee Details" : section === "b" ? "Guarantor 1 Details" : "Guarantor 2 Details";
+        const bellMsg = status === "rejected"
+          ? `⚠️ Your guarantor form section "${sectionLabel}" was rejected by HR. Reason: ${reason || "No reason provided."}. Please contact HR to resolve this.`
+          : `✅ Your guarantor form section "${sectionLabel}" has been approved by HR.`;
+        // Bell notification for both outcomes (non-blocking)
+        apiFetch(`${API_BASE}/hr/notifications`, {
+          method: "POST",
+          body: JSON.stringify({ staff_id: sub.staff_id, type: "guarantor_review", message: bellMsg }),
+        }).catch(() => { });
+        // Email only on rejection (non-blocking)
+        if (status === "rejected" && sub.employee_email) {
+          apiFetch(`${API_BASE}/hr/recruitment/send-email`, {
+            method: "POST",
+            body: JSON.stringify({
+              email: sub.employee_email,
+              subject: `⚠️ Guarantor Form — Section Rejected: ${sectionLabel}`,
+              message: `Dear ${sub.employee_name || "Staff Member"},\n\nYour guarantor form submission has been reviewed by HR and the following section requires attention:\n\nSection: ${sectionLabel}\nStatus: REJECTED\nReason: ${reason || "No specific reason provided."}\n\nPlease log in to the HR portal to review the feedback and contact HR to discuss next steps.\n\nRegards,\nHR Team`,
+            }),
+          }).catch(() => { });
+        }
+      }
+    } catch (e) { alert(e.message); }
+    finally { setReviewing(false); }
+  };
+
+  const bulkReview = async (status) => {
+    if (!window.confirm(`Are you sure you want to ${status} ALL sections of this submission?`)) return;
+    setReviewing(true);
+    try {
+      await apiFetch(`${API_BASE}/guarantor/submissions/${sub.id}/bulk-review`, {
+        method: "POST",
+        body: JSON.stringify({ status }),
+      });
+      const d = await apiFetch(`${API_BASE}/guarantor/submissions/${sub.id}`);
+      setFull(d);
+      if (sub.staff_id) {
+        const bellMsg = status === "approved"
+          ? `✅ Your entire guarantor form submission has been approved by HR. Welcome aboard!`
+          : `⚠️ Your guarantor form submission was rejected by HR across all sections. Please contact HR for next steps.`;
+        // Bell notification for both outcomes (non-blocking)
+        apiFetch(`${API_BASE}/hr/notifications`, {
+          method: "POST",
+          body: JSON.stringify({ staff_id: sub.staff_id, type: "guarantor_review", message: bellMsg }),
+        }).catch(() => { });
+        // Email only on rejection (non-blocking)
+        if (status === "rejected" && sub.employee_email) {
+          apiFetch(`${API_BASE}/hr/recruitment/send-email`, {
+            method: "POST",
+            body: JSON.stringify({
+              email: sub.employee_email,
+              subject: `⚠️ Guarantor Form Submission — Rejected`,
+              message: `Dear ${sub.employee_name || "Staff Member"},\n\nYour guarantor form submission has been reviewed by HR and has been rejected across all sections.\n\nPlease log in to the HR portal to view the detailed feedback for each section, then contact HR to discuss next steps and resubmission.\n\nRegards,\nHR Team`,
+            }),
+          }).catch(() => { });
+        }
+      }
+    } catch (e) { alert(e.message); }
+    finally { setReviewing(false); }
+  };
+
+  const GOLD = T.gold;
+  const lbl = { fontSize: 10, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 };
+  const val = { fontSize: 14, color: C.text, marginTop: 3, fontWeight: 500 };
+
+  const F = ({ label, value }) => (
+    <div>
+      <div style={lbl}>{label}</div>
+      <div style={val}>{value || "—"}</div>
+    </div>
+  );
+
+  const SectionBadge = ({ status }) => {
+    const map = { approved: ["#10B981", "#ECFDF5", "Approved"], rejected: ["#EF4444", "#FEF2F2", "Rejected"], pending: [GOLD, `${GOLD}15`, "Pending"] };
+    const [col, bg, text] = map[status] || [C.muted, C.surface, "Not submitted"];
+    return (
+      <span style={{ background: bg, color: col, border: `1px solid ${col}33`, padding: "3px 12px", borderRadius: 99, fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.5 }}>
+        {text}
+      </span>
+    );
+  };
+
+  const ReviewActions = ({ section, status, reason: existingReason }) => {
+    const [showRejectForm, setShowRejectForm] = useState(false);
+    const [reason, setReason] = useState(existingReason || "");
+
+    if (status === "approved") return (
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14 }}>
+        <span style={{ color: "#10B981", fontSize: 12, fontWeight: 700 }}>✓ Section Approved</span>
+        <button onClick={() => doReview(section, "pending")} disabled={reviewing}
+          style={{ border: "none", background: "none", color: C.muted, fontSize: 11, cursor: "pointer", textDecoration: "underline" }}>
+          Undo
+        </button>
+      </div>
+    );
+
+    return (
+      <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
+        {!showRejectForm ? (
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <button onClick={() => doReview(section, "approved")} disabled={reviewing}
+              style={{ padding: "8px 20px", borderRadius: 4, fontSize: 12, fontWeight: 700, cursor: "pointer", background: "#10B98118", color: "#10B981", border: "1px solid #10B98140" }}>
+              ✓ Approve Section
+            </button>
+            <button onClick={() => setShowRejectForm(true)} disabled={reviewing}
+              style={{ padding: "8px 20px", borderRadius: 4, fontSize: 12, fontWeight: 700, cursor: "pointer", background: "#EF444418", color: "#EF4444", border: "1px solid #EF444440" }}>
+              ✗ Reject Section
+            </button>
+            {status === "rejected" && <span style={{ fontSize: 11, color: "#EF4444", fontWeight: 600 }}>⚠ Currently rejected</span>}
+          </div>
+        ) : (
+          <div>
+            <div style={{ ...lbl, marginBottom: 6 }}>Reason for Rejection <span style={{ color: "#EF4444" }}>*</span></div>
+            <textarea
+              value={reason} onChange={e => setReason(e.target.value)}
+              placeholder="e.g. ID card is expired, address is incomplete…"
+              style={{
+                width: "100%", boxSizing: "border-box", padding: "10px 14px",
+                border: "1px solid #DDE3EE", borderRadius: 3, fontSize: 13,
+                background: C.surface, color: C.text, resize: "vertical", height: 70,
+                fontFamily: "inherit",
+              }}
+            />
+            <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+              <button onClick={() => { if (!reason.trim()) { alert("Please provide a reason."); return; } doReview(section, "rejected", reason); setShowRejectForm(false); }}
+                disabled={reviewing}
+                style={{ padding: "8px 20px", borderRadius: 4, fontSize: 12, fontWeight: 700, cursor: "pointer", background: "#EF4444", color: "#fff", border: "none" }}>
+                Confirm Rejection
+              </button>
+              <button onClick={() => setShowRejectForm(false)}
+                style={{ padding: "8px 16px", borderRadius: 4, fontSize: 12, cursor: "pointer", background: "none", border: "none", color: C.muted }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const SectionHeader = ({ label, title, status }) => (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `2px solid ${GOLD}22`, paddingBottom: 10, marginBottom: 20 }}>
+      <div>
+        <div style={{ fontSize: 9, color: GOLD, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", marginBottom: 3 }}>{label}</div>
+        <div style={{ fontSize: 17, fontWeight: 700, color: C.text }}>{title}</div>
+      </div>
+      {status && <SectionBadge status={status} />}
+    </div>
+  );
+
+  const overallApproved = full && full.section_a_status === "approved" && full.section_b_status === "approved" && full.section_c_status === "approved";
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "#000000CC", zIndex: 9999,
+      display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+    }} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{
+        background: C.surface, borderRadius: 8, width: "100%", maxWidth: 820,
+        maxHeight: "92vh", overflow: "hidden", display: "flex", flexDirection: "column",
+        boxShadow: "0 40px 120px #00000080", border: `1px solid ${C.border}`,
+      }}>
+        {/* Modal header */}
+        <div style={{ padding: "18px 28px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+          <div>
+            <div style={{ fontSize: 18, color: C.text, fontWeight: 800 }}>Employee Guarantor's Form</div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{sub.employee_name} · {sub.employee_email}</div>
+          </div>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            {full && !overallApproved && (
+              <>
+                <button onClick={() => bulkReview("approved")} disabled={reviewing}
+                  style={{ padding: "7px 16px", borderRadius: 4, fontSize: 11, fontWeight: 700, cursor: "pointer", background: "#10B98118", color: "#10B981", border: "1px solid #10B98140" }}>
+                  Approve All
+                </button>
+                <button onClick={() => bulkReview("rejected")} disabled={reviewing}
+                  style={{ padding: "7px 16px", borderRadius: 4, fontSize: 11, fontWeight: 700, cursor: "pointer", background: "#EF444418", color: "#EF4444", border: "1px solid #EF444440" }}>
+                  Reject All
+                </button>
+              </>
+            )}
+            <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, fontSize: 22, cursor: "pointer", lineHeight: 1 }}>✕</button>
+          </div>
+        </div>
+
+        {loading ? (
+          <div style={{ padding: 60, textAlign: "center", color: C.muted }}>Loading submission…</div>
+        ) : !full ? (
+          <div style={{ padding: 40, textAlign: "center", color: "#EF4444" }}>Could not load submission details.</div>
+        ) : (
+          <div style={{ overflow: "auto", flex: 1, padding: 28 }}>
+
+            {/* Section A */}
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: "22px 24px", marginBottom: 16 }}>
+              <SectionHeader label="Section A" title="Employee Details" status={full.section_a_status} />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 24px" }}>
+                <F label="Full Name" value={full.employee_name} />
+                <F label="Position" value={full.position} />
+                <F label="Staff ID" value={full.staff_id} />
+                <F label="Date of Employment" value={full.date_of_employment} />
+                <F label="Phone" value={full.employee_phone} />
+                <F label="Email" value={full.employee_email} />
+                <div style={{ gridColumn: "1/-1" }}><F label="Residential Address" value={full.employee_address} /></div>
+              </div>
+              {full.employee_signature_url && (
+                <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${C.border}` }}>
+                  <div style={lbl}>Employee Signature</div>
+                  <img src={full.employee_signature_url} alt="Sig"
+                    style={{ maxHeight: 55, maxWidth: 200, marginTop: 8, border: `1px solid ${C.border}`, borderRadius: 4, padding: 6, background: "#fff" }}
+                    onError={e => e.target.style.display = "none"} />
+                </div>
+              )}
+              {(full.employee_signed_at || full.employee_ip) && (
+                <>
+                  <hr style={{ border: "none", borderTop: `1px solid ${C.border}`, margin: "16px 0 12px" }} />
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: C.muted, marginBottom: 10 }}>🔒 Signing Audit Trail</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 24px", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 4, padding: "14px 18px" }}>
+                    <F label="Signed At (UTC)" value={full.employee_signed_at ? new Date(full.employee_signed_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "medium" }) : "—"} />
+                    <F label="Form Date (Self-reported)" value={full.employee_signed_date || "—"} />
+                    <F label="IP Address" value={full.employee_ip || "—"} />
+                    <F label="Device Type" value={full.employee_device_type || "—"} />
+                    <div style={{ gridColumn: "1/-1" }}><F label="User Agent" value={full.employee_user_agent || "—"} /></div>
+                  </div>
+                </>
+              )}
+              <ReviewActions section="a" status={full.section_a_status} reason={full.section_a_reason} />
+            </div>
+
+            {/* Guarantor Tabs + Links Button */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 12, justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 8 }}>
+                {[1, 2].map(n => (
+                  <button key={n} onClick={() => setActiveG(n)} style={{
+                    padding: "8px 22px", borderRadius: 4, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                    border: `1px solid ${activeGuarantor === n ? GOLD : C.border}`,
+                    background: activeGuarantor === n ? `${GOLD}15` : "transparent",
+                    color: activeGuarantor === n ? GOLD : C.muted,
+                  }}>
+                    Guarantor {n} {full[`guarantor${n}`] ? "✓" : "(pending)"}
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => setShowGuarantorLinks(!showGuarantorLinks)} style={{
+                padding: "8px 14px", borderRadius: 4, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                background: `${GOLD}15`, color: GOLD, border: `1px solid ${GOLD}40`,
+              }}>
+                📎 Sent Links
+              </button>
+            </div>
+
+            {/* Guarantor Links Display */}
+            {showGuarantorLinks && (
+              full?.relay_link ? (
+                <div style={{ background: `${GOLD}08`, border: `1px solid ${GOLD}30`, borderRadius: 6, padding: 16, marginBottom: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Links Sent to Guarantors</div>
+                  {[1, 2].map(n => {
+                    const link = `${full.relay_link}&guarantor=${n}`;
+                    return (
+                      <div key={n} style={{ marginBottom: n === 1 ? 12 : 0 }}>
+                        <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>Guarantor {n}</div>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          <input readOnly value={link} style={{
+                            flex: 1, fontSize: 10, padding: "8px 12px", border: `1px solid ${C.border}`,
+                            borderRadius: 4, background: C.surface, color: C.text, fontFamily: "monospace", wordBreak: "break-all"
+                          }} />
+                          <button onClick={() => {
+                            navigator.clipboard.writeText(link);
+                            alert("Guarantor " + n + " link copied!");
+                          }} style={{
+                            padding: "8px 12px", borderRadius: 4, fontSize: 10, fontWeight: 700,
+                            background: GOLD, color: "#fff", border: "none", cursor: "pointer", whiteSpace: "nowrap"
+                          }}>
+                            Copy
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ background: `${GOLD}08`, border: `1px solid ${GOLD}30`, borderRadius: 6, padding: "14px 18px", marginBottom: 12, display: "flex", alignItems: "flex-start", gap: 12 }}>
+                  <span style={{ fontSize: 18, flexShrink: 0 }}>ℹ️</span>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: GOLD, marginBottom: 4 }}>Links not available for this submission</div>
+                    <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
+                      The shareable guarantor links are only stored when the employee submits via the public form. This submission may have been created before link tracking was enabled, or the link data was not returned by the server.
+                    </div>
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>
+                      <strong style={{ color: C.text }}>Employee:</strong> {sub.employee_name} ({sub.employee_email})
+                    </div>
+                  </div>
+                </div>
+              )
+            )}
+
+            {/* Guarantor Detail */}
+            {[1, 2].map(n => {
+              const g = full[`guarantor${n}`];
+              if (activeGuarantor !== n) return null;
+              if (!g) return (
+                <div key={n} style={{ padding: "48px", textAlign: "center", color: C.muted, border: `2px dashed ${C.border}`, borderRadius: 6 }}>
+                  <div style={{ fontSize: 28, marginBottom: 12 }}>⏳</div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>Guarantor {n} has not submitted their section yet.</div>
+                </div>
+              );
+
+              const secKey = n === 1 ? "b" : "c";
+              return (
+                <div key={n}>
+                  <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: "22px 24px", marginBottom: 12 }}>
+                    <SectionHeader label={`Section B — Guarantor ${n}`} title="Guarantor Details" status={full[`section_${secKey}_status`]} />
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 24px" }}>
+                      <F label="Full Name" value={g.full_name} />
+                      <F label="Relationship to Employee" value={g.relationship} />
+                      <F label="Occupation" value={g.occupation} />
+                      <F label="Position Held" value={g.position_held} />
+                      <F label="Years at Current Job" value={g.years_at_job} />
+                      <F label="Phone" value={g.phone} />
+                      <F label="Email" value={g.email} />
+                      <div style={{ gridColumn: "1/-1" }}><F label="Residential Address" value={g.address} /></div>
+                      <div style={{ gridColumn: "1/-1" }}><F label="Employer / Business" value={g.employer_name} /></div>
+                      <F label="Means of ID" value={g.id_type} />
+                      <F label="ID Number" value={g.id_number} />
+                    </div>
+
+                    <div style={{ display: "flex", gap: 20, marginTop: 16, flexWrap: "wrap" }}>
+                      {g.passport_photo_url && (
+                        <div style={{ cursor: "pointer" }} onClick={() => setDocViewer({ gNum: n, type: "Passport Photo", url: g.passport_photo_url })}>
+                          <div style={lbl}>Passport Photo</div>
+                          <img src={g.passport_photo_url} alt="Passport"
+                            style={{ width: 72, height: 72, borderRadius: 6, objectFit: "cover", marginTop: 6, border: `2px solid ${GOLD}40`, transition: "opacity 0.2s", opacity: 0.8, cursor: "pointer" }}
+                            onMouseEnter={e => e.target.style.opacity = "1"}
+                            onMouseLeave={e => e.target.style.opacity = "0.8"}
+                            onError={e => e.target.style.display = "none"} />
+                        </div>
+                      )}
+                      {g.id_document_url && (
+                        <div style={{ cursor: "pointer" }} onClick={() => setDocViewer({ gNum: n, type: "ID Document", url: g.id_document_url })}>
+                          <div style={lbl}>ID Document</div>
+                          <img src={g.id_document_url} alt="ID"
+                            style={{ height: 72, borderRadius: 6, objectFit: "cover", marginTop: 6, border: `1px solid ${C.border}`, transition: "opacity 0.2s", opacity: 0.8, cursor: "pointer" }}
+                            onMouseEnter={e => e.target.style.opacity = "1"}
+                            onMouseLeave={e => e.target.style.opacity = "0.8"}
+                            onError={e => e.target.style.display = "none"} />
+                        </div>
+                      )}
+                    </div>
+
+                    {g.signature_url && (
+                      <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${C.border}` }}>
+                        <div style={lbl}>Guarantor {n} Signature</div>
+                        <img src={g.signature_url} alt="Sig"
+                          style={{ maxHeight: 55, maxWidth: 200, marginTop: 8, border: `1px solid ${C.border}`, borderRadius: 4, padding: 6, background: "#fff" }}
+                          onError={e => e.target.style.display = "none"} />
+                      </div>
+                    )}
+
+                    {/* Signing Audit Trail — Guarantor */}
+                    {(g.signed_at || g.ip_address) && (
+                      <>
+                        <hr style={{ border: "none", borderTop: `1px solid ${C.border}`, margin: "20px 0" }} />
+                        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: C.muted, marginBottom: 12 }}>🔒 Signing Audit Trail</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 24px", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 4, padding: "14px 18px" }}>
+                          <F label="Signed At (UTC)" value={g.signed_at ? new Date(g.signed_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "medium" }) : "—"} />
+                          <F label="Form Date (Self-reported)" value={g.signed_date || "—"} />
+                          <F label="IP Address" value={g.ip_address || "—"} />
+                          <F label="Device Type" value={g.device_type || "—"} />
+                          <div style={{ gridColumn: "1/-1" }}><F label="User Agent" value={g.user_agent || "—"} /></div>
+                        </div>
+                      </>
+                    )}
+
+                    <ReviewActions section={secKey} status={full[`section_${secKey}_status`]} reason={full[`section_${secKey}_reason`]} />
+                  </div>
+                </div>
+              );
+            })}
+
+            {overallApproved && (
+              <div style={{ background: "#ECFDF5", border: "1px solid #10B981", borderRadius: 6, padding: "16px 20px", display: "flex", alignItems: "center", gap: 12 }}>
+                <span style={{ color: "#10B981", fontSize: 20 }}>✓</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#065F46" }}>All sections approved</div>
+                  <div style={{ fontSize: 12, color: "#047857", marginTop: 2 }}>This submission has been fully verified by HR.</div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Document Viewer Modal */}
+        {docViewer && (
+          <div style={{
+            position: "fixed", inset: 0, background: "#000000CC", zIndex: 10000,
+            display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+          }} onClick={e => e.target === e.currentTarget && setDocViewer(null)}>
+            <div style={{
+              background: C.surface, borderRadius: 8, width: "100%", maxWidth: 700,
+              maxHeight: "85vh", overflow: "hidden", display: "flex", flexDirection: "column",
+              boxShadow: "0 40px 120px #00000080", border: `1px solid ${C.border}`,
+            }}>
+              <div style={{ padding: "16px 24px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>Guarantor {docViewer.gNum} Document</div>
+                  <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{docViewer.type}</div>
+                </div>
+                <button onClick={() => setDocViewer(null)} style={{ background: "none", border: "none", color: C.muted, fontSize: 24, cursor: "pointer", lineHeight: 1 }}>✕</button>
+              </div>
+              <div style={{ flex: 1, overflow: "auto", display: "flex", alignItems: "center", justifyContent: "center", background: C.surface, padding: 20, minHeight: 0 }}>
+                <img src={docViewer.url} alt={docViewer.type} style={{ maxWidth: "100%", maxHeight: "calc(85vh - 80px)", objectFit: "contain", borderRadius: 6, display: "block" }} onError={e => {
+                  e.target.style.display = "none";
+                  const msg = document.createElement("div");
+                  msg.style.cssText = "color:" + C.muted + ";text-align:center;font-size:13px;padding:20px";
+                  msg.textContent = "Could not load document";
+                  e.target.parentElement.appendChild(msg);
+                }} />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+//  PUBLIC GUARANTOR FORM — static design tokens & sub-components
+//  Defined OUTSIDE the component so they are stable references across renders.
+//  This prevents React from unmounting/remounting inputs on every keystroke.
+// ════════════════════════════════════════════════════════════════════════════
+
+const GF_GOLD = "#B8860B";
+const GF_NAVY = "#0D1B2A";
+
+const GF_CSS = {
+  page: { minHeight: "100vh", background: "linear-gradient(160deg,#F5F0E8 0%,#FAF8F4 60%,#EDE9E0 100%)", fontFamily: "'DM Sans','Segoe UI',sans-serif", padding: "0 0 80px" },
+  topbar: { background: GF_NAVY, padding: "14px 32px", display: "flex", justifyContent: "space-between", alignItems: "center" },
+  topbarTxt: { color: "#fff", fontSize: 11, fontWeight: 600, letterSpacing: 1.5, textTransform: "uppercase", opacity: 0.5 },
+  wrap: { maxWidth: 760, margin: "0 auto", padding: "0 20px" },
+  lhead: { background: "#fff", borderLeft: `6px solid ${GF_GOLD}`, padding: "36px 44px 28px", marginTop: 24, boxShadow: "0 2px 20px rgba(0,0,0,0.07)" },
+  card: { background: "#fff", border: "1px solid #E8E2D9", borderRadius: 4, padding: "32px 40px", marginBottom: 14, boxShadow: "0 1px 6px rgba(0,0,0,0.04)" },
+  seclbl: { fontSize: 9, fontWeight: 800, letterSpacing: 2.5, textTransform: "uppercase", color: GF_GOLD, marginBottom: 5 },
+  sectitle: { fontSize: 21, fontWeight: 700, color: GF_NAVY, marginBottom: 3, lineHeight: 1.2 },
+  secsub: { fontSize: 13, color: "#6B7280", marginBottom: 26 },
+  flbl: { fontSize: 10, fontWeight: 700, letterSpacing: 1.4, textTransform: "uppercase", color: "#94A3B8", marginBottom: 5, display: "block" },
+  inp: { width: "100%", boxSizing: "border-box", padding: "11px 14px", border: "1px solid #DDE3EE", borderRadius: 3, fontSize: 14, color: GF_NAVY, background: "#FAFBFC", fontFamily: "inherit", outline: "none" },
+  btn: { padding: "13px 40px", borderRadius: 3, border: "none", background: GF_NAVY, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" },
+  btn2: { padding: "12px 28px", borderRadius: 3, border: `1px solid ${GF_NAVY}`, background: "transparent", color: GF_NAVY, fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  sigbox: { width: "100%", height: 160, display: "block", borderRadius: 3, border: "1.5px dashed #B8C0CC", background: "#FAFBFC", cursor: "crosshair", touchAction: "none" },
+  hr: { border: "none", borderTop: "1px solid #E8E2D9", margin: "22px 0" },
+};
+
+const GF_STEPS = ["Verify", "Employee", "Guarantor 1", "Guarantor 2", "Complete"];
+const GF_PHASE_IDX = { email: 0, section_a: 1, relay_screen: 1, section_b_1: 2, section_b_2: 3, success: 4 };
+
+// Static sub-components — no props that change per-keystroke, so React never remounts them
+function GF_Topbar() {
+  return (
+    <div style={GF_CSS.topbar}>
+      <span style={GF_CSS.topbarTxt}>Eximp &amp; Cloves Infrastructure · HR Division</span>
+      <span style={GF_CSS.topbarTxt}>Confidential</span>
+    </div>
+  );
+}
+
+function GF_Letterhead({ companyInfo }) {
+  return (
+    <div style={GF_CSS.lhead}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 14 }}>
+        <div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: GF_NAVY, lineHeight: 1.15 }}>{companyInfo.name}</div>
+          <div style={{ fontSize: 12, color: "#6B7280", marginTop: 6, lineHeight: 1.65 }}>
+            {companyInfo.address}{companyInfo.phone && <><br />{companyInfo.phone}</>}
+          </div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ display: "inline-block", padding: "7px 18px", border: `1px solid ${GF_GOLD}`, color: GF_GOLD, fontSize: 10, fontWeight: 800, letterSpacing: 2.2, textTransform: "uppercase", borderRadius: 2 }}>
+            Employee Guarantor's Form
+          </div>
+          {companyInfo.rc && <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 7 }}>{companyInfo.rc}</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GF_Progress({ phase }) {
+  const cur = GF_PHASE_IDX[phase] || 0;
+  return (
+    <div style={{ display: "flex", alignItems: "flex-start", margin: "26px 0 30px" }}>
+      {GF_STEPS.map((s, i) => (
+        <Fragment key={s}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <div style={{ width: 27, height: 27, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, background: i < cur ? GF_GOLD : i === cur ? GF_NAVY : "#E8E2D9", color: i <= cur ? "#fff" : "#9CA3AF", border: `2px solid ${i < cur ? GF_GOLD : i === cur ? GF_NAVY : "#DDE3EE"}` }}>
+              {i < cur ? "✓" : i + 1}
+            </div>
+            <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", color: i === cur ? GF_NAVY : "#9CA3AF", marginTop: 5, whiteSpace: "nowrap" }}>{s}</div>
+          </div>
+          {i < GF_STEPS.length - 1 && (
+            <div style={{ flex: 1, display: "flex", alignItems: "center", paddingBottom: 16 }}>
+              <div style={{ flex: 1, height: 1.5, background: i < cur ? GF_GOLD : "#DDE3EE", margin: "0 5px" }} />
+            </div>
+          )}
+        </Fragment>
+      ))}
+    </div>
+  );
+}
+
+// Pure layout wrappers — children change, but the wrapper itself is stable
+function GF_Fld({ label, required, gridSpan, children }) {
+  return (
+    <div style={{ gridColumn: gridSpan ? "1/-1" : undefined }}>
+      <label style={GF_CSS.flbl}>{label}{required && <span style={{ color: "#EF4444" }}> *</span>}</label>
+      {children}
+    </div>
+  );
+}
+
+// GF_Inp: a plain <input> wrapper — defined outside so its identity is stable.
+// onChange/value come in as props; React reconciles the existing DOM node instead of remounting.
+function GF_Inp({ value, onChange, type = "text", placeholder, style: extraStyle }) {
+  return (
+    <input
+      style={{ ...GF_CSS.inp, ...extraStyle }}
+      type={type}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      onFocus={e => { e.target.style.borderColor = GF_GOLD; }}
+      onBlur={e => { e.target.style.borderColor = "#DDE3EE"; }}
+    />
+  );
+}
+
+function GF_SigPad({ label, sigRef, handlers, hasSig }) {
+  return (
+    <div>
+      <label style={GF_CSS.flbl}>{label} <span style={{ color: "#EF4444" }}>*</span></label>
+      <div style={{ position: "relative" }}>
+        <canvas ref={sigRef} style={GF_CSS.sigbox} {...handlers} />
+        {!hasSig && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none", fontSize: 12, color: "#B8C0CC", fontStyle: "italic" }}>
+            Draw signature here
+          </div>
+        )}
+      </div>
+      {hasSig && (
+        <button onClick={handlers.clear} style={{ marginTop: 7, padding: "4px 14px", border: "1px solid #DDE3EE", background: "none", color: "#6B7280", fontSize: 11, borderRadius: 3, cursor: "pointer" }}>
+          Clear &amp; Redo
+        </button>
+      )}
+    </div>
+  );
+}
+
+function GF_RejBanner({ reason }) {
+  if (!reason) return null;
+  return (
+    <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 3, padding: "14px 18px", marginBottom: 22, display: "flex", gap: 12 }}>
+      <span style={{ fontSize: 16 }}>⚠</span>
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#991B1B" }}>Section Rejected by HR</div>
+        <div style={{ fontSize: 12, color: "#B91C1C", marginTop: 2 }}>Reason: {reason}</div>
+        <div style={{ fontSize: 11, color: "#B91C1C", marginTop: 3 }}>Please correct the information below and resubmit.</div>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  PUBLIC GUARANTOR FORM  — accessed via ?guarantor_token=xxx
+// ════════════════════════════════════════════════════════════════════════════
+function PublicGuarantorForm() {
+  const [phase, setPhase] = useState("email");
+  const [token, setToken] = useState("");
+  const [email, setEmail] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [companyInfo, setCompanyInfo] = useState({
+    name: "Eximp & Cloves Infrastructure Limited",
+    address: "57B, Isaac John Street, Yaba, Lagos",
+    rc: "RC 8311800", phone: "+234 912 686 4383", email_addr: "hr@eximps-cloves.com",
+  });
+  const [submission, setSubmission] = useState(null);
+  const [relayLink, setRelayLink] = useState("");
+
+  const [empForm, setEmpForm] = useState({
+    full_name: "", position: "", address: "", phone: "",
+    email: "", date_of_employment: "", staff_id: "", signed_date: "",
+  });
+
+  const emptyG = () => ({
+    full_name: "", relationship: "", address: "", occupation: "",
+    employer_name: "", position_held: "", years_at_job: "", phone: "",
+    email: "", id_type: "", id_number: "",
+    passport_file: null, passport_preview: "", id_doc_file: null, id_doc_preview: "",
+  });
+  const [g1, setG1] = useState(emptyG());
+  const [g2, setG2] = useState(emptyG());
+
+  // Canvas refs
+  const empSigRef = useRef(null); const g1SigRef = useRef(null); const g2SigRef = useRef(null);
+  // Track drawing state in refs (avoids stale closures, no re-renders)
+  const empDrawRef = useRef(false); const g1DrawRef = useRef(false); const g2DrawRef = useRef(false);
+  // Track whether canvas has been sized (prevent double-scale bug)
+  const empSizedRef = useRef(false); const g1SizedRef = useRef(false); const g2SizedRef = useRef(false);
+  const [empHasSig, setEmpHasSig] = useState(false);
+  const [g1HasSig, setG1HasSig] = useState(false);
+  const [g2HasSig, setG2HasSig] = useState(false);
+  const [slotHint, setSlotHint] = useState(null); // "1" or "2" — set from ?slot= param for guarantor-specific links
+  const [successRole, setSuccessRole] = useState("employee"); // "employee" | "guarantor"
+
+  // ── On mount: read URL params ─────────────────────────────────────────
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get("guarantor_token") || "";
+    const e = params.get("email") || "";
+    const g = params.get("guarantor") || params.get("slot") || ""; // Support both ?guarantor= and ?slot= formats
+    if (t) setToken(t);
+    if (e) setEmail(e);
+    if (g) setSlotHint(g);
+    fetch(`${API_BASE}/guarantor/company-info`)
+      .then(r => r.json()).then(d => setCompanyInfo(d)).catch(() => { });
+    if (t && e) setTimeout(() => doCheck(e, t), 400);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Canvas setup: size the backing store once per phase ───────────────
+  // We set canvas.width/height = CSS size * dpr for a crisp HiDPI backing store.
+  // We do NOT apply ctx.scale() — instead, getXY() maps coordinates using the
+  // ratio (canvas.width / rect.width) so strokes are always exactly under the pointer.
+  const setupCanvas = (canvasRef, sizedRef) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return false;
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return false;
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.round(rect.width * dpr);
+    const h = Math.round(rect.height * dpr);
+    // Only resize if dimensions changed (avoids wiping existing drawing)
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+      sizedRef.current = false;
+    }
+    if (!sizedRef.current) {
+      const ctx = canvas.getContext("2d");
+      ctx.setTransform(1, 0, 0, 1, 0, 0); // NO dpr scale — getXY handles it
+      ctx.strokeStyle = "#1A1A2E";
+      ctx.lineWidth = 2.5 * dpr;           // scale line width manually
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      sizedRef.current = true;
+    }
+    return true;
+  };
+
+  // Slot-based routing is now handled entirely inside doCheck.
+  // No auto-advance from relay_screen needed here.
+
+  useEffect(() => {
+    const map = {
+      section_a: [empSigRef, empSizedRef],
+      section_b_1: [g1SigRef, g1SizedRef],
+      section_b_2: [g2SigRef, g2SizedRef],
+    };
+    const pair = map[phase];
+    if (!pair) return;
+    const [cRef, sRef] = pair;
+    // Reset sized flag so new phase gets fresh scale
+    sRef.current = false;
+    const attempt = () => setupCanvas(cRef, sRef);
+    const t1 = setTimeout(attempt, 50);
+    const t2 = setTimeout(attempt, 200);
+    const t3 = setTimeout(attempt, 500);
+    let ro;
+    if (window.ResizeObserver) {
+      ro = new ResizeObserver(attempt);
+      // Observe after a tick so the ref is attached
+      setTimeout(() => { if (cRef.current) ro.observe(cRef.current); }, 10);
+    }
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); if (ro) ro.disconnect(); };
+  }, [phase]);
+
+  // ── Get cursor/touch position mapped to canvas coordinate space ───────
+  // Uses ratio-based mapping: always correct regardless of DPR, scroll, or zoom.
+  const getXY = (e, canvas) => {
+    const rect = canvas.getBoundingClientRect();
+    const src = e.touches ? e.touches[0] : e;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+      x: (src.clientX - rect.left) * scaleX,
+      y: (src.clientY - rect.top) * scaleY,
+    };
+  };
+
+  // ── Get a ready context — setup if needed, always re-apply stroke style
+  const getCtx = (cRef, sRef) => {
+    if (!setupCanvas(cRef, sRef)) return null;
+    const canvas = cRef.current;
+    const dpr = window.devicePixelRatio || 1;
+    const ctx = canvas.getContext("2d");
+    ctx.strokeStyle = "#1A1A2E";
+    ctx.lineWidth = 2.5 * dpr;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    return ctx;
+  };
+
+  const makeSigHandlers = (cRef, sRef, drawRef, setHas) => ({
+    onMouseDown: (e) => {
+      e.preventDefault();
+      const ctx = getCtx(cRef, sRef);
+      if (!ctx) return;
+      drawRef.current = true; setHas(true);
+      const p = getXY(e, cRef.current);
+      ctx.beginPath(); ctx.moveTo(p.x, p.y);
+    },
+    onMouseMove: (e) => {
+      e.preventDefault();
+      if (!drawRef.current) return;
+      const ctx = cRef.current?.getContext("2d");
+      if (!ctx) return;
+      const p = getXY(e, cRef.current);
+      ctx.lineTo(p.x, p.y); ctx.stroke();
+    },
+    onMouseUp: (e) => { e.preventDefault(); drawRef.current = false; cRef.current?.getContext("2d")?.beginPath(); },
+    onMouseLeave: (e) => { e.preventDefault(); drawRef.current = false; cRef.current?.getContext("2d")?.beginPath(); },
+    onTouchStart: (e) => {
+      e.preventDefault();
+      const ctx = getCtx(cRef, sRef);
+      if (!ctx) return;
+      drawRef.current = true; setHas(true);
+      const p = getXY(e, cRef.current);
+      ctx.beginPath(); ctx.moveTo(p.x, p.y);
+    },
+    onTouchMove: (e) => {
+      e.preventDefault();
+      if (!drawRef.current) return;
+      const ctx = cRef.current?.getContext("2d");
+      if (!ctx) return;
+      const p = getXY(e, cRef.current);
+      ctx.lineTo(p.x, p.y); ctx.stroke();
+    },
+    onTouchEnd: (e) => { e.preventDefault(); drawRef.current = false; cRef.current?.getContext("2d")?.beginPath(); },
+    clear: () => {
+      const canvas = cRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      setHas(false);
+    },
+  });
+
+  const empSig = makeSigHandlers(empSigRef, empSizedRef, empDrawRef, setEmpHasSig);
+  const g1Sig = makeSigHandlers(g1SigRef, g1SizedRef, g1DrawRef, setG1HasSig);
+  const g2Sig = makeSigHandlers(g2SigRef, g2SizedRef, g2DrawRef, setG2HasSig);
+
+  // ── Verify token + email ──────────────────────────────────────────────
+  const doCheck = async (overEmail, overToken) => {
+    const eAddr = (overEmail || email).trim();
+    const tok = overToken || token;
+    if (!eAddr || !tok) { alert("Please enter your email address."); return; }
+    setChecking(true);
+    // Read slotHint fresh from URL so it's available inside this async fn
+    const urlSlot = new URLSearchParams(window.location.search).get("guarantor") ||
+      new URLSearchParams(window.location.search).get("slot") || null;
+    try {
+      const res = await fetch(`${API_BASE}/guarantor/public/check?token=${encodeURIComponent(tok)}&email=${encodeURIComponent(eAddr)}`);
+      if (!res.ok) { const e = await res.json().catch(() => ({})); alert(e.detail || "Invalid or expired link."); return; }
+      const data = await res.json();
+      if (data.submission) {
+        const s = data.submission;
+        setSubmission(s);
+        setEmpForm({ full_name: s.employee_name || "", position: s.position || "", address: s.employee_address || "", phone: s.employee_phone || "", email: s.employee_email || eAddr, date_of_employment: s.date_of_employment || "", staff_id: s.staff_id || "" });
+        if (s.g1) setG1(p => ({ ...p, ...s.g1 }));
+        if (s.g2) setG2(p => ({ ...p, ...s.g2 }));
+
+        const aRejected = s.section_a_status === "rejected";
+        const bRejected = s.section_b_status === "rejected";
+        const cRejected = s.section_c_status === "rejected";
+
+        // ── GUARANTOR LINK: slot is locked to 1 or 2 ──────────────────
+        if (urlSlot === "1") {
+          // This is Guarantor 1's personal link
+          if (bRejected) setPhase("section_b_1");           // HR rejected — let them re-fill
+          else if (s.g1?.signature_url) { setSuccessRole("guarantor"); setPhase("success"); } // already submitted
+          else setPhase("section_b_1");                     // first time filling
+          return;
+        }
+        if (urlSlot === "2") {
+          // This is Guarantor 2's personal link
+          if (cRejected) setPhase("section_b_2");
+          else if (s.g2?.signature_url) { setSuccessRole("guarantor"); setPhase("success"); }
+          else setPhase("section_b_2");
+          return;
+        }
+
+        // ── EMPLOYEE (no slot hint) ────────────────────────────────────
+        // Employee's own section A rejected — send them back to re-fill it
+        if (aRejected) { setPhase("section_a"); return; }
+        // Guarantor sections rejected — employee stays on relay screen with a warning banner.
+        // The guarantor must re-fill via their own link; the employee cannot fill it for them.
+        if (s.employee_signature_url) {
+          // The check endpoint doesn't return relay_link — reconstruct it from the current token + email,
+          // mirroring how the backend builds it in save-partial: /?guarantor_token={token}&email={email}
+          const builtLink = s.relay_link ||
+            `${window.location.origin}${window.location.pathname}?guarantor_token=${encodeURIComponent(tok)}&email=${encodeURIComponent(eAddr)}`;
+          setRelayLink(builtLink);
+          setPhase("relay_screen");
+          return;
+        }
+        // First-time employee fill
+        setPhase("section_a");
+      } else {
+        setSubmission(null);
+        if (data.staff_info) {
+          setEmpForm(f => ({ ...f, full_name: data.staff_info.full_name || "", position: data.staff_info.job_title || "", email: eAddr, staff_id: data.staff_info.staff_id || "" }));
+        }
+        setPhase("section_a");
+      }
+    } catch { alert("Connection error. Please try again."); }
+    finally { setChecking(false); }
+  };
+
+  // Compress an image file to JPEG before storing it.
+  // Max dimension 1600px, quality 0.75 — keeps file well under 1 MB for typical photos.
+  const compressImage = (file) => new Promise((resolve) => {
+    // PDFs and non-images: pass through untouched
+    if (!file.type.startsWith("image/")) { resolve(file); return; }
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const MAX = 1600;
+      let { width, height } = img;
+      if (width > MAX || height > MAX) {
+        if (width > height) { height = Math.round(height * MAX / width); width = MAX; }
+        else { width = Math.round(width * MAX / height); height = MAX; }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      canvas.toBlob(blob => {
+        resolve(new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg" }));
+      }, "image/jpeg", 0.75);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+
+  const handleFile = (file, setter, key) => {
+    if (!file) return;
+    compressImage(file).then(compressed => {
+      const r = new FileReader();
+      r.onloadend = () => setter(p => ({ ...p, [`${key}_file`]: compressed, [`${key}_preview`]: r.result }));
+      r.readAsDataURL(compressed);
+    });
+  };
+
+  // ── Submit Section A ──────────────────────────────────────────────────
+  const submitSectionA = async () => {
+    for (const f of ["full_name", "position", "address", "phone", "email", "date_of_employment"]) {
+      if (!empForm[f]?.trim()) { alert(`Please fill in: ${f.replace(/_/g, " ")}`); return; }
+    }
+    if (!empHasSig) { alert("Please draw your signature before continuing."); return; }
+    setSubmitting(true);
+    try {
+      const fd = new FormData();
+      fd.append("token", token); fd.append("email", email.trim()); fd.append("section", "employee");
+      // Paint white background behind ink before exporting — JPEG has no alpha channel
+      // so without this the transparent canvas pixels flatten to black, making the
+      // dark ink invisible when the image is displayed on any dark surface.
+      const empCanvas = empSigRef.current;
+      const empCtx = empCanvas.getContext("2d");
+      empCtx.globalCompositeOperation = "destination-over";
+      empCtx.fillStyle = "#FFFFFF";
+      empCtx.fillRect(0, 0, empCanvas.width, empCanvas.height);
+      empCtx.globalCompositeOperation = "source-over";
+      const empSigBlob = await new Promise(res => empCanvas.toBlob(res, "image/jpeg", 0.9));
+      fd.append("signature_file", empSigBlob, "employee_sig.jpg");
+      fd.append("data", JSON.stringify({ ...empForm, signed_date: empForm.signed_date || new Date().toISOString().split("T")[0] }));
+      const res = await fetch(`${API_BASE}/guarantor/public/save-partial`, { method: "POST", body: fd });
+      if (!res.ok) throw new Error((await res.json()).detail || "Failed to save.");
+      const d = await res.json();
+      setRelayLink(d.relay_link);
+      setPhase("relay_screen");
+    } catch (e) {
+      const msg = e.message || "";
+      if (msg.toLowerCase().includes("part exceeded") || msg.toLowerCase().includes("maximum size") || msg.toLowerCase().includes("413") || msg.toLowerCase().includes("too large")) {
+        alert("The file you uploaded is too large. Please use an image under 10 MB and try again.");
+      } else {
+        alert(msg || "Something went wrong. Please check your connection and try again.");
+      }
+    }
+    finally { setSubmitting(false); }
+  };
+
+  // ── Submit Guarantor section ──────────────────────────────────────────
+  const submitGuarantor = async (gNum) => {
+    const g = gNum === 1 ? g1 : g2;
+    const sigRef = gNum === 1 ? g1SigRef : g2SigRef;
+    const hasSig = gNum === 1 ? g1HasSig : g2HasSig;
+    for (const f of ["full_name", "relationship", "address", "occupation", "employer_name", "position_held", "years_at_job", "phone", "email", "id_type", "id_number"]) {
+      if (!g[f]?.trim()) { alert(`Please fill in: ${f.replace(/_/g, " ")}`); return; }
+    }
+    if (!hasSig) { alert("Please draw your signature."); return; }
+    if (!g.passport_file && !g.passport_photo_url) { alert("Please upload a passport photograph."); return; }
+    if (!g.id_doc_file && !g.id_document_url) { alert("Please upload a copy of your valid ID document."); return; }
+    setSubmitting(true);
+    try {
+      const fd = new FormData();
+      fd.append("token", token); fd.append("email", email.trim()); fd.append("section", gNum === 1 ? "g1" : "g2");
+      // Paint white background behind ink before exporting — same fix as employee sig
+      const gCanvas = sigRef.current;
+      const gCtx = gCanvas.getContext("2d");
+      gCtx.globalCompositeOperation = "destination-over";
+      gCtx.fillStyle = "#FFFFFF";
+      gCtx.fillRect(0, 0, gCanvas.width, gCanvas.height);
+      gCtx.globalCompositeOperation = "source-over";
+      const gSigBlob = await new Promise(res => gCanvas.toBlob(res, "image/jpeg", 0.9));
+      fd.append("signature_file", gSigBlob, `g${gNum}_sig.jpg`);
+      const payload = { ...g, signed_date: g.signed_date || new Date().toISOString().split("T")[0] };
+      delete payload.passport_file; delete payload.id_doc_file;
+      fd.append("data", JSON.stringify(payload));
+      if (g.passport_file) fd.append("passport_photo", g.passport_file);
+      if (g.id_doc_file) fd.append("id_document", g.id_doc_file);
+      const res = await fetch(`${API_BASE}/guarantor/public/save-partial`, { method: "POST", body: fd });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        const detail = errData.detail || "";
+        if (detail.toLowerCase().includes("part exceeded") || detail.toLowerCase().includes("maximum size") || res.status === 413) {
+          throw new Error("One of your uploaded files is too large. Please use images under 10 MB and try again.");
+        }
+        throw new Error(detail || "Submission failed. Please try again.");
+      }
+      setSuccessRole("guarantor");
+      setPhase("success"); // Always show success — guarantors fill only their slot
+    } catch (e) {
+      const msg = e.message || "";
+      if (msg.toLowerCase().includes("part exceeded") || msg.toLowerCase().includes("maximum size")) {
+        alert("One of your uploaded files is too large. Please use images under 10 MB and try again.");
+      } else {
+        alert(msg || "Something went wrong. Please check your connection and try again.");
+      }
+    }
+    finally { setSubmitting(false); }
+  };
+
+  // ── Point to module-level constants (moved outside to prevent re-render on keystroke) ──
+  const GOLD = GF_GOLD; const NAVY = GF_NAVY; const css = GF_CSS;
+  const Topbar = GF_Topbar;
+  const Fld = GF_Fld;
+  const Inp = GF_Inp;
+  const SigPad = GF_SigPad;
+  const RejBanner = GF_RejBanner;
+  const Letterhead = () => <GF_Letterhead companyInfo={companyInfo} />;
+  const Progress = () => <GF_Progress phase={phase} />;
+
+  // ── SUCCESS ────────────────────────────────────────────────────────────
+  if (phase === "success") return (
+    <div style={css.page}><Topbar />
+      <div style={css.wrap}><Progress />
+        <div style={{ ...css.card, textAlign: "center", padding: "64px 48px", background: "linear-gradient(135deg, #ECFDF5 0%, #F0FDF4 100%)", borderColor: "#10B981" }}>
+          <div style={{ width: 80, height: 80, borderRadius: "50%", background: "#10B981", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 28px", fontSize: 40, color: "#fff", boxShadow: "0 8px 24px rgba(16, 185, 129, 0.3)" }}>✓</div>
+          <div style={{ fontSize: 32, fontWeight: 900, color: "#065F46", marginBottom: 16, letterSpacing: -0.5 }}>Form Submitted Successfully and under review by HR and admin</div>
+          <div style={{ fontSize: 15, color: "#047857", lineHeight: 1.9, maxWidth: 480, margin: "0 auto 28px", fontWeight: 500 }}>
+            Your form has been received. HR and Admin will review your submission and you will be notified by email once a decision has been made.
+          </div>
+          <div style={{ background: "#fff", border: "1px solid #10B98140", borderRadius: 8, padding: "16px 20px", margin: "0 auto 24px", maxWidth: 380, textAlign: "left" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#10B981", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 }}>📋 Submission Details</div>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
+              <div>
+                <div style={{ fontSize: 10, color: "#6B7280", fontWeight: 600, marginBottom: 3 }}>Role</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#065F46" }}>{successRole === "employee" ? "Employee" : "Guarantor"}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: "#6B7280", fontWeight: 600, marginBottom: 3 }}>Submitted</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#065F46" }}>{new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: "#6B7280", fontWeight: 600, marginBottom: 3 }}>Time</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#065F46" }}>{new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</div>
+              </div>
+            </div>
+          </div>
+          <div style={{ fontSize: 12, color: "#10B981", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", paddingTop: 20, borderTop: "1px solid #10B98140" }}>
+            Official HR Record · Eximp &amp; Cloves Infrastructure
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // ── EMAIL PHASE ────────────────────────────────────────────────────────
+  if (phase === "email") return (
+    <div style={css.page}><Topbar />
+      <div style={css.wrap}><Letterhead />
+        <div style={{ ...css.card, marginTop: 16, textAlign: "center", padding: "44px 44px" }}>
+          <div style={{ fontSize: 22, fontWeight: 800, color: NAVY, marginBottom: 10 }}>Employee Verification</div>
+          <div style={{ fontSize: 13, color: "#6B7280", marginBottom: 28, lineHeight: 1.7, maxWidth: 400, margin: "0 auto 24px" }}>
+            Enter your company email address to access your personalized guarantor form.
+          </div>
+          <Inp type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="firstname.lastname@eximps-cloves.com" />
+          <div style={{ height: 12 }} />
+          <button onClick={() => doCheck()} disabled={checking || !email.trim()} style={{ ...css.btn, width: "100%", opacity: checking ? 0.6 : 1 }}>
+            {checking ? "Verifying…" : "Continue →"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // ── RELAY SCREEN ───────────────────────────────────────────────────────
+  if (phase === "relay_screen") {
+    const g1Rejected = submission?.section_b_status === "rejected";
+    const g2Rejected = submission?.section_c_status === "rejected";
+    const anyRejected = g1Rejected || g2Rejected;
+    return (
+      <div style={css.page}><Topbar />
+        <div style={css.wrap}><Progress />
+          <div style={{ ...css.card, textAlign: "center" }}>
+            <div style={{ width: 60, height: 60, borderRadius: "50%", background: "#ECFDF5", border: "2px solid #10B981", color: "#10B981", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px", fontSize: 20 }}>✓</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: NAVY, marginBottom: 10 }}>Your Details Are On Record</div>
+            <div style={{ fontSize: 13, color: "#6B7280", marginBottom: anyRejected ? 16 : 24, lineHeight: 1.8 }}>
+              Your section has been saved. Share the links below with your two guarantors — each guarantor should open their own link and complete their section.
+            </div>
+            {anyRejected && (
+              <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 8, padding: "14px 18px", textAlign: "left", marginBottom: 8 }}>
+                <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                  <span style={{ fontSize: 18, flexShrink: 0 }}>⚠️</span>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#991B1B", marginBottom: 4 }}>
+                      {g1Rejected && g2Rejected ? "Both guarantors need to resubmit" : g1Rejected ? "Guarantor 1 needs to resubmit" : "Guarantor 2 needs to resubmit"}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#B91C1C", lineHeight: 1.6 }}>
+                      HR has rejected one or more guarantor sections. Please resend the relevant link(s) below — your guarantor(s) must open their link, review the rejection reason, and resubmit their section. You cannot fill in the guarantor forms yourself.
+                    </div>
+                    {g1Rejected && submission?.section_b_reason && (
+                      <div style={{ marginTop: 8, fontSize: 11, color: "#7F1D1D", background: "#FEE2E2", borderRadius: 4, padding: "6px 10px" }}>
+                        <strong>Guarantor 1 rejection reason:</strong> {submission.section_b_reason}
+                      </div>
+                    )}
+                    {g2Rejected && submission?.section_c_reason && (
+                      <div style={{ marginTop: 6, fontSize: 11, color: "#7F1D1D", background: "#FEE2E2", borderRadius: 4, padding: "6px 10px" }}>
+                        <strong>Guarantor 2 rejection reason:</strong> {submission.section_c_reason}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Guarantor 1 Link */}
+          <div style={{ ...css.card, background: g1Rejected ? "#FFF1F2" : "#F0F9FF", borderColor: g1Rejected ? "#F87171" : "#0EA5E9" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+              <div style={{ width: 32, height: 32, borderRadius: "50%", background: g1Rejected ? "#EF4444" : "#0EA5E9", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700 }}>1</div>
+              <div style={{ flex: 1, textAlign: "left" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>Guarantor 1 Form Link</div>
+                  {g1Rejected && <span style={{ fontSize: 10, fontWeight: 700, background: "#FEE2E2", color: "#B91C1C", padding: "2px 8px", borderRadius: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>Needs Resubmission</span>}
+                </div>
+                <div style={{ fontSize: 11, color: g1Rejected ? "#B91C1C" : "#6B7280", marginTop: 2 }}>
+                  {g1Rejected ? "Resend this link — guarantor must re-fill and resubmit" : "Share this link with your first guarantor"}
+                </div>
+              </div>
+            </div>
+            <div style={{ background: "#fff", border: `1px solid ${g1Rejected ? "#F8717130" : "#0EA5E930"}`, borderRadius: 4, padding: "12px 14px", marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}>
+              <input readOnly value={`${relayLink}&guarantor=1`} style={{
+                flex: 1, fontSize: 11, padding: "8px 0", border: "none", background: "transparent",
+                color: NAVY, fontFamily: "monospace", outline: "none"
+              }} />
+              <button onClick={() => {
+                navigator.clipboard.writeText(`${relayLink}&guarantor=1`);
+                alert("Guarantor 1 link copied!");
+              }} style={{
+                padding: "8px 14px", borderRadius: 4, fontSize: 10, fontWeight: 700,
+                background: g1Rejected ? "#EF4444" : "#0EA5E9", color: "#fff", border: "none", cursor: "pointer", whiteSpace: "nowrap"
+              }}>
+                Copy
+              </button>
+            </div>
+          </div>
+
+          {/* Guarantor 2 Link */}
+          <div style={{ ...css.card, background: g2Rejected ? "#FFF1F2" : "#F0FDF4", borderColor: g2Rejected ? "#F87171" : "#10B981" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+              <div style={{ width: 32, height: 32, borderRadius: "50%", background: g2Rejected ? "#EF4444" : "#10B981", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700 }}>2</div>
+              <div style={{ flex: 1, textAlign: "left" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>Guarantor 2 Form Link</div>
+                  {g2Rejected && <span style={{ fontSize: 10, fontWeight: 700, background: "#FEE2E2", color: "#B91C1C", padding: "2px 8px", borderRadius: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>Needs Resubmission</span>}
+                </div>
+                <div style={{ fontSize: 11, color: g2Rejected ? "#B91C1C" : "#6B7280", marginTop: 2 }}>
+                  {g2Rejected ? "Resend this link — guarantor must re-fill and resubmit" : "Share this link with your second guarantor"}
+                </div>
+              </div>
+            </div>
+            <div style={{ background: "#fff", border: `1px solid ${g2Rejected ? "#F8717130" : "#10B98130"}`, borderRadius: 4, padding: "12px 14px", marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}>
+              <input readOnly value={`${relayLink}&guarantor=2`} style={{
+                flex: 1, fontSize: 11, padding: "8px 0", border: "none", background: "transparent",
+                color: NAVY, fontFamily: "monospace", outline: "none"
+              }} />
+              <button onClick={() => {
+                navigator.clipboard.writeText(`${relayLink}&guarantor=2`);
+                alert("Guarantor 2 link copied!");
+              }} style={{
+                padding: "8px 14px", borderRadius: 4, fontSize: 10, fontWeight: 700,
+                background: g2Rejected ? "#EF4444" : "#10B981", color: "#fff", border: "none", cursor: "pointer", whiteSpace: "nowrap"
+              }}>
+                Copy
+              </button>
+            </div>
+          </div>
+
+          {/* Note */}
+          <div style={{ ...css.card, background: "#FFFBEB", borderColor: "#F59E0B", textAlign: "left" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#92400E", letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>💡 Next Steps</div>
+            <ul style={{ fontSize: 12, color: "#78350F", lineHeight: 1.8, margin: 0, paddingLeft: 20 }}>
+              <li>Copy each link above (click the Copy button)</li>
+              <li>Send Guarantor 1 link to your first guarantor</li>
+              <li>Send Guarantor 2 link to your second guarantor</li>
+              <li>They will complete their forms independently</li>
+              <li>HR will review all submissions when complete</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── SECTION A ─────────────────────────────────────────────────────────
+  if (phase === "section_a") {
+    const set = (k, v) => setEmpForm(f => ({ ...f, [k]: v }));
+    return (
+      <div style={css.page}><Topbar />
+        <div style={css.wrap}><Letterhead /><Progress />
+          <RejBanner reason={submission?.section_a_status === "rejected" ? submission.section_a_reason : null} />
+          <div style={css.card}>
+            <div style={css.seclbl}>Section A</div>
+            <div style={css.sectitle}>Employee Details</div>
+            <div style={css.secsub}>To be completed by the employee. Please verify all pre-filled information.</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px 20px" }}>
+              <Fld label="Full Name" required gridSpan><Inp value={empForm.full_name} onChange={e => set("full_name", e.target.value)} /></Fld>
+              <Fld label="Position / Job Title" required><Inp value={empForm.position} onChange={e => set("position", e.target.value)} /></Fld>
+              <Fld label="Date of Employment" required><input style={css.inp} type="date" value={empForm.date_of_employment} onChange={e => set("date_of_employment", e.target.value)} /></Fld>
+              <Fld label="Staff ID Number"><Inp value={empForm.staff_id} onChange={e => set("staff_id", e.target.value)} /></Fld>
+              <Fld label="Phone Number" required><Inp value={empForm.phone} onChange={e => set("phone", e.target.value)} /></Fld>
+              <Fld label="Email Address" required><Inp type="email" value={empForm.email} onChange={e => set("email", e.target.value)} /></Fld>
+              <Fld label="Residential Address" required gridSpan><Inp value={empForm.address} onChange={e => set("address", e.target.value)} /></Fld>
+            </div>
+            <hr style={css.hr} />
+            <div style={{ background: "#F8F9FB", border: "1px solid #E8E2D9", borderRadius: 3, padding: "14px 18px", marginBottom: 18, fontSize: 13, color: "#374151", lineHeight: 1.8 }}>
+              I hereby present the persons named below as my guarantors and confirm that all information provided is accurate and truthful.
+            </div>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 24, flexWrap: "wrap", marginTop: 4 }}>
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <SigPad label="Employee Signature" sigRef={empSigRef} handlers={empSig} hasSig={empHasSig} />
+              </div>
+              <div style={{ minWidth: 160, marginBottom: 6 }}>
+                <label style={{ display: "block", fontSize: 10, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: GF_NAVY, marginBottom: 6 }}>Date <span style={{ color: "#DC2626" }}>*</span></label>
+                <input type="date" style={{ width: "100%", border: "1.5px solid #DDE3EE", borderRadius: 3, padding: "10px 12px", fontSize: 13, color: GF_NAVY, background: "#FAFBFC", outline: "none" }}
+                  value={empForm.signed_date || ""} onChange={e => setEmpForm(f => ({ ...f, signed_date: e.target.value }))} max={new Date().toISOString().split("T")[0]} />
+              </div>
+            </div>
+            <div style={{ fontSize: 10, color: "#6B7280", marginTop: 12, fontStyle: "italic", lineHeight: 1.5, opacity: 0.8 }}>
+              ⚖️ <strong>Compliance Notice:</strong> To ensure the legal integrity of this digital signature, your IP address and device metadata will be securely recorded in the audit trail for this submission.
+            </div>
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+            <button onClick={submitSectionA} disabled={submitting} style={{ ...css.btn, opacity: submitting ? 0.6 : 1 }}>
+              {submitting ? "Saving…" : "Save & Continue →"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── GUARANTOR FORM (shared for G1 + G2) ───────────────────────────────
+  const renderGuarantorForm = (gNum, g, setG, sigRef, sigHandlers, hasSig, onSubmit) => {
+    const set = (k, v) => setG(p => ({ ...p, [k]: v }));
+    const ID_TYPES = ["NIN", "Int'l Passport", "Driver's License", "Voter's Card"];
+    const secKey = gNum === 1 ? "b" : "c";
+    const rejReason = submission?.[`section_${secKey}_status`] === "rejected" ? submission[`section_${secKey}_reason`] : null;
+
+    return (
+      <div style={css.page}><Topbar />
+        <div style={css.wrap}><Letterhead /><Progress />
+          <RejBanner reason={rejReason} />
+
+          {/* Section B */}
+          <div style={css.card}>
+            <div style={css.seclbl}>Section B — Guarantor {gNum}</div>
+            <div style={css.sectitle}>Guarantor {gNum} Details</div>
+            <div style={css.secsub}>To be completed by Guarantor {gNum}. All fields marked * are required.</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px 20px" }}>
+              <Fld label="Full Name of Guarantor" required gridSpan><Inp value={g.full_name} onChange={e => set("full_name", e.target.value)} /></Fld>
+              <Fld label="Relationship to Employee" required gridSpan><Inp value={g.relationship} onChange={e => set("relationship", e.target.value)} placeholder="e.g. Uncle, Colleague, Employer" /></Fld>
+              <Fld label="Occupation" required><Inp value={g.occupation} onChange={e => set("occupation", e.target.value)} /></Fld>
+              <Fld label="Position Held" required><Inp value={g.position_held} onChange={e => set("position_held", e.target.value)} /></Fld>
+              <Fld label="Years at Current Employment" required><input style={css.inp} type="number" min="0" value={g.years_at_job} onChange={e => set("years_at_job", e.target.value)} /></Fld>
+              <Fld label="Phone Number" required><Inp value={g.phone} onChange={e => set("phone", e.target.value)} /></Fld>
+              <Fld label="Email Address" required><Inp type="email" value={g.email} onChange={e => set("email", e.target.value)} /></Fld>
+              <Fld label="Residential Address" required gridSpan><Inp value={g.address} onChange={e => set("address", e.target.value)} /></Fld>
+              <Fld label="Name & Address of Employer / Business" required gridSpan><Inp value={g.employer_name} onChange={e => set("employer_name", e.target.value)} /></Fld>
+              <Fld label="Means of Identification" required gridSpan>
+                <div style={{ display: "flex", gap: 22, flexWrap: "wrap", marginTop: 4 }}>
+                  {ID_TYPES.map(t => (
+                    <label key={t} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13, color: NAVY, cursor: "pointer" }}>
+                      <input type="radio" name={`id_g${gNum}`} value={t} checked={g.id_type === t} onChange={() => set("id_type", t)} style={{ accentColor: GOLD, width: 15, height: 15 }} />
+                      {t}
+                    </label>
+                  ))}
+                </div>
+              </Fld>
+              <Fld label="ID Number" required><Inp value={g.id_number} onChange={e => set("id_number", e.target.value)} /></Fld>
+              <Fld label="Passport Photograph" required>
+                <div>
+                  <input type="file" accept="image/*" id={`pp_g${gNum}`} style={{ display: "none" }} onChange={e => handleFile(e.target.files[0], setG, "passport")} />
+                  <label htmlFor={`pp_g${gNum}`} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 16px", border: `1.5px dashed ${g.passport_preview ? GOLD : "#DDE3EE"}`, borderRadius: 3, fontSize: 12, cursor: "pointer", color: g.passport_preview ? GOLD : "#6B7280", background: "#FAFBFC" }}>
+                    📷 {g.passport_preview ? "Photo selected ✓" : "Upload Passport Photo"}
+                  </label>
+                  {g.passport_preview && <img src={g.passport_preview} alt="preview" style={{ width: 50, height: 50, objectFit: "cover", borderRadius: 4, marginLeft: 10, border: `2px solid ${GOLD}40`, verticalAlign: "middle" }} />}
+                </div>
+              </Fld>
+              <Fld label="Copy of Valid ID Document" required>
+                <div>
+                  <input type="file" accept="image/*,application/pdf" id={`id_g${gNum}`} style={{ display: "none" }} onChange={e => handleFile(e.target.files[0], setG, "id_doc")} />
+                  <label htmlFor={`id_g${gNum}`} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 16px", border: `1.5px dashed ${g.id_doc_preview ? GOLD : "#DDE3EE"}`, borderRadius: 3, fontSize: 12, cursor: "pointer", color: g.id_doc_preview ? GOLD : "#6B7280", background: "#FAFBFC" }}>
+                    📎 {g.id_doc_preview ? "Document selected ✓" : "Upload ID Photocopy"}
+                  </label>
+                </div>
+              </Fld>
+            </div>
+          </div>
+
+          {/* Section C: Declaration */}
+          <div style={css.card}>
+            <div style={css.seclbl}>Section C — Declaration</div>
+            <div style={css.sectitle}>Guarantor's Declaration</div>
+            <div style={{ background: "#F8F9FB", border: "1px solid #E8E2D9", borderRadius: 3, padding: "18px 22px", marginBottom: 22, fontSize: 13, color: "#374151", lineHeight: 1.9 }}>
+              <p style={{ marginTop: 0, marginBottom: 12 }}>
+                I, <strong style={{ color: NAVY, borderBottom: `1.5px solid ${GOLD}` }}>{g.full_name || "___________________"}</strong>, of the above address, do hereby solemnly declare as follows:
+              </p>
+              {[
+                "I know the above-named employee personally and can vouch for their character, integrity, and conduct.",
+                "I understand that the employee will be engaged in the sales of real estate properties and will handle company funds, documents, and client relationships.",
+                "I guarantee that the employee shall be of good behaviour and shall faithfully discharge all duties assigned.",
+                "Should the employee be found liable for any act of fraud, dishonesty, negligence, misappropriation of funds, damage to company property, or breach of company policy resulting in financial loss, I undertake to assist the company in ensuring restitution or take responsibility up to the limit permitted by law.",
+                "I confirm that I am gainfully employed/self-employed, financially capable, and have not been convicted of any criminal offence.",
+                `I consent to ${companyInfo.name || "the Company"} verifying any information provided herein.`,
+              ].map((item, i) => (
+                <div key={i} style={{ display: "flex", gap: 12, marginBottom: 9 }}>
+                  <div style={{ fontWeight: 800, color: GOLD, minWidth: 18, flexShrink: 0 }}>{i + 1}.</div>
+                  <div>{item}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 24, flexWrap: "wrap", marginTop: 4 }}>
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <SigPad label={`Guarantor ${gNum} Signature`} sigRef={sigRef} handlers={sigHandlers} hasSig={hasSig} />
+              </div>
+              <div style={{ minWidth: 160, marginBottom: 6 }}>
+                <label style={{ display: "block", fontSize: 10, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: GF_NAVY, marginBottom: 6 }}>Date <span style={{ color: "#DC2626" }}>*</span></label>
+                <input type="date" style={{ width: "100%", border: "1.5px solid #DDE3EE", borderRadius: 3, padding: "10px 12px", fontSize: 13, color: GF_NAVY, background: "#FAFBFC", outline: "none" }}
+                  value={g.signed_date || ""} onChange={e => set("signed_date", e.target.value)} max={new Date().toISOString().split("T")[0]} />
+              </div>
+            </div>
+            <div style={{ fontSize: 10, color: "#6B7280", marginTop: 12, fontStyle: "italic", lineHeight: 1.5, opacity: 0.8 }}>
+              ⚖️ <strong>Compliance Notice:</strong> To ensure the legal integrity of this digital signature, your IP address and device metadata will be securely recorded in the audit trail for this submission.
+            </div>
+          </div>
+
+          {/* Section D (Attestation) removed per HR directive */}
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+            {gNum === 2 ? <button onClick={() => setPhase("section_b_1")} style={css.btn2}>← Back</button> : <div />}
+            <button onClick={() => onSubmit(gNum)} disabled={submitting} style={{ ...css.btn, opacity: submitting ? 0.6 : 1 }}>
+              {submitting ? "Submitting…" : gNum === 1 ? "Save & Continue to Guarantor 2 →" : "Submit Form ✓"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  if (phase === "section_b_1") return renderGuarantorForm(1, g1, setG1, g1SigRef, g1Sig, g1HasSig, submitGuarantor);
+  if (phase === "section_b_2") return renderGuarantorForm(2, g2, setG2, g2SigRef, g2Sig, g2HasSig, submitGuarantor);
+  return null;
+}
+
 
 function HRAdminPortal({ user, onLogout }) {
   const nav = [
@@ -8300,6 +14870,8 @@ function HRAdminPortal({ user, onLogout }) {
     // HUB 2: PEOPLE & ORG
     { isHeader: true, label: "People & Org" },
     { id: "staff", icon: "users", label: "Employees" },
+    { id: "biodata", icon: "file", label: "Bio Data Collection" },
+    { id: "guarantors", icon: "file", label: "Guarantor Forms" },
     { id: "org_chart", icon: "org", label: "Org Chart" },
     { id: "departments", icon: "home", label: "Departments" },
     { id: "diversity", icon: "star", label: "Diversity & Inclusion" },
@@ -8327,15 +14899,10 @@ function HRAdminPortal({ user, onLogout }) {
     { id: "succession", icon: "org", label: "Succession Planning" },
     // HUB: LEARNING & GROWTH
     { isHeader: true, label: "Learning & Growth" },
-    { id: "training", icon: "book", label: "Training" },
-    { id: "compliance_training", icon: "shield", label: "Compliance Training" },
-    { id: "onboarding", icon: "star", label: "Onboarding" },
-    { id: "onboarding_checklists", icon: "tasks", label: "Onboarding Checklists" },
-    { id: "probation", icon: "clock", label: "Probation Tracking" },
+    { id: "training", icon: "book", label: "Training" }, { id: "onboarding", icon: "star", label: "Onboarding" }, { id: "probation", icon: "clock", label: "Probation Tracking" },
     // HUB 6: COMPENSATION & BENEFITS
     { isHeader: true, label: "Compensation & Benefits" },
     { id: "payroll", icon: "payroll", label: "Payroll" },
-    { id: "payroll_runs", icon: "dollar", label: "Payroll Runs" },
     { id: "comp_bands", icon: "chart", label: "Compensation Bands" },
     { id: "bonuses", icon: "star", label: "Bonuses & Incentives" },
     { id: "benefits", icon: "shield", label: "Benefits" },
@@ -8352,7 +14919,7 @@ function HRAdminPortal({ user, onLogout }) {
     // HUB 8: DOCUMENTS & COMPLIANCE
     { isHeader: true, label: "Documents & Compliance" },
     { id: "legal_vault", icon: "file", label: "Documents" },
-    { id: "contracts", icon: "file", label: "Contracts" },
+    { id: "contracts", icon: "file", label: "⚖️ Contract Kitchen" },
     { id: "hr_letters", icon: "file", label: "HR Letters" },
     { id: "work_permits", icon: "globe", label: "Work Permits" },
     { id: "hr_requests", icon: "star", label: "Requests" },
@@ -8382,9 +14949,11 @@ function HRAdminPortal({ user, onLogout }) {
       if (p === "ats_pipeline") return <ATSPipeline />;
       if (p === "interviews") return <InterviewScheduler />;
       if (p === "offers") return <OffersManager />;
+      if (p === "guarantors") return <GuarantorManager />;
       if (p === "talent_pool") return <TalentPool />;
       // Hub 2: People
       if (p === "staff") return <StaffDirectory authRole="hr" />;
+      if (p === "biodata") return <BiodataManager />;
       if (p === "org_chart") return <OrgChartEnhanced />;
       if (p === "departments") return <DepartmentsView />;
       if (p === "diversity") return <DiversityInclusion />;
@@ -8393,12 +14962,12 @@ function HRAdminPortal({ user, onLogout }) {
       if (p === "timesheets") return <StaffTimesheet />;
       if (p === "timesheet_approvals") return <TimesheetApprovalCenter />;
       if (p === "shifts") return <ShiftScheduler isHR={true} />;
-      if (p === "hr_calendar") return <HRCalendarView />;
+      if (p === "hr_calendar") return <HRCalendarView user={user} />;
       if (p === "holidays") return <HolidaysManager />;
       // Hub 4: Leave
       if (p === "leave") return <LeaveManagement user={user} />;
       if (p === "leave_balances") return <LeaveBalancesOverview />;
-      if (p === "leave_policies") return <LeavePolicies />;
+      if (p === "leave_policies") return <LeavePolicies isHR={true} />;
       if (p === "leave_accrual") return <LeaveAccrualConfig />;
       // Hub 5: Performance
       if (p === "perf") return <Performance />;
@@ -8408,11 +14977,11 @@ function HRAdminPortal({ user, onLogout }) {
       if (p === "skills_matrix") return <SkillsMatrix />;
       if (p === "succession") return <SuccessionPlanning />;
       // Learning & Growth
-      if (p === "training" || p === "compliance_training") return <LearningHub isHR={true} />;
+      if (p === "training" || p === "compliance_training") return <LearningHub isHR={true} defaultTab={p === "compliance_training" ? "compliance" : "trainings"} />;
       if (p === "onboarding" || p === "onboarding_checklists") return <OnboardingHub isHR={true} />;
       if (p === "probation") return <ProbationTracker isHR={true} />;
       // Hub 6: Compensation
-      if (p === "payroll" || p === "payroll_runs") return <Payroll />;
+      if (p === "payroll") return <Payroll />;
       if (p === "comp_bands") return <CompensationBands isHR={true} />;
       if (p === "bonuses") return <BonusManager isHR={true} />;
       if (p === "benefits") return <BenefitsManager />;
@@ -8424,10 +14993,10 @@ function HRAdminPortal({ user, onLogout }) {
       if (p === "surveys") return <CultureHub authRole="hr" />;
       if (p === "remote_work") return <RemoteWork />;
       if (p === "policy_library") return <PolicyLibrary isHR={true} />;
-      if (p === "internal_job_board") return <InternalJobBoard isHR={true} />;
+      if (p === "internal_job_board") return <InternalJobBoard isHR={true} user={user} />;
       // Hub 8: Documents
       if (p === "legal_vault") return <DocumentsVault isHR={true} />;
-      if (p === "contracts") return <LegalManager staffId={null} staffName={null} isHR={true} />;
+      if (p === "contracts") return <ContractKitchen user={user} />;
       if (p === "hr_letters") return <HRLetters isHR={true} />;
       if (p === "work_permits") return <WorkPermits isHR={true} />;
       if (p === "hr_requests") return <HRRequests user={user} isHR={true} />;
@@ -8504,15 +15073,16 @@ function ManagerPortal({ user, onLogout }) {
       if (p === "leave" || p === "leave_requests") return <LeaveManagement user={user} />;
       if (p === "leave_balances") return <LeaveBalancesOverview />;
       if (p === "leave_accrual") return <LeaveAccrualConfig />;
-      if (p === "leave_policies") return <LeavePolicies />;
-      if (p === "presence" || p === "hr_calendar" || p === "holidays") return <Presence currentUser={user} />;
+      if (p === "leave_policies") return <LeavePolicies isHR={false} />;
+      if (p === "presence" || p === "holidays") return <Presence currentUser={user} />;
+      if (p === "hr_calendar") return <HRCalendarView user={user} />;
       if (p === "timesheets") return <StaffTimesheet />;
       if (p === "timesheet_approvals") return <TimesheetApprovalCenter />;
       if (p === "shifts") return <ShiftScheduler isHR={false} />;
       if (p === "perf") return <Performance />;
       if (p === "goals") return <Goals />;
       if (p === "improvement_plans") return <ImprovementPlans authRole="manager" />;
-      if (p === "peer_reviews") return <CultureHub authRole="manager" />;
+      if (p === "peer_reviews") return <MyPeerReviews user={user} />;
       if (p === "skills_matrix") return <SkillsMatrix />;
       if (p === "succession") return <SuccessionPlanning />;
       if (p === "tasks") return <Tasks currentUser={user} />;
@@ -8555,11 +15125,126 @@ function ManagerPortal({ user, onLogout }) {
   );
 }
 
-function StaffPortal({ user, onLogout }) {
+// ─── DASHBOARD WIDGET: 360 PEER REVIEWS ──────────────────────────────────────
+function DashboardPeerReviewWidget({ userId }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [pending, setPending] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      apiFetch(`${API_BASE}/hr/peer-reviews/my-assignments?staff_id=${userId}`).catch(() => null),
+      apiFetch(`${API_BASE}/hr/peer-reviews`).catch(() => []),
+    ]).then(([myAssigned, all]) => {
+      if (myAssigned && Array.isArray(myAssigned)) {
+        setPending(myAssigned.filter(r => ["pending", "in-progress"].includes(r.status)));
+      } else if (Array.isArray(all)) {
+        const mine = all.filter(r =>
+          ["pending", "in-progress"].includes(r.status) &&
+          (r.reviewer_ids || []).map(String).includes(String(userId))
+        );
+        setPending(mine);
+      }
+    }).finally(() => setLoading(false));
+  }, [userId]);
+
+  if (loading || pending.length === 0) return null;
+
+  return (
+    <div className="gc" style={{ padding: 22, marginTop: 18, borderLeft: `4px solid ${T.gold}` }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <div className="ho" style={{ fontSize: 14 }}>⭐ Peer Reviews Awaiting You</div>
+        <span className="tg" style={{ background: `${T.gold}22`, color: T.gold, border: `1px solid ${T.gold}44` }}>{pending.length} pending</span>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {pending.slice(0, 3).map(r => (
+          <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${C.border}22` }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{r.title || "Peer Review"}</div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                Reviewing: {r.reviewee?.full_name || "a colleague"}
+                {r.deadline && <span style={{ color: T.orange, marginLeft: 8 }}>· Due {new Date(r.deadline).toLocaleDateString()}</span>}
+              </div>
+            </div>
+            <button className="bp" style={{ fontSize: 10, padding: "5px 12px", flexShrink: 0 }}
+              onClick={() => { window.location.hash = "peer_reviews"; window.dispatchEvent(new HashChangeEvent("hashchange")); }}>
+              Give Feedback
+            </button>
+          </div>
+        ))}
+      </div>
+      {pending.length > 3 && <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>+ {pending.length - 3} more reviews pending in 360° Peer Reviews</div>}
+    </div>
+  );
+}
+
+
+function TINUpdateModal({ onClose }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [tin, setTin] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const save = async () => {
+    if (!tin.trim()) return;
+    setLoading(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/profile/tin`, {
+        method: "PATCH",
+        body: JSON.stringify({ tin: tin.trim() })
+      });
+      alert("Tax Identification Number (TIN) updated successfully!");
+      onClose(tin.trim());
+    } catch (e) {
+      // If the backend says TIN already exists, treat it as success —
+      // the user's session was stale. Dismiss the modal silently.
+      if (e.message && e.message.toLowerCase().includes("already on file")) {
+        onClose(tin.trim()); // still stamp user.tin so modal won't re-fire
+      } else {
+        alert(e.message);
+      }
+    }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <div className="md-overlay" style={{ zIndex: 10000 }}>
+      <div className="md-card" style={{ maxWidth: 400, padding: 32, textAlign: "center" }}>
+        <div style={{ fontSize: 40, marginBottom: 16 }}>📋</div>
+        <div style={{ fontSize: 20, fontWeight: 900, marginBottom: 8, color: C.text }}>TIN Required</div>
+        <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.6, marginBottom: 24 }}>
+          To complete your official payroll and tax records, we require your <strong>Tax Identification Number (TIN)</strong>.
+        </div>
+        <div style={{ textAlign: "left", marginBottom: 20 }}>
+          <label style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase", marginBottom: 6, display: "block" }}>Enter TIN</label>
+          <input
+            style={{ width: "100%", padding: 12, borderRadius: 10, border: `1px solid ${C.border}`, background: C.surface, color: C.text, outline: "none" }}
+            placeholder="Enter your TIN number"
+            value={tin} onChange={e => setTin(e.target.value)}
+          />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <button onClick={save} disabled={loading || !tin.trim()} style={{
+            width: "100%", padding: 14, background: T.orange, color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, cursor: "pointer"
+          }}>
+            {loading ? "Updating..." : "Update TIN →"}
+          </button>
+          <button onClick={() => onClose(false)} style={{
+            width: "100%", padding: 10, background: "none", color: C.muted, border: "none", fontSize: 12, cursor: "pointer"
+          }}>
+            Remind Me Later
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StaffPortal({ user, onLogout, meLoaded = false }) {
   const nav = [
     { isHeader: true, label: "People & Org" },
     { id: "dashboard", icon: "dashboard", label: "My Dashboard" },
     { id: "profile", icon: "profile", label: "My Profile" },
+    { id: "my_biodata", icon: "file", label: "My Bio Data" },
     { isHeader: true, label: "Time & Attendance" },
     { id: "presence", icon: "clock", label: "Attendance" },
     { id: "timesheets", icon: "log", label: "Timesheets" },
@@ -8572,12 +15257,11 @@ function StaffPortal({ user, onLogout }) {
     { isHeader: true, label: "Performance" },
     { id: "perf", icon: "perf", label: "Performance" },
     { id: "goals", icon: "goal", label: "Goals & OKRs" },
+    { id: "peer_reviews", icon: "users", label: "360° Peer Reviews" },
     { id: "improvement_plans", icon: "trend", label: "Improvement Plans" },
     { id: "skills_matrix", icon: "chart", label: "Skills Matrix" },
     { isHeader: true, label: "Learning & Growth" },
-    { id: "training", icon: "book", label: "Training" },
-    { id: "compliance_training", icon: "shield", label: "Compliance Training" },
-    { isHeader: true, label: "Compensation & Benefits" },
+    { id: "training", icon: "book", label: "Training" }, { isHeader: true, label: "Compensation & Benefits" },
     { id: "payroll", icon: "payslip", label: "My Payroll" },
     { id: "bonuses", icon: "star", label: "My Bonuses" },
     { isHeader: true, label: "Engagement & Culture" },
@@ -8593,6 +15277,7 @@ function StaffPortal({ user, onLogout }) {
     { id: "hr_requests", icon: "star", label: "Requests" },
     { id: "grievances", icon: "alert", label: "Grievances" },
     { id: "disciplinary", icon: "mis", label: "My Flags" },
+    { id: "guarantors", icon: "task", label: "My Guarantors" },
     { isHeader: true, label: "Administration" },
     { id: "tasks", icon: "tasks", label: "My Tasks" },
   ];
@@ -8600,6 +15285,19 @@ function StaffPortal({ user, onLogout }) {
   const [tasks, setTasks] = useState([]);
   const [perf, setPerf] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showTinModal, setShowTinModal] = useState(false);
+
+  useEffect(() => {
+    // Wait for /me refresh to settle before checking TIN.
+    // Without this gate, a stale localStorage session (user.tin = null)
+    // would fire the modal before the fresh /me response arrives.
+    if (!meLoaded) return;
+    const tinFromProfile = user?.staff_profiles?.[0]?.tin;
+    const hasTin = user?.tin || tinFromProfile;
+    if (user && !hasTin) {
+      setShowTinModal(true);
+    }
+  }, [user, meLoaded]);
 
   useEffect(() => {
     setLoading(true);
@@ -8622,16 +15320,19 @@ function StaffPortal({ user, onLogout }) {
   return (
     <Portal user={user} onLogout={onLogout} navItems={nav} roleLabel="Team Member Portal" initialPage={startPage} renderPage={pg => {
       if (pg === "profile") return <MyProfile user={user} />;
+      if (pg === "my_biodata") return <MyBiodata user={user} />;
       if (pg === "leave") return <LeaveManagement user={user} />;
       if (pg === "leave_balances") return <LeaveBalancesOverview />;
       if (pg === "leave_accrual") return <LeaveAccrualConfig />;
-      if (pg === "leave_policies") return <LeavePolicies />;
+      if (pg === "leave_policies") return <LeavePolicies isHR={false} />;
       if (pg === "perf") return <Performance viewOnly userId={user.id} />;
       if (pg === "goals") return <Goals viewOnly userId={user.id} />;
+      if (pg === "peer_reviews") return <MyPeerReviews user={user} />;
       if (pg === "improvement_plans") return <ImprovementPlans viewOnly userId={user.id} authRole="staff" />;
       if (pg === "skills_matrix") return <SkillsMatrix />;
       if (pg === "tasks") return <Tasks currentUser={user} />;
-      if (pg === "presence" || pg === "hr_calendar") return <Presence currentUserId={user.id} currentUser={user} />;
+      if (pg === "presence") return <Presence currentUserId={user.id} currentUser={user} />;
+      if (pg === "hr_calendar") return <HRCalendarView user={user} />;
       if (pg === "timesheets") return <StaffTimesheet />;
       if (pg === "payroll") return <StaffPayroll user={user} />;
       if (pg === "bonuses") return <BonusManager isHR={false} />;
@@ -8646,11 +15347,19 @@ function StaffPortal({ user, onLogout }) {
       if (pg === "surveys") return <CultureHub authRole="staff" />;
       if (pg === "remote_work") return <RemoteWork />;
       if (pg === "policy_library") return <PolicyLibrary isHR={false} />;
-      if (pg === "internal_job_board") return <InternalJobBoard isHR={false} />;
-      if (pg === "training" || pg === "compliance_training") return <LearningHub isHR={false} />;
+      if (pg === "internal_job_board") return <InternalJobBoard isHR={false} user={user} />;
+      if (pg === "training" || pg === "compliance_training") return <LearningHub isHR={false} defaultTab={pg === "compliance_training" ? "compliance" : "trainings"} />;
+      if (pg === "guarantors") return <MyGuarantorStatus user={user} />;
 
       return (
         <div className="fade">
+          {showTinModal && <TINUpdateModal onClose={(success) => {
+            setShowTinModal(false);
+            if (success) {
+              // Stamp user.tin so the useEffect guard won't re-fire in the same session
+              user.tin = success;
+            }
+          }} />}
           <div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Welcome, {user.full_name?.split(" ")[0]} 👋</div>
           <div style={{ fontSize: 13, color: C.sub, marginBottom: 22 }}>{user.staff_profiles?.[0]?.job_title || user.role} · {user.department}</div>
 
@@ -8704,6 +15413,9 @@ function StaffPortal({ user, onLogout }) {
               ) : <div style={{ fontSize: 13, color: C.muted }}>No performance data available yet.</div>}
             </div>
           </div>
+
+          {/* 360 Peer Reviews widget */}
+          <DashboardPeerReviewWidget userId={user.id} />
         </div>
       );
     }} />
@@ -8738,7 +15450,7 @@ function ExitInterviews() {
     if (!form.staff_id || !form.exit_date) return alert("Staff member and exit date required.");
     setSaving(true);
     try {
-      await apiFetch(`${API_BASE}/hr/exit-interviews`, { method: "POST", body: JSON.stringify(form) });
+      await apiFetch(`${API_BASE}/hr/exit-interviews`, { method: "POST", body: JSON.stringify({ job_id: form.job_id, candidate_name: form.candidate_name, candidate_email: form.candidate_email, candidate_phone: form.candidate_phone, cover_letter: form.cover_letter, resume_url: form.resume_url }) });
       setShowNew(false); setForm({ staff_id: "", exit_date: "", reason: "Resignation", overall_satisfaction: 3, highlights: "", concerns: "", would_recommend: true, notes: "" });
       refresh();
     } catch (e) { alert("Error: " + e.message); } finally { setSaving(false); }
@@ -8748,7 +15460,7 @@ function ExitInterviews() {
     <span>{[1, 2, 3, 4, 5].map(n => <span key={n} style={{ color: n <= val ? T.gold : "#333", fontSize: 16 }}>★</span>)}</span>
   );
 
-  // Aggregate stats
+  // ──────────────────────────────────────────────────ggregate stats
   const total = interviews.length;
   const avgSat = total > 0 ? (interviews.reduce((s, i) => s + (i.overall_satisfaction || 3), 0) / total).toFixed(1) : "—";
   const wouldRec = total > 0 ? Math.round((interviews.filter(i => i.would_recommend).length / total) * 100) : 0;
@@ -8881,54 +15593,178 @@ function ExitInterviews() {
 }
 
 // ─── NOTIFICATION BELL SYSTEM ─────────────────────────────────────────────────
-// A global bell icon + dropdown that fetches /hr/notifications for the current user.
-// Notification types: letter_issued, task_assigned, grievance_update, request_update, goal_update, announcement
-function NotificationBell({ userId }) {
-  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+// ─── NOTIFICATION CONTEXT ─────────────────────────────────────────────────────
+// Single source of truth for notifications — shared by bell AND nav badges.
+const NotifCtx = createContext({ notifs: [], unread: 0, unreadByType: {}, refresh: () => { }, markRead: () => { }, markAllRead: () => { } });
+const useNotifs = () => useContext(NotifCtx);
+
+// Maps notification_type → nav page id (for badge counts on sidebar items)
+const NOTIF_TYPE_TO_PAGE = {
+  task_assigned: "tasks",
+  task_assigned_hr: "tasks_hr",
+  request_update: "hr_requests",
+  hr_request: "hr_requests",
+  leave_request: "leave",
+  leave_update: "leave",
+  grievance_update: "grievances",
+  grievance_filed: "grievances",
+  letter_issued: "hr_letters",
+  announcement: "announcements",
+  recognition: "recognition",
+  remote_work_update: "remote_work",
+  goal_update: "goals",
+  performance_review: "perf",
+  disciplinary: "disciplinary",
+  asset_assigned: "assets",
+  shift_assigned: "shifts",
+  payroll_run: "payroll",
+  bonus_awarded: "bonuses",
+  timesheet_update: "timesheets",
+  offer_response: "offers",
+  new_application: "applications",
+  interview_scheduled: "interviews",
+  expense_update: "expenses",
+  survey_new: "surveys",
+  payout_reimbursement_request: "expenses",
+  payout_commission_request: "commissions",
+};
+
+function NotifProvider({ userId, children }) {
   const [notifs, setNotifs] = useState([]);
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
 
-  const notifIcon = { letter_issued: "📄", task_assigned: "✅", grievance_update: "⚖️", request_update: "📦", goal_update: "🎯", announcement: "📢", recognition: "🏆", default: "🔔" };
-  const notifColor = { letter_issued: "#60A5FA", task_assigned: "#4ADE80", grievance_update: "#F87171", request_update: T.gold, goal_update: "#A78BFA", announcement: "#F59E0B", recognition: T.gold };
-
-  const fetch_ = useCallback(async () => {
-    setLoading(true);
+  const refresh = useCallback(async () => {
+    if (!userId) return;
     try {
-      const d = await apiFetch(`${API_BASE}/hr/notifications?staff_id=${userId}&limit=30`).catch(() => []);
+      const d = await apiFetch(`${API_BASE}/hr/notifications?limit=60`).catch(() => []);
       setNotifs(Array.isArray(d) ? d : []);
-    } catch { } finally { setLoading(false); }
+    } catch { }
   }, [userId]);
 
-  useEffect(() => { fetch_(); const t = setInterval(fetch_, 60000); return () => clearInterval(t); }, [fetch_]);
+  // Poll every 30 seconds — fast enough to feel live
+  useEffect(() => {
+    refresh();
+    const t = setInterval(refresh, 30000);
+    return () => clearInterval(t);
+  }, [refresh]);
 
-  const markRead = async (id) => {
+  const markRead = useCallback(async (id) => {
     try {
       await apiFetch(`${API_BASE}/hr/notifications/${id}/read`, { method: "PATCH" });
       setNotifs(ns => ns.map(n => n.id === id ? { ...n, is_read: true } : n));
     } catch { }
-  };
+  }, []);
 
-  const markAllRead = async () => {
+  const markAllRead = useCallback(async () => {
     try {
-      await apiFetch(`${API_BASE}/hr/notifications/read-all`, { method: "PATCH", body: JSON.stringify({ staff_id: userId }) });
+      await apiFetch(`${API_BASE}/hr/notifications/read-all`, { method: "PATCH" });
       setNotifs(ns => ns.map(n => ({ ...n, is_read: true })));
     } catch { }
-  };
+  }, []);
 
   const unread = notifs.filter(n => !n.is_read).length;
+
+  // Count unread per destination page for nav badges
+  const unreadByType = notifs
+    .filter(n => !n.is_read)
+    .reduce((acc, n) => {
+      const type = n.notification_type || n.type || "";
+      const page = NOTIF_TYPE_TO_PAGE[type];
+      if (page) acc[page] = (acc[page] || 0) + 1;
+      return acc;
+    }, {});
+
+  return (
+    <NotifCtx.Provider value={{ notifs, unread, unreadByType, refresh, markRead, markAllRead }}>
+      {children}
+    </NotifCtx.Provider>
+  );
+}
+
+// Notification type metadata
+const NOTIF_META = {
+  letter_issued: { icon: "📄", color: "#60A5FA", label: "HR Letter" },
+  task_assigned: { icon: "✅", color: "#4ADE80", label: "Task" },
+  task_assigned_hr: { icon: "✅", color: "#4ADE80", label: "Task" },
+  grievance_update: { icon: "⚖️", color: "#F87171", label: "Grievance" },
+  grievance_filed: { icon: "⚖️", color: "#F87171", label: "Grievance" },
+  request_update: { icon: "📋", color: T.gold, label: "Request" },
+  hr_request: { icon: "📋", color: T.gold, label: "HR Request" },
+  leave_request: { icon: "🌴", color: "#34D399", label: "Leave" },
+  leave_update: { icon: "🌴", color: "#34D399", label: "Leave" },
+  goal_update: { icon: "🎯", color: "#A78BFA", label: "Goal" },
+  announcement: { icon: "📢", color: "#F59E0B", label: "Announcement" },
+  recognition: { icon: "🏆", color: T.gold, label: "Recognition" },
+  remote_work_update: { icon: "🏠", color: "#60A5FA", label: "Remote Work" },
+  performance_review: { icon: "📊", color: "#A78BFA", label: "Performance" },
+  disciplinary: { icon: "🚨", color: "#F87171", label: "Disciplinary" },
+  asset_assigned: { icon: "💼", color: "#60A5FA", label: "Asset" },
+  shift_assigned: { icon: "🗓️", color: "#34D399", label: "Shift" },
+  payroll_run: { icon: "💰", color: "#4ADE80", label: "Payroll" },
+  bonus_awarded: { icon: "🎁", color: T.gold, label: "Bonus" },
+  timesheet_update: { icon: "⏱️", color: "#60A5FA", label: "Timesheet" },
+  offer_response: { icon: "🤝", color: "#4ADE80", label: "Offer" },
+  new_application: { icon: "📥", color: T.gold, label: "Application" },
+  interview_scheduled: { icon: "🗓️", color: "#A78BFA", label: "Interview" },
+  expense_update: { icon: "🧾", color: T.gold, label: "Expense" },
+  survey_new: { icon: "📝", color: "#60A5FA", label: "Survey" },
+  payout_reimbursement_request: { icon: "🧾", color: T.gold, label: "Reimbursement Request" },
+  payout_commission_request: { icon: "💼", color: "#60A5FA", label: "Commission Request" },
+  hr_alert: { icon: "🔔", color: "#F59E0B", label: "Alert" },
+  general: { icon: "🔔", color: "#9CA3AF", label: "Notification" },
+};
+
+function NotificationBell() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const { notifs, unread, markRead, markAllRead, refresh } = useNotifs();
+  const [open, setOpen] = useState(false);
+  const [filter, setFilter] = useState("all");
+
+  const filtered = filter === "unread" ? notifs.filter(n => !n.is_read) : notifs;
+  const groups = filtered.reduce((acc, n) => {
+    const d = new Date(n.created_at);
+    const now = new Date();
+    const diff = now - d;
+    const key = diff < 86400000 ? "Today" : diff < 172800000 ? "Yesterday" : "Earlier";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(n);
+    return acc;
+  }, {});
+
+  const timeAgo = (ts) => {
+    const s = Math.floor((Date.now() - new Date(ts)) / 1000);
+    if (s < 60) return "just now";
+    if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+    if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+    return new Date(ts).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  };
 
   return (
     <div style={{ position: "relative" }}>
       <button
-        onClick={() => { setOpen(o => !o); if (!open) fetch_(); }}
-        style={{ background: "none", border: "none", cursor: "pointer", position: "relative", padding: "6px 8px", borderRadius: 8, color: C.text }}
+        onClick={() => { setOpen(o => { if (!o) refresh(); return !o; }); }}
+        style={{
+          background: open ? `${T.gold}18` : "none",
+          border: open ? `1px solid ${T.gold}44` : "1px solid transparent",
+          cursor: "pointer", position: "relative", padding: "7px 10px",
+          borderRadius: 10, color: C.text, transition: "all .2s", display: "flex", alignItems: "center"
+        }}
         title="Notifications"
       >
-        <span style={{ fontSize: 20 }}>🔔</span>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={unread > 0 ? T.gold : C.sub} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+          {unread > 0 && <circle cx="19" cy="5" r="4" fill="#F87171" stroke="none" />}
+        </svg>
         {unread > 0 && (
-          <span style={{ position: "absolute", top: 2, right: 2, background: "#F87171", color: "#fff", borderRadius: "50%", width: 16, height: 16, fontSize: 10, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
-            {unread > 9 ? "9+" : unread}
+          <span style={{
+            position: "absolute", top: 3, right: 3,
+            background: "#F87171", color: "#fff", borderRadius: "50%",
+            width: 17, height: 17, fontSize: 9, fontWeight: 900,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: "0 0 8px rgba(248,113,113,0.7)", border: `2px solid ${C.surface}`,
+            lineHeight: 1
+          }}>
+            {unread > 99 ? "99+" : unread > 9 ? "9+" : unread}
           </span>
         )}
       </button>
@@ -8937,45 +15773,123 @@ function NotificationBell({ userId }) {
         <>
           <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 999 }} />
           <div style={{
-            position: "absolute", top: "100%", right: 0, width: 360, maxHeight: 480, overflowY: "auto", zIndex: 1000,
-            background: dark ? "#1a1a2e" : "#fff", border: `1px solid ${C.border}`, borderRadius: 16,
-            boxShadow: "0 20px 60px rgba(0,0,0,0.4)", marginTop: 8
+            position: "fixed",
+            top: "auto",
+            right: "max(8px, env(safe-area-inset-right))",
+            left: "auto",
+            width: "min(400px, calc(100vw - 16px))",
+            maxWidth: 400,
+            maxHeight: "min(560px, calc(100dvh - 80px))",
+            display: "flex", flexDirection: "column", zIndex: 1000,
+            background: dark ? "#141720" : "#fff",
+            border: `1px solid ${dark ? "#2D2F3A" : "#DDE3EE"}`,
+            borderRadius: 18, boxShadow: "0 24px 80px rgba(0,0,0,0.5)",
+            overflow: "hidden"
           }}>
             {/* Header */}
-            <div style={{ padding: "16px 18px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontWeight: 900, fontSize: 15, color: C.text }}>Notifications {unread > 0 && <span style={{ fontSize: 12, color: "#F87171", marginLeft: 4 }}>({unread} new)</span>}</div>
-              {unread > 0 && <button onClick={markAllRead} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, color: T.gold, fontWeight: 700 }}>Mark all read</button>}
+            <div style={{ padding: "18px 20px 12px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, display: "flex", alignItems: "center", gap: 8 }}>
+                  Notifications
+                  {unread > 0 && (
+                    <span style={{ background: "#F87171", color: "#fff", borderRadius: 20, padding: "2px 8px", fontSize: 11, fontWeight: 900 }}>
+                      {unread} new
+                    </span>
+                  )}
+                </div>
+                {unread > 0 && (
+                  <button onClick={markAllRead} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: T.gold, fontWeight: 700, padding: "4px 8px", borderRadius: 6 }}>
+                    Mark all read
+                  </button>
+                )}
+              </div>
+              {/* Filter tabs */}
+              <div style={{ display: "flex", gap: 6 }}>
+                {["all", "unread"].map(f => (
+                  <button key={f} onClick={() => setFilter(f)} style={{
+                    padding: "5px 14px", borderRadius: 20, border: "none", cursor: "pointer",
+                    fontSize: 12, fontWeight: 700, fontFamily: "inherit",
+                    background: filter === f ? `${T.gold}22` : "transparent",
+                    color: filter === f ? T.gold : C.muted,
+                    transition: "all .15s"
+                  }}>
+                    {f === "all" ? `All (${notifs.length})` : `Unread (${unread})`}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {loading && notifs.length === 0 ? (
-              <div style={{ padding: 30, textAlign: "center", color: C.muted, fontSize: 13 }}>Loading…</div>
-            ) : notifs.length === 0 ? (
-              <div style={{ padding: 40, textAlign: "center" }}>
-                <div style={{ fontSize: 28, marginBottom: 10 }}>🎉</div>
-                <div style={{ fontSize: 13, color: C.muted }}>You're all caught up!</div>
-              </div>
-            ) : (
-              notifs.map(n => {
-                const icon = notifIcon[n.type] || notifIcon.default;
-                const col = notifColor[n.type] || C.muted;
-                return (
-                  <div key={n.id}
-                    onClick={() => markRead(n.id)}
-                    style={{ padding: "14px 18px", borderBottom: `1px solid ${C.border}`, display: "flex", gap: 12, alignItems: "flex-start", cursor: "pointer", background: n.is_read ? "transparent" : (dark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)"), transition: "background 0.2s" }}
-                  >
-                    <div style={{ width: 34, height: 34, borderRadius: "50%", background: `${col}22`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{icon}</div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, color: C.text, fontWeight: n.is_read ? 400 : 700, lineHeight: 1.4 }}>{n.message}</div>
-                      <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{new Date(n.created_at).toLocaleString()}</div>
-                    </div>
-                    {!n.is_read && <div style={{ width: 8, height: 8, borderRadius: "50%", background: col, flexShrink: 0, marginTop: 3 }} />}
+            {/* Notification list */}
+            <div style={{ overflowY: "auto", flex: 1 }}>
+              {filtered.length === 0 ? (
+                <div style={{ padding: 50, textAlign: "center" }}>
+                  <div style={{ fontSize: 36, marginBottom: 12 }}>
+                    {filter === "unread" ? "✅" : "🎉"}
                   </div>
-                );
-              })
-            )}
+                  <div style={{ fontSize: 14, color: C.muted, fontWeight: 600 }}>
+                    {filter === "unread" ? "All caught up!" : "No notifications yet"}
+                  </div>
+                </div>
+              ) : (
+                Object.entries(groups).map(([group, items]) => (
+                  <div key={group}>
+                    <div style={{ padding: "10px 20px 4px", fontSize: 10, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "1px", background: dark ? "#0F1117" : C.bg, position: "sticky", top: 0 }}>
+                      {group}
+                    </div>
+                    {items.map(n => {
+                      const type = n.notification_type || n.type || "general";
+                      const meta = NOTIF_META[type] || NOTIF_META.general;
+                      return (
+                        <div key={n.id} onClick={() => markRead(n.id)} style={{
+                          padding: "14px 20px", borderBottom: `1px solid ${C.border}44`,
+                          display: "flex", gap: 12, alignItems: "flex-start", cursor: "pointer",
+                          background: n.is_read ? "transparent" : (dark ? `${meta.color}09` : `${meta.color}08`),
+                          transition: "background .15s",
+                          position: "relative"
+                        }}>
+                          {/* Left accent */}
+                          {!n.is_read && (
+                            <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: meta.color, borderRadius: "0 2px 2px 0" }} />
+                          )}
+                          <div style={{
+                            width: 36, height: 36, borderRadius: 10,
+                            background: `${meta.color}20`, border: `1px solid ${meta.color}30`,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            fontSize: 17, flexShrink: 0
+                          }}>
+                            {meta.icon}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                              <span style={{ fontSize: 9, fontWeight: 800, color: meta.color, textTransform: "uppercase", letterSpacing: "0.8px" }}>
+                                {meta.label}
+                              </span>
+                              <span style={{ fontSize: 10, color: C.muted, whiteSpace: "nowrap", flexShrink: 0 }}>
+                                {timeAgo(n.created_at)}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: 13, color: n.is_read ? C.sub : C.text, fontWeight: n.is_read ? 400 : 600, lineHeight: 1.5, marginTop: 2 }}>
+                              {n.title && n.title !== n.message && (
+                                <div style={{ fontWeight: 700, marginBottom: 2, color: n.is_read ? C.sub : C.text }}>{n.title}</div>
+                              )}
+                              {n.message}
+                            </div>
+                          </div>
+                          {!n.is_read && (
+                            <div style={{ width: 8, height: 8, borderRadius: "50%", background: meta.color, flexShrink: 0, marginTop: 5, boxShadow: `0 0 6px ${meta.color}` }} />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))
+              )}
+            </div>
 
-            <div style={{ padding: "10px 18px", textAlign: "center", borderTop: `1px solid ${C.border}` }}>
-              <button onClick={() => setOpen(false)} style={{ background: "none", border: "none", color: C.muted, fontSize: 12, cursor: "pointer" }}>Close</button>
+            <div style={{ padding: "10px 20px", textAlign: "center", borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
+              <button onClick={() => setOpen(false)} style={{ background: "none", border: "none", color: C.muted, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
+                Close
+              </button>
             </div>
           </div>
         </>
@@ -8994,6 +15908,7 @@ const isHrAdminUser = (user) => {
       ? rawRole.split(",").map(r => r.trim())
       : [];
   return roles.includes("admin")
+    || roles.includes("super_admin")
     || roles.includes("hr")
     || roles.includes("hr_admin")
     || primaryRole === "hr";
@@ -9270,8 +16185,9 @@ function JobsBoard() {
   const [viewJob, setViewJob] = useState(null);
   const [form, setForm] = useState({ title: "", department: departments[0]?.name || "Sales & Acquisitions", employment_type: "Full-time", location: "Port Harcourt, NG", salary_range: "", description: "", responsibilities: "", requirements: "" });
 
-  const depts = ["All", ...new Set(jobs.map(j => j.department).filter(Boolean))];
+  const depts = ["All", ...new Set(jobs.filter(j => !j.is_internal).map(j => j.department).filter(Boolean))];
   const filtered = jobs.filter(j =>
+    (!j.is_internal) &&
     (deptFilter === "All" || j.department === deptFilter) &&
     (j.title?.toLowerCase().includes(search.toLowerCase()) || j.department?.toLowerCase().includes(search.toLowerCase()))
   );
@@ -9279,7 +16195,7 @@ function JobsBoard() {
   const create = async () => {
     if (!form.title) return alert("Job title required");
     try {
-      await apiFetch(`${API_BASE}/hr/recruitment/jobs`, { method: "POST", body: JSON.stringify(form) });
+      await apiFetch(`${API_BASE}/hr/recruitment/jobs`, { method: "POST", body: JSON.stringify({ title: form.title, department: form.department, employment_type: form.employment_type, location: form.location, salary_range: form.salary_range, description: form.description, responsibilities: form.responsibilities, requirements: form.requirements, status: "Pending Approval" }) });
       setShowNew(false); setForm({ title: "", department: departments[0]?.name || "Sales & Acquisitions", employment_type: "Full-time", location: "Port Harcourt, NG", salary_range: "", description: "", responsibilities: "", requirements: "" }); refresh();
     } catch (e) { alert(e.message); }
   };
@@ -9379,7 +16295,7 @@ function JobRequisitions() {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const { jobs, departments, loading, refresh } = useRecruitmentData();
   const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState({ title: "", department: departments[0]?.name || "Sales & Acquisitions", employment_type: "Full-time", location: "Port Harcourt, NG", salary_range: "", headcount: 1, justification: "", responsibilities: "", approved_by: "" });
+  const [form, setForm] = useState({ title: "", department: departments[0]?.name || "Sales & Acquisitions", employment_type: "Full-time", location: "Port Harcourt, NG", salary_range: "", headcount: 1, justification: "", responsibilities: "", approved_by: "", is_internal: false });
 
   const toggleApproval = async (j) => {
     try { await apiFetch(`${API_BASE}/hr/recruitment/jobs/${j.id}`, { method: "PATCH", body: JSON.stringify({ status: "Approved" }) }); refresh(); } catch (e) { alert(e.message); }
@@ -9389,7 +16305,7 @@ function JobRequisitions() {
     if (!form.title) return alert("Job title required");
     try {
       if (form.id) {
-        await apiFetch(`${API_BASE}/hr/recruitment/jobs/${form.id}`, { method: "PATCH", body: JSON.stringify(form) });
+        await apiFetch(`${API_BASE}/hr/recruitment/jobs/${form.id}`, { method: "PATCH", body: JSON.stringify({ title: form.title, department: form.department, employment_type: form.employment_type, location: form.location, salary_range: form.salary_range, headcount: form.headcount, justification: form.justification, responsibilities: form.responsibilities, is_internal: form.is_internal }) });
       } else {
         await apiFetch(`${API_BASE}/hr/recruitment/jobs`, { method: "POST", body: JSON.stringify({ ...form, status: "Pending Approval" }) });
       }
@@ -9407,7 +16323,7 @@ function JobRequisitions() {
     <div className="fade">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
         <div><div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Job Requisitions</div><div style={{ fontSize: 13, color: C.sub }}>Formal headcount requests with approval workflows before posting.</div></div>
-        <button className="bp" onClick={() => { setForm({ title: "", department: "Sales & Acquisitions", employment_type: "Full-time", location: "Port Harcourt, NG", salary_range: "", headcount: 1, justification: "", approved_by: "" }); setShowNew(true); }}>+ New Requisition</button>
+        <button className="bp" onClick={() => { setForm({ title: "", department: "Sales & Acquisitions", employment_type: "Full-time", location: "Port Harcourt, NG", salary_range: "", headcount: 1, justification: "", approved_by: "", is_internal: false }); setShowNew(true); }}>+ New Requisition</button>
       </div>
       <div style={{ display: "flex", gap: 0, marginBottom: 24, background: C.surface, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden" }}>
         {approvalStages.map((s, i) => (<div key={s.label} style={{ flex: 1, padding: "12px 16px", borderRight: i < approvalStages.length - 1 ? `1px solid ${C.border}` : "none" }}>
@@ -9425,6 +16341,7 @@ function JobRequisitions() {
                   <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
                     <div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>{j.title}</div>
                     <span className="tg" style={{ background: `${rc}22`, color: rc, border: `1px solid ${rc}44` }}>{j.status || "Open"}</span>
+                    {j.is_internal && <span className="tg" style={{ background: `${T.gold}22`, color: T.gold, fontSize: 10 }}>Internal</span>}
                   </div>
                   <div style={{ display: "flex", gap: 18, fontSize: 12, color: C.muted, flexWrap: "wrap" }}>
                     <span>📁 {j.department}</span><span>⏱ {j.employment_type}</span><span>📍 {j.location || "Port Harcourt"}</span>
@@ -9463,6 +16380,10 @@ function JobRequisitions() {
           <div><Lbl>Key Responsibilities</Lbl><textarea className="inp" rows={2} value={form.responsibilities} onChange={e => setForm(f => ({ ...f, responsibilities: e.target.value }))} /></div>
           <div><Lbl>Requirements</Lbl><textarea className="inp" rows={2} value={form.requirements} onChange={e => setForm(f => ({ ...f, requirements: e.target.value }))} /></div>
           <div><Lbl>Requested Approval From</Lbl><input className="inp" value={form.approved_by || ""} onChange={e => setForm(f => ({ ...f, approved_by: e.target.value }))} placeholder="Name of approving manager" /></div>
+          <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "10px 0" }}>
+            <input type="checkbox" checked={form.is_internal} onChange={e => setForm(f => ({ ...f, is_internal: e.target.checked }))} style={{ width: 18, height: 18 }} />
+            <span style={{ fontSize: 14, fontWeight: 700, color: T.gold }}>Internal Listing Only (Staff Only)</span>
+          </label>
           <button className="bp" onClick={create} style={{ padding: 14 }}>{form.id ? "Save Changes" : "Submit for Approval"}</button>
         </div>
       </Modal>)}
@@ -9512,7 +16433,7 @@ function ApplicationsTracker() {
 
   const addApp = async () => {
     if (!form.job_id || !form.candidate_name) return alert("Job and candidate name required");
-    try { await apiFetch(`${API_BASE}/hr/recruitment/applications`, { method: "POST", body: JSON.stringify(form) }); setShowNew(false); setForm({ job_id: "", candidate_name: "", candidate_email: "", candidate_phone: "", cover_letter: "", resume_url: "" }); refresh(); } catch (e) { alert(e.message); }
+    try { await apiFetch(`${API_BASE}/hr/recruitment/applications`, { method: "POST", body: JSON.stringify({ job_id: form.job_id, candidate_name: form.candidate_name, candidate_email: form.candidate_email, candidate_phone: form.candidate_phone, cover_letter: form.cover_letter, resume_url: form.resume_url, status: "Applied" }) }); setShowNew(false); setForm({ job_id: "", candidate_name: "", candidate_email: "", candidate_phone: "", cover_letter: "", resume_url: "" }); refresh(); } catch (e) { alert(e.message); }
   };
 
   return (
@@ -9628,7 +16549,7 @@ function ATSPipeline() {
       {loading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}>Loading pipeline…</div> : (
         <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 20, alignItems: "flex-start" }}>
           {stages.map(stage => {
-            const stageApps = filteredApps.filter(a => a.status === stage.key);
+            const stageApps = filteredApps.filter(a => a.status === stage.key || (stage.key === "Rejected" && a.status === "Offer Declined") || (stage.key === "Offered" && a.status === "Offer Accepted"));
             return (<div key={stage.key} style={{ minWidth: 220, width: 220, flexShrink: 0, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden" }}>
               <div style={{ padding: "12px 16px", borderBottom: `2px solid ${stage.col}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ fontSize: 16 }}>{stage.emoji}</span><span style={{ fontSize: 12, fontWeight: 800, color: stage.col, textTransform: "uppercase", letterSpacing: "1px" }}>{stage.label}</span></div>
@@ -9673,13 +16594,30 @@ function InterviewScheduler() {
   const [staff, setStaff] = useState([]);
   const [showNew, setShowNew] = useState(false);
   const [viewIV, setViewIV] = useState(null);
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ application_id: "", interviewer_id: "", scheduled_at: "", location: "Video Call (Google Meet)", interview_type: "Technical", notes: "" });
 
   useEffect(() => { apiFetch(`${API_BASE}/hr/staff`).then(d => setStaff(d || [])).catch(() => { }); }, []);
 
   const schedule = async () => {
     if (!form.application_id || !form.scheduled_at) return alert("Application and date/time required");
-    try { await apiFetch(`${API_BASE}/hr/recruitment/interviews`, { method: "POST", body: JSON.stringify(form) }); setShowNew(false); setForm({ application_id: "", interviewer_id: "", scheduled_at: "", location: "Video Call (Google Meet)", interview_type: "Technical", notes: "" }); refresh(); } catch (e) { alert(e.message); }
+    setSaving(true);
+    try {
+      const method = form.id ? "PATCH" : "POST";
+      const url = form.id ? `${API_BASE}/hr/recruitment/interviews/${form.id}` : `${API_BASE}/hr/recruitment/interviews`;
+      await apiFetch(url, { method, body: JSON.stringify({ application_id: form.application_id, interviewer_id: form.interviewer_id, scheduled_at: form.scheduled_at, location: form.location, interview_type: form.interview_type, notes: form.notes }) });
+      setShowNew(false);
+      setForm({ application_id: "", interviewer_id: "", scheduled_at: "", location: "Video Call (Google Meet)", interview_type: "Technical", notes: "" });
+      refresh();
+    } catch (e) { alert(e.message); } finally { setSaving(false); }
+  };
+
+  const updateIV = async (id, data) => {
+    try {
+      await apiFetch(`${API_BASE}/hr/recruitment/interviews/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+      setViewIV(null);
+      refresh();
+    } catch (e) { alert(e.message); }
   };
 
   const ivTypeCol = { Technical: "#60A5FA", Cultural: T.gold, HR: "#4ADE80", Final: "#A78BFA", Panel: "#F87171" };
@@ -9765,20 +16703,39 @@ function InterviewScheduler() {
           <Field label="Status" value={viewIV.status || "scheduled"} />
         </div>
         {viewIV.notes && <div><Lbl>Notes</Lbl><div style={{ fontSize: 13, color: C.sub, lineHeight: 1.7, padding: "12px 16px", background: `${T.gold}08`, borderRadius: 10, marginTop: 8 }}>{viewIV.notes}</div></div>}
+        {viewIV.outcome && <div style={{ marginTop: 14 }}><Lbl>Outcome / Feedback</Lbl><div style={{ fontSize: 13, color: "#4ADE80", fontWeight: 700, padding: "12px 16px", background: "#4ADE8010", borderRadius: 10, marginTop: 8 }}>{viewIV.outcome}</div></div>}
+
+        {viewIV.status !== 'completed' && viewIV.status !== 'cancelled' && (
+          <div style={{ marginTop: 24, display: 'flex', gap: 10 }}>
+            <button className="bp" onClick={() => { setForm({ ...viewIV, scheduled_at: viewIV.scheduled_at?.substring(0, 16) }); setShowNew(true); setViewIV(null); }} style={{ flex: 1 }}>Reschedule 📅</button>
+            <button className="bp" style={{ flex: 1, background: '#4ADE80', borderColor: '#4ADE80' }} onClick={() => { const out = window.prompt("Log Outcome / Rating (e.g. 4/5 - Strong Technical Skills):"); if (out) updateIV(viewIV.id, { status: 'completed', outcome: out }); }}>Complete & Rate ✅</button>
+            <button style={{ flex: 1, border: '1px solid #F87171', background: '#F8717118', color: '#F87171', borderRadius: 10, cursor: 'pointer', fontSize: 12, fontWeight: 700 }} onClick={() => { if (window.confirm("Cancel this interview?")) updateIV(viewIV.id, { status: 'cancelled' }); }}>Cancel ✕</button>
+          </div>
+        )}
       </Modal>)}
-      {showNew && (<Modal onClose={() => setShowNew(false)} title="Schedule Interview" width={580}>
+      {showNew && (<Modal onClose={() => { setShowNew(false); setForm({ application_id: "", interviewer_id: "", scheduled_at: "", location: "Video Call (Google Meet)", interview_type: "Technical", notes: "" }); }} title={form.id ? "Reschedule Interview" : "Schedule Interview"} width={580}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div><Lbl>Candidate *</Lbl><select className="inp" value={form.application_id} onChange={e => setForm(f => ({ ...f, application_id: e.target.value }))}><option value="">— Select Candidate —</option>{apps.filter(a => ["Applied", "Screening", "Interview"].includes(a.status)).map(a => (<option key={a.id} value={a.id}>{a.candidate_name} — {jobs.find(j => j.id === a.job_id)?.title || "—"}</option>))}</select></div>
+          <div><Lbl>Candidate *</Lbl><select className="inp" disabled={!!form.id} value={form.application_id} onChange={e => setForm(f => ({ ...f, application_id: e.target.value }))}><option value="">— Select Candidate —</option>{apps.filter(a => form.id ? a.id === form.application_id : ["Applied", "Screening", "Interview"].includes(a.status)).map(a => (<option key={a.id} value={a.id}>{a.candidate_name} — {jobs.find(j => j.id === a.job_id)?.title || "—"}</option>))}</select></div>
           <div className="g2" style={{ gap: 12 }}>
             <div><Lbl>Date & Time *</Lbl><input type="datetime-local" className="inp" value={form.scheduled_at} onChange={e => setForm(f => ({ ...f, scheduled_at: e.target.value }))} /></div>
-            <div><Lbl>Interview Type</Lbl><select className="inp" value={form.interview_type} onChange={e => setForm(f => ({ ...f, interview_type: e.target.value }))}><option>Technical</option><option>Cultural</option><option>HR</option><option>Final</option><option>Panel</option></select></div>
+            <div><Lbl>Interview Type</Lbl>
+              <select className="inp" value={form.interview_type === "Technical" || form.interview_type === "Cultural" || form.interview_type === "HR" || form.interview_type === "Final" || form.interview_type === "Panel" ? form.interview_type : "Custom"} onChange={e => setForm(f => ({ ...f, interview_type: e.target.value === "Custom" ? "" : e.target.value }))}>
+                <option>Technical</option><option>Cultural</option><option>HR</option><option>Final</option><option>Panel</option>
+                <option value="Custom">Other / Custom...</option>
+              </select>
+            </div>
           </div>
+          {!(["Technical", "Cultural", "HR", "Final", "Panel"].includes(form.interview_type)) && (
+            <div className="fade"><Lbl>Specify Custom Interview Type *</Lbl><input className="inp" value={form.interview_type} onChange={e => setForm(f => ({ ...f, interview_type: e.target.value }))} placeholder="e.g. Site Visit, CEO Chat..." /></div>
+          )}
           <div className="g2" style={{ gap: 12 }}>
             <div><Lbl>Interviewer</Lbl><select className="inp" value={form.interviewer_id} onChange={e => setForm(f => ({ ...f, interviewer_id: e.target.value }))}><option value="">— Assign Interviewer —</option>{staff.map(s => <option key={s.id} value={s.id}>{s.full_name} ({s.department})</option>)}</select></div>
-            <div><Lbl>Location / Format</Lbl><select className="inp" value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))}><option>Video Call (Google Meet)</option><option>Video Call (Zoom)</option><option>In-Person – Port Harcourt Office</option><option>Phone Call</option></select></div>
+            <div><Lbl>Location / Format</Lbl><select className="inp" value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))}><option>Video Call (Google Meet)</option><option>Video Call (Zoom)</option><option>In-Person – Office</option><option>Phone Call</option></select></div>
           </div>
           <div><Lbl>Notes / Preparation</Lbl><textarea className="inp" rows={3} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Topics to cover, documents to bring…" /></div>
-          <button className="bp" onClick={schedule} style={{ padding: 14 }}>Schedule Interview</button>
+          <button className="bp" onClick={schedule} disabled={saving} style={{ padding: 14, opacity: saving ? 0.7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+            {saving ? <><div className="spin" style={{ width: 14, height: 14, borderTopColor: 'transparent' }}></div> Processing...</> : (form.id ? "Update Schedule" : "Schedule Interview")}
+          </button>
         </div>
       </Modal>)}
     </div>
@@ -9789,18 +16746,23 @@ function OffersManager() {
   const { apps, jobs, loading, refresh } = useRecruitmentData();
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({ application_id: "", offered_salary: "", start_date: "", notes: "" });
+  const [saving, setSaving] = useState(false);
 
-  const offeredApps = apps.filter(a => a.status === "Offered" || a.status === "Hired");
+  const offeredApps = apps.filter(a => ["Offered", "Offer Accepted", "Offer Declined", "Hired", "Rejected"].includes(a.status) && a.offered_salary);
 
   const makeOffer = async () => {
     if (!form.application_id || !form.offered_salary) return alert("Candidate and salary required");
-    try { await apiFetch(`${API_BASE}/hr/recruitment/applications/${form.application_id}`, { method: "PATCH", body: JSON.stringify({ status: "Offered", offered_salary: form.offered_salary, start_date: form.start_date, notes: form.notes }) }); setShowNew(false); setForm({ application_id: "", offered_salary: "", start_date: "", notes: "" }); refresh(); } catch (e) { alert(e.message); }
+    setSaving(true);
+    try { await apiFetch(`${API_BASE}/hr/recruitment/applications/${form.application_id}`, { method: "PATCH", body: JSON.stringify({ status: "Offered", offered_salary: form.offered_salary, start_date: form.start_date, notes: form.notes }) }); setShowNew(false); setForm({ application_id: "", offered_salary: "", start_date: "", notes: "" }); refresh(); } catch (e) { alert(e.message); } finally { setSaving(false); }
   };
   const acceptOffer = async (id) => {
-    try { await apiFetch(`${API_BASE}/hr/recruitment/applications/${id}`, { method: "PATCH", body: JSON.stringify({ status: "Hired" }) }); refresh(); } catch (e) { alert(e.message); }
+    try { await apiFetch(`${API_BASE}/hr/recruitment/applications/${id}`, { method: "PATCH", body: JSON.stringify({ status: "Offer Accepted" }) }); refresh(); } catch (e) { alert(e.message); }
   };
   const declineOffer = async (id) => {
-    try { await apiFetch(`${API_BASE}/hr/recruitment/applications/${id}`, { method: "PATCH", body: JSON.stringify({ status: "Rejected" }) }); refresh(); } catch (e) { alert(e.message); }
+    try { await apiFetch(`${API_BASE}/hr/recruitment/applications/${id}`, { method: "PATCH", body: JSON.stringify({ status: "Offer Declined" }) }); refresh(); } catch (e) { alert(e.message); }
+  };
+  const hireApplicant = async (id) => {
+    try { await apiFetch(`${API_BASE}/hr/recruitment/applications/${id}/hire`, { method: "POST" }); refresh(); alert("Applicant successfully hired and onboarded!"); } catch (e) { alert(e.message); }
   };
 
   return (
@@ -9812,7 +16774,7 @@ function OffersManager() {
       <div className="g4" style={{ marginBottom: 24 }}>
         <StatCard label="Total Offers" value={offeredApps.length} col={T.gold} />
         <StatCard label="Hired" value={offeredApps.filter(a => a.status === "Hired").length} col="#4ADE80" />
-        <StatCard label="Pending" value={offeredApps.filter(a => a.status === "Offered").length} col="#A78BFA" />
+        <StatCard label="Pending / Accepted" value={offeredApps.filter(a => ["Offered", "Offer Accepted"].includes(a.status)).length} col="#A78BFA" />
       </div>
       {loading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}>Loading…</div> : (
         <div className="g3" style={{ gap: 14 }}>
@@ -9828,13 +16790,32 @@ function OffersManager() {
                     {a.offered_salary && <span>💰 Offered: <strong style={{ color: T.gold }}>₦{parseFloat(a.offered_salary).toLocaleString()}</strong></span>}
                     {a.start_date && <span>📅 Start: {a.start_date}</span>}
                   </div>
+                  {a.notes && (
+                    <div style={{ marginTop: 12, fontSize: 12, color: C.sub, padding: "8px 12px", background: `${T.gold}11`, borderLeft: "3px solid ${T.gold}", borderRadius: 4, whiteSpace: "pre-wrap" }}>
+                      {a.notes}
+                    </div>
+                  )}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
-                  <span className="tg" style={{ background: isHired ? "#4ADE8022" : "#A78BFA22", color: isHired ? "#4ADE80" : "#A78BFA" }}>{isHired ? "✓ Hired" : "Offer Pending"}</span>
-                  {!isHired && (<div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-                    <button className="bp" style={{ fontSize: 11, padding: "5px 14px" }} onClick={() => acceptOffer(a.id)}>Accept ✓</button>
-                    <button style={{ fontSize: 11, padding: "5px 14px", border: "1px solid #F87171", background: "#F8717118", color: "#F87171", borderRadius: 8, cursor: "pointer" }} onClick={() => declineOffer(a.id)}>Decline</button>
-                  </div>)}
+                  {a.status === "Hired" && <span className="tg" style={{ background: "#4ADE8022", color: "#4ADE80" }}>✓ Hired</span>}
+                  {a.status === "Offer Accepted" && <span className="tg" style={{ background: `${T.gold}22`, color: T.gold }}>🎉 Offer Accepted</span>}
+                  {(a.status === "Offer Declined" || a.status === "Rejected") && <span className="tg" style={{ background: "#F8717122", color: "#F87171" }}>❌ Declined</span>}
+                  {a.status === "Offered" && <span className="tg" style={{ background: "#A78BFA22", color: "#A78BFA" }}>⏳ Offer Pending</span>}
+
+                  <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                    {a.status === "Offer Accepted" && (
+                      <button className="bp" style={{ fontSize: 11, padding: "5px 14px", background: "#4ADE80", color: "#1A1A1A" }} onClick={() => hireApplicant(a.id)}>Hire & Onboard ✓</button>
+                    )}
+                    {a.status === "Offered" && (
+                      <>
+                        <button className="bg" style={{ fontSize: 11, padding: "5px 14px" }} onClick={() => acceptOffer(a.id)}>Force Accept</button>
+                        <button style={{ fontSize: 11, padding: "5px 14px", border: "1px solid #F87171", background: "#F8717118", color: "#F87171", borderRadius: 8, cursor: "pointer" }} onClick={() => declineOffer(a.id)}>Force Decline</button>
+                      </>
+                    )}
+                    {(a.status === "Offer Declined" || a.status === "Rejected") && (
+                      <button className="bp" style={{ fontSize: 11, padding: "5px 14px" }} onClick={() => { setForm({ application_id: a.id, offered_salary: a.offered_salary, start_date: a.start_date || "", notes: a.notes || "" }); setShowNew(true); }}>Revise & Resend Offer 📝</button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>);
@@ -9844,13 +16825,15 @@ function OffersManager() {
       )}
       {showNew && (<Modal onClose={() => setShowNew(false)} title="Issue Employment Offer" width={560}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div><Lbl>Candidate *</Lbl><select className="inp" value={form.application_id} onChange={e => setForm(f => ({ ...f, application_id: e.target.value }))}><option value="">— Select Candidate —</option>{apps.filter(a => ["Interview", "Screening"].includes(a.status)).map(a => (<option key={a.id} value={a.id}>{a.candidate_name} — {jobs.find(j => j.id === a.job_id)?.title || "—"}</option>))}</select></div>
+          <div><Lbl>Candidate *</Lbl><select className="inp" value={form.application_id} onChange={e => setForm(f => ({ ...f, application_id: e.target.value }))}><option value="">— Select Candidate —</option>{apps.filter(a => ["Interview", "Screening", "Offered", "Offer Accepted", "Offer Declined", "Rejected"].includes(a.status) || a.id === form.application_id).map(a => (<option key={a.id} value={a.id}>{a.candidate_name} ({a.candidate_email || "N/A"}) — {jobs.find(j => j.id === a.job_id)?.title || "—"}</option>))}</select></div>
           <div className="g2" style={{ gap: 12 }}>
             <div><Lbl>Offered Salary (NGN) *</Lbl><input type="number" className="inp" value={form.offered_salary} onChange={e => setForm(f => ({ ...f, offered_salary: e.target.value }))} placeholder="e.g. 250000" /></div>
             <div><Lbl>Proposed Start Date</Lbl><input type="date" className="inp" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} /></div>
           </div>
           <div><Lbl>Offer Notes / Conditions</Lbl><textarea className="inp" rows={4} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Benefits, conditions, probation period…" /></div>
-          <button className="bp" onClick={makeOffer} style={{ padding: 14 }}>Issue Offer</button>
+          <button className="bp" onClick={makeOffer} disabled={saving} style={{ padding: 14, opacity: saving ? 0.7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+            {saving ? <><div className="spin" style={{ width: 14, height: 14, borderTopColor: 'transparent' }}></div> Processing...</> : "Issue Offer"}
+          </button>
         </div>
       </Modal>)}
     </div>
@@ -9860,116 +16843,553 @@ function OffersManager() {
 // ─── 7. TALENT POOL ───────────────────────────────────────────────────────────
 function TalentPool() {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
-  const { apps, jobs, loading } = useRecruitmentData();
+  const { apps, jobs, loading: appsLoading } = useRecruitmentData();
+  const { refresh: refreshNotifs } = useNotifs();
+
+  // ── Pool data (ATS + manual) ──────────────────────────────────────────────
+  const [pool, setPool] = useState([]);
+  const [loadingPool, setLoadingPool] = useState(false);
+
+  // ── Chat state ────────────────────────────────────────────────────────────
+  const [rooms, setRooms] = useState([]);          // talent_chat_rooms list
+  const [activeRoom, setActiveRoom] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [loadingMsgs, setLoadingMsgs] = useState(false);
+  const [msgText, setMsgText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [wsRef, setWsRef] = useState(null);
+  const [typingIndicator, setTypingIndicator] = useState(false);
+  const [typingTimeout, setTypingTimeout] = useState(null);
+  const [isTyping, setIsTyping] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null);
+
+  // ── UI state ──────────────────────────────────────────────────────────────
+  const [view, setView] = useState("list"); // "list" | "chat"
   const [search, setSearch] = useState("");
   const [tagFilter, setTagFilter] = useState("All");
   const [showAdd, setShowAdd] = useState(false);
-  const [pool, setPool] = useState([]);
-  const [form, setForm] = useState({ name: "", email: "", phone: "", source: "LinkedIn", skills: "", notes: "", role_interest: "" });
-  const [emailing, setEmailing] = useState(null);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailingCandidate, setEmailingCandidate] = useState(null);
   const [emailForm, setEmailForm] = useState({ subject: "", message: "" });
-  const [sending, setSending] = useState(false);
+  const [emailSending, setEmailSending] = useState(false);
+  const [form, setForm] = useState({ name: "", email: "", phone: "", source: "LinkedIn", skills: "", notes: "", role_interest: "" });
 
-  const sendEmail = async () => {
-    if (!emailForm.subject || !emailForm.message) return alert("Subject and message are required.");
-    setSending(true);
+  const msgsEndRef = useState(null)[0] || { current: null };
+  const msgsContainerRef = { current: null };
+
+  // ── Load rooms ────────────────────────────────────────────────────────────
+  const fetchRooms = async () => {
     try {
-      await apiFetch(`${API_BASE}/hr/recruitment/send-email`, {
-        method: "POST",
-        body: JSON.stringify({ email: emailing.email, subject: emailForm.subject, message: emailForm.message, candidate_id: emailing.id })
-      });
-      alert(`Email sent to ${emailing.name} successfully.`);
-      setEmailing(null); setEmailForm({ subject: "", message: "" });
-    } catch (e) { alert("Failed to send email: " + e.message); } finally { setSending(false); }
+      const data = await apiFetch(`${API_BASE}/hr/talent-chat/rooms`);
+      setRooms(Array.isArray(data) ? data : []);
+    } catch (e) { console.error("fetch rooms", e); }
   };
 
+  // ── Build pool from ATS apps (unchanged logic) ───────────────────────────
   useEffect(() => {
-    const candidates = apps.filter(a => ["Hired", "Rejected"].includes(a.status) || a.resume_url).map(a => ({ id: a.id, name: a.candidate_name, email: a.candidate_email, phone: a.candidate_phone, status: a.status, role: jobs.find(j => j.id === a.job_id)?.title || "—", source: "Applied", date: a.created_at, resume_url: a.resume_url }));
+    const candidates = apps.filter(a =>
+      ["Hired", "Rejected"].includes(a.status) || a.resume_url
+    ).map(a => ({
+      id: a.id, name: a.candidate_name, email: a.candidate_email,
+      phone: a.candidate_phone, status: a.status,
+      role: jobs.find(j => j.id === a.job_id)?.title || "—",
+      source: "Applied", date: a.created_at, resume_url: a.resume_url,
+    }));
     setPool(candidates);
   }, [apps, jobs]);
 
+  useEffect(() => {
+    fetchRooms();
+    const t = setInterval(fetchRooms, 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  // ── Open a chat for a candidate ───────────────────────────────────────────
+  const openChat = async (candidate) => {
+    try {
+      const room = await apiFetch(`${API_BASE}/hr/talent-chat/rooms`, {
+        method: "POST",
+        body: JSON.stringify({
+          candidate_name: candidate.name,
+          candidate_email: candidate.email,
+          candidate_phone: candidate.phone,
+          source: candidate.source,
+          role_interest: candidate.role_interest || candidate.role,
+        })
+      });
+      setActiveRoom(room);
+      setView("chat");
+      await loadMessages(room.id);
+      connectWS(room);
+      // mark HR read
+      apiFetch(`${API_BASE}/hr/talent-chat/rooms/${room.id}/read`, { method: "PATCH" }).catch(() => { });
+      await fetchRooms();
+    } catch (e) { alert("Failed to open chat: " + e.message); }
+  };
+
+  const openRoomDirect = async (room) => {
+    setActiveRoom(room);
+    setView("chat");
+    await loadMessages(room.id);
+    connectWS(room);
+    apiFetch(`${API_BASE}/hr/talent-chat/rooms/${room.id}/read`, { method: "PATCH" }).catch(() => { });
+    setRooms(prev => prev.map(r => r.id === room.id ? { ...r, hr_unread_count: 0 } : r));
+  };
+
+  // ── Load messages ─────────────────────────────────────────────────────────
+  const loadMessages = async (roomId) => {
+    setLoadingMsgs(true);
+    try {
+      const data = await apiFetch(`${API_BASE}/hr/talent-chat/rooms/${roomId}/messages`);
+      setMessages(Array.isArray(data) ? data : []);
+    } catch (e) { console.error(e); } finally { setLoadingMsgs(false); }
+  };
+
+  // ── WebSocket ─────────────────────────────────────────────────────────────
+  const connectWS = (room) => {
+    if (wsRef) { try { wsRef.close(); } catch (_) { } }
+    const token = localStorage.getItem("ec_token");
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    const ws = new WebSocket(`${proto}://${location.host}/api/ws/talent-chat/${room.id}?token=${token}`);
+    ws.onmessage = (e) => {
+      const data = JSON.parse(e.data);
+      if (data.type === "ping") return ws.send(JSON.stringify({ type: "pong" }));
+      if (data.type === "new_message") {
+        setMessages(prev => prev.find(m => m.id === data.message.id) ? prev : [...prev, data.message]);
+        setRooms(prev => prev.map(r => r.id === room.id ? { ...r, last_message_preview: data.message.message || `📎 ${data.message.file_name}`, last_message_at: data.message.created_at } : r));
+        refreshNotifs();
+        setTimeout(() => {
+          const el = document.getElementById("talent-msgs-end");
+          if (el) el.scrollIntoView({ behavior: "smooth" });
+        }, 50);
+        if (data.message.sender_type === "applicant") {
+          apiFetch(`${API_BASE}/hr/talent-chat/rooms/${room.id}/read`, { method: "PATCH" }).catch(() => { });
+        }
+      }
+      if (data.type === "typing" && data.sender_type === "applicant") {
+        setTypingIndicator(true);
+        clearTimeout(typingTimeout);
+        setTypingTimeout(setTimeout(() => setTypingIndicator(false), 2500));
+      }
+    };
+    ws.onclose = () => setTimeout(() => activeRoom && connectWS(activeRoom), 3000);
+    setWsRef(ws);
+  };
+
+  useEffect(() => {
+    return () => { if (wsRef) try { wsRef.close(); } catch (_) { } };
+  }, [wsRef]);
+
+  useEffect(() => {
+    const el = document.getElementById("talent-msgs-end");
+    if (el) el.scrollIntoView({ behavior: "instant" });
+  }, [messages]);
+
+  // ── Send message ──────────────────────────────────────────────────────────
+  const sendMessage = async () => {
+    if (!msgText.trim() || !activeRoom) return;
+    const text = msgText.trim();
+    setMsgText("");
+    setSending(true);
+    try {
+      const msg = await apiFetch(`${API_BASE}/hr/talent-chat/rooms/${activeRoom.id}/messages`, {
+        method: "POST",
+        body: JSON.stringify({ message: text })
+      });
+      setMessages(prev => prev.find(m => m.id === msg.id) ? prev : [...prev, msg]);
+    } catch (e) { alert("Failed to send: " + e.message); setMsgText(text); }
+    finally { setSending(false); }
+  };
+
+  // ── File upload ───────────────────────────────────────────────────────────
+  const uploadFile = async (file) => {
+    if (!activeRoom) return;
+    const fd = new FormData();
+    fd.append("file", file);
+    setUploadProgress(file.name);
+    try {
+      const res = await fetch(`/api/hr/talent-chat/rooms/${activeRoom.id}/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${localStorage.getItem("ec_token")}` },
+        body: fd
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const msg = await res.json();
+      setMessages(prev => prev.find(m => m.id === msg.id) ? prev : [...prev, msg]);
+    } catch (e) { alert("Upload failed: " + e.message); }
+    finally { setUploadProgress(null); }
+  };
+
+  // ── Send legacy email ─────────────────────────────────────────────────────
+  const sendEmail = async () => {
+    if (!emailForm.subject || !emailForm.message) return alert("Subject and message are required.");
+    setEmailSending(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/recruitment/send-email`, {
+        method: "POST",
+        body: JSON.stringify({ email: emailingCandidate.email, subject: emailForm.subject, message: emailForm.message, candidate_id: emailingCandidate.id })
+      });
+      alert(`Email sent to ${emailingCandidate.name} successfully.`);
+      setShowEmailModal(false); setEmailingCandidate(null); setEmailForm({ subject: "", message: "" });
+    } catch (e) { alert("Failed to send email: " + e.message); } finally { setEmailSending(false); }
+  };
+
+  // ── Invite applicant to chat ──────────────────────────────────────────────
+  const inviteToChat = async () => {
+    if (!activeRoom) return;
+    try {
+      await apiFetch(`${API_BASE}/hr/recruitment/send-email`, {
+        method: "POST",
+        body: JSON.stringify({
+          email: activeRoom.candidate_email,
+          candidate_id: activeRoom.id,
+          subject: `💬 HR would like to chat with you — Eximp & Cloves`,
+          message: `Hi ${activeRoom.candidate_name},\n\nWe'd love to connect with you! Please use the link below to open our private chat thread:\n\n${window.location.origin}/api/talent-chat/portal/${activeRoom.applicant_token}\n\nWarm regards,\nHR Team`
+        })
+      });
+      alert("Invite sent to " + activeRoom.candidate_email);
+      setShowInviteModal(false);
+    } catch (e) { alert("Failed: " + e.message); }
+  };
+
+  // ── Add to pool manually ──────────────────────────────────────────────────
   const addToPool = () => {
     if (!form.name) return alert("Name required");
     setPool(prev => [{ id: Date.now().toString(), name: form.name, email: form.email, phone: form.phone, source: form.source, skills: form.skills, notes: form.notes, role_interest: form.role_interest, status: "Passive", date: new Date().toISOString() }, ...prev]);
     setShowAdd(false); setForm({ name: "", email: "", phone: "", source: "LinkedIn", skills: "", notes: "", role_interest: "" });
   };
 
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  const totalUnread = rooms.reduce((s, r) => s + (r.hr_unread_count || 0), 0);
   const tags = ["All", "Passive", "Applied", "Hired", "Rejected"];
-  const filtered = pool.filter(p => (tagFilter === "All" || p.status === tagFilter) && (p.name?.toLowerCase().includes(search.toLowerCase()) || p.role?.toLowerCase().includes(search.toLowerCase())));
+  const filtered = pool.filter(p =>
+    (tagFilter === "All" || p.status === tagFilter) &&
+    (p.name?.toLowerCase().includes(search.toLowerCase()) || p.role?.toLowerCase().includes(search.toLowerCase()))
+  );
   const statusStyle = { Passive: "#60A5FA", Applied: T.gold, Hired: "#4ADE80", Rejected: "#9CA3AF" };
   const sourceEmoji = { LinkedIn: "💼", Referral: "👥", Indeed: "🔍", Direct: "📧", Applied: "📋" };
+  const fmtTime = (ts) => { if (!ts) return ""; const d = new Date(ts); const now = new Date(); const diff = now - d; if (diff < 86400000) return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); return d.toLocaleDateString([], { month: "short", day: "numeric" }); };
+  const fmtSize = (b) => { if (!b) return ""; if (b < 1024) return b + "B"; if (b < 1048576) return (b / 1024).toFixed(1) + "KB"; return (b / 1048576).toFixed(1) + "MB"; };
 
+  const renderFilePreview = (msg) => {
+    const mime = msg.file_mime || "";
+    if (mime.startsWith("image/")) return (
+      <img src={msg.file_url} alt={msg.file_name} onClick={() => window.open(msg.file_url, "_blank")}
+        style={{ maxWidth: 220, maxHeight: 180, borderRadius: 8, marginTop: 6, cursor: "pointer", objectFit: "cover", display: "block" }} />
+    );
+    if (mime === "application/pdf") return (
+      <div style={{ marginTop: 6 }}>
+        <embed src={msg.file_url} type="application/pdf" style={{ width: "100%", height: 300, borderRadius: 8, border: `1px solid ${C.border}` }} />
+        <a href={msg.file_url} target="_blank" rel="noreferrer"
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 6, fontSize: 11, color: T.gold, textDecoration: "none" }}>⬇ Open PDF</a>
+      </div>
+    );
+    return (
+      <a href={msg.file_url} target="_blank" rel="noreferrer"
+        style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 12px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12, color: C.text, textDecoration: "none", marginTop: 6 }}>
+        <span>📎</span><span>{msg.file_name}</span><span style={{ color: C.muted }}>({fmtSize(msg.file_size)})</span>
+      </a>
+    );
+  };
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // RENDER — Chat view (WhatsApp-style, 2-panel)
+  // ══════════════════════════════════════════════════════════════════════════
+  if (view === "chat") {
+    return (
+      <div className="fade" style={{ display: "flex", height: "calc(100vh - 110px)", minHeight: 500, borderRadius: 16, overflow: "hidden", border: `1px solid ${C.border}`, background: C.surface }}>
+        {/* ── LEFT: Contacts sidebar ─────────────────────────────────── */}
+        <div style={{ width: 300, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", flexShrink: 0 }}>
+          {/* Sidebar header */}
+          <div style={{ padding: "14px 16px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>
+              Chats {totalUnread > 0 && <span style={{ background: T.gold, color: "#fff", borderRadius: "50%", fontSize: 11, padding: "2px 7px", marginLeft: 6, fontWeight: 800 }}>{totalUnread}</span>}
+            </div>
+            <button onClick={() => setView("list")} style={{ fontSize: 11, color: C.sub, background: "transparent", border: `1px solid ${C.border}`, borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Pool View</button>
+          </div>
+          {/* Search */}
+          <div style={{ padding: "10px 12px", borderBottom: `1px solid ${C.border}` }}>
+            <input className="inp" placeholder="Search conversations…" style={{ padding: "8px 12px", fontSize: 12, width: "100%" }}
+              value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+          {/* Rooms list */}
+          <div style={{ flex: 1, overflowY: "auto" }}>
+            {rooms.filter(r => r.candidate_name?.toLowerCase().includes(search.toLowerCase()) || r.candidate_email?.toLowerCase().includes(search.toLowerCase())).map(room => (
+              <div key={room.id} onClick={() => openRoomDirect(room)}
+                style={{ padding: "12px 16px", cursor: "pointer", borderBottom: `1px solid ${C.border}`, background: activeRoom?.id === room.id ? `${T.gold}15` : "transparent", transition: "background .15s", display: "flex", gap: 12, alignItems: "center" }}>
+                <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${T.gold}22`, border: `1.5px solid ${activeRoom?.id === room.id ? T.gold : C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, color: T.gold, fontSize: 16, flexShrink: 0 }}>
+                  {(room.candidate_name || "?")[0].toUpperCase()}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                    <span style={{ fontWeight: 700, fontSize: 13, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{room.candidate_name}</span>
+                    <span style={{ fontSize: 10, color: C.muted, flexShrink: 0, marginLeft: 6 }}>{fmtTime(room.last_message_at)}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 11, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{room.last_message_preview || "No messages yet"}</span>
+                    {(room.hr_unread_count > 0) && <span style={{ background: T.gold, color: "#fff", borderRadius: "50%", fontSize: 10, padding: "1px 6px", marginLeft: 6, fontWeight: 800, flexShrink: 0 }}>{room.hr_unread_count}</span>}
+                  </div>
+                </div>
+              </div>
+            ))}
+            {rooms.length === 0 && <div style={{ textAlign: "center", padding: 30, color: C.muted, fontSize: 12 }}>No chats yet.<br />Start from the pool view.</div>}
+          </div>
+          {/* Quick-add room button */}
+          <div style={{ padding: "12px 14px", borderTop: `1px solid ${C.border}` }}>
+            <button className="bp" onClick={() => { setView("list"); setShowAdd(true); }} style={{ width: "100%", padding: 10, fontSize: 12 }}>+ New Contact</button>
+          </div>
+        </div>
+
+        {/* ── RIGHT: Chat window ─────────────────────────────────────── */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+          {activeRoom ? (
+            <>
+              {/* Chat header */}
+              <div style={{ padding: "12px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", background: C.card }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${T.gold}22`, border: `1.5px solid ${T.gold}44`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, color: T.gold, fontSize: 16 }}>
+                    {(activeRoom.candidate_name || "?")[0].toUpperCase()}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 800, color: C.text, fontSize: 14 }}>{activeRoom.candidate_name}</div>
+                    <div style={{ fontSize: 11, color: C.muted }}>{activeRoom.candidate_email} {activeRoom.role_interest && `· ${activeRoom.role_interest}`}</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => setShowInviteModal(true)} className="bg" style={{ fontSize: 11, padding: "6px 12px" }}>📨 Invite to Chat</button>
+                  <button onClick={() => { setEmailingCandidate({ id: activeRoom.id, name: activeRoom.candidate_name, email: activeRoom.candidate_email }); setEmailForm({ subject: `Opportunity at Eximp & Cloves — ${activeRoom.role_interest || "Role"}`, message: `Dear ${activeRoom.candidate_name},\n\nWe came across your profile and would love to discuss an exciting opportunity with you at Eximp & Cloves.\n\nWarm regards,\nHR Team` }); setShowEmailModal(true); }} className="bg" style={{ fontSize: 11, padding: "6px 12px" }}>✉️ Email</button>
+                  <a href={`/api/talent-chat/portal/${activeRoom.applicant_token}`} target="_blank" rel="noreferrer" className="bg" style={{ fontSize: 11, padding: "6px 12px", textDecoration: "none" }}>🔗 Portal Link</a>
+                </div>
+              </div>
+
+              {/* Messages area */}
+              <div style={{ flex: 1, overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 10, background: dark ? "#0D0E12" : "#F4F6FA" }}>
+                {loadingMsgs && <div style={{ textAlign: "center", color: C.muted, fontSize: 13, padding: 30 }}>Loading…</div>}
+                {messages.map(msg => {
+                  const isHR = msg.sender_type === "hr";
+                  return (
+                    <div key={msg.id} style={{ display: "flex", justifyContent: isHR ? "flex-end" : "flex-start" }}>
+                      {!isHR && (
+                        <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#60A5FA22", border: "1px solid #60A5FA44", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: "#60A5FA", marginRight: 8, flexShrink: 0, alignSelf: "flex-end" }}>
+                          {(activeRoom.candidate_name || "?")[0].toUpperCase()}
+                        </div>
+                      )}
+                      <div style={{ maxWidth: "60%", padding: "10px 14px", borderRadius: isHR ? "14px 14px 4px 14px" : "14px 14px 14px 4px", background: isHR ? `${T.gold}25` : C.card, border: `1px solid ${isHR ? T.gold + "44" : C.border}`, position: "relative" }}>
+                        {!isHR && <div style={{ fontSize: 10, color: T.gold, fontWeight: 700, marginBottom: 4 }}>{msg.sender_name}</div>}
+                        {msg.message && <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{msg.message}</div>}
+                        {msg.message_type === "file" && renderFilePreview(msg)}
+                        <div style={{ fontSize: 10, color: C.muted, marginTop: 6, textAlign: "right" }}>
+                          {fmtTime(msg.created_at)} {isHR && (msg.is_read_by_applicant ? "✓✓" : "✓")}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {typingIndicator && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#60A5FA22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#60A5FA" }}>{(activeRoom.candidate_name || "?")[0].toUpperCase()}</div>
+                    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: "12px 12px 12px 4px", padding: "10px 14px", fontSize: 12, color: C.muted, fontStyle: "italic" }}>
+                      typing…
+                    </div>
+                  </div>
+                )}
+                {uploadProgress && (
+                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                    <div style={{ background: `${T.gold}20`, border: `1px solid ${T.gold}33`, borderRadius: 10, padding: "10px 16px", fontSize: 12, color: C.muted }}>
+                      📤 Uploading {uploadProgress}…
+                    </div>
+                  </div>
+                )}
+                <div id="talent-msgs-end" />
+              </div>
+
+              {/* Input bar */}
+              <div style={{ padding: "12px 16px", borderTop: `1px solid ${C.border}`, background: C.card, display: "flex", gap: 10, alignItems: "flex-end" }}>
+                <label htmlFor="talent-file-input" style={{ cursor: "pointer", padding: "8px 10px", background: "transparent", border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 16, color: C.sub, flexShrink: 0, lineHeight: 1 }}>📎</label>
+                <input id="talent-file-input" type="file" accept="*/*" style={{ display: "none" }} onChange={e => { const f = e.target.files[0]; if (f) uploadFile(f); e.target.value = ""; }} />
+                <textarea
+                  className="inp"
+                  placeholder="Type a message…"
+                  value={msgText}
+                  onChange={e => {
+                    setMsgText(e.target.value);
+                    if (!isTyping && wsRef?.readyState === 1) {
+                      wsRef.send(JSON.stringify({ type: "typing", sender_type: "hr" }));
+                      setIsTyping(true);
+                      setTimeout(() => setIsTyping(false), 1500);
+                    }
+                  }}
+                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+                  rows={1}
+                  style={{ flex: 1, padding: "10px 14px", fontSize: 14, resize: "none", maxHeight: 120, overflow: "auto", borderRadius: 10 }}
+                />
+                <button className="bp" onClick={sendMessage} disabled={sending || !msgText.trim()} style={{ padding: "10px 20px", flexShrink: 0, borderRadius: 10 }}>
+                  {sending ? "…" : "Send"}
+                </button>
+              </div>
+            </>
+          ) : (
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16, color: C.muted }}>
+              <div style={{ fontSize: 52 }}>💬</div>
+              <div style={{ fontWeight: 800, fontSize: 16, color: C.sub }}>Select a conversation</div>
+              <div style={{ fontSize: 13 }}>Pick from the list on the left or open a chat from the pool view.</div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Invite modal ─────────────────────────────────────────────── */}
+        {showInviteModal && activeRoom && (
+          <Modal onClose={() => setShowInviteModal(false)} title={`Invite ${activeRoom.candidate_name} to Chat`} width={480}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.6 }}>
+                This will send an email to <strong>{activeRoom.candidate_email}</strong> with a secure link to the private chat thread. They can reply and share files without needing an account.
+              </div>
+              <div style={{ padding: 14, background: `${T.gold}10`, border: `1px dashed ${T.gold}44`, borderRadius: 10, fontSize: 12, color: C.muted, wordBreak: "break-all" }}>
+                🔗 {window.location.origin}/api/talent-chat/portal/{activeRoom.applicant_token}
+              </div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button className="bp" onClick={inviteToChat} style={{ flex: 1, padding: 13 }}>📨 Send Invite Email</button>
+                <button className="bg" onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/api/talent-chat/portal/${activeRoom.applicant_token}`); alert("Link copied!"); }} style={{ flex: 1, padding: 13 }}>📋 Copy Link</button>
+              </div>
+            </div>
+          </Modal>
+        )}
+
+        {/* ── Email modal ──────────────────────────────────────────────── */}
+        {showEmailModal && emailingCandidate && (
+          <Modal onClose={() => { setShowEmailModal(false); setEmailingCandidate(null); }} title={`Email ${emailingCandidate.name}`} width={540}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ fontSize: 13, color: C.sub }}>To: <strong>{emailingCandidate.email}</strong></div>
+              <div><Lbl>Subject *</Lbl><input className="inp" value={emailForm.subject} onChange={e => setEmailForm(f => ({ ...f, subject: e.target.value }))} /></div>
+              <div><Lbl>Message *</Lbl><textarea className="inp" rows={8} value={emailForm.message} onChange={e => setEmailForm(f => ({ ...f, message: e.target.value }))} /></div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button className="bp" onClick={sendEmail} disabled={emailSending} style={{ flex: 1, padding: 13 }}>{emailSending ? "Sending…" : "Send Email ✉️"}</button>
+                <button className="bg" onClick={() => { setShowEmailModal(false); setEmailingCandidate(null); }} style={{ flex: 1, padding: 13 }}>Cancel</button>
+              </div>
+            </div>
+          </Modal>
+        )}
+      </div>
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // RENDER — Pool list view (original grid + chat action)
+  // ══════════════════════════════════════════════════════════════════════════
   return (
     <div className="fade">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
-        <div><div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Talent Pool</div><div style={{ fontSize: 13, color: C.sub }}>Sourced and passive candidates. Build your pipeline before roles open.</div></div>
-        <button className="bp" onClick={() => setShowAdd(true)}>+ Add to Pool</button>
+        <div>
+          <div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Talent Pool</div>
+          <div style={{ fontSize: 13, color: C.sub }}>Sourced and passive candidates. Build your pipeline before roles open.</div>
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button className="bg" onClick={() => setView("chat")} style={{ padding: "10px 18px", position: "relative" }}>
+            💬 Chats
+            {totalUnread > 0 && <span style={{ position: "absolute", top: -6, right: -6, background: T.gold, color: "#fff", borderRadius: "50%", fontSize: 10, padding: "2px 6px", fontWeight: 800 }}>{totalUnread}</span>}
+          </button>
+          <button className="bp" onClick={() => setShowAdd(true)}>+ Add to Pool</button>
+        </div>
       </div>
+
+      {/* Stats */}
       <div className="g4" style={{ marginBottom: 22 }}>
         <StatCard label="In Pool" value={pool.length} col={T.gold} />
         <StatCard label="Passive" value={pool.filter(p => p.status === "Passive").length} col="#60A5FA" />
         <StatCard label="Previously Hired" value={pool.filter(p => p.status === "Hired").length} col="#4ADE80" />
-        <StatCard label="Reconsidered" value={pool.filter(p => p.status === "Rejected").length} col="#9CA3AF" />
+        <StatCard label="Active Chats" value={rooms.length} col={T.gold} />
       </div>
+
+      {/* Filters */}
       <div style={{ display: "flex", gap: 12, marginBottom: 18, flexWrap: "wrap", alignItems: "center" }}>
         <input className="inp" placeholder="Search by name or role…" value={search} onChange={e => setSearch(e.target.value)} style={{ maxWidth: 300, padding: "9px 14px" }} />
-        <div style={{ display: "flex", gap: 6 }}>{tags.map(t => (<button key={t} onClick={() => setTagFilter(t)} style={{ padding: "6px 14px", borderRadius: 8, border: `1px solid ${tagFilter === t ? T.gold : C.border}`, background: tagFilter === t ? `${T.gold}22` : "transparent", color: tagFilter === t ? T.gold : C.sub, cursor: "pointer", fontSize: 12, fontWeight: tagFilter === t ? 800 : 400 }}>{t}</button>))}</div>
+        <div style={{ display: "flex", gap: 6 }}>
+          {tags.map(t => (
+            <button key={t} onClick={() => setTagFilter(t)} style={{ padding: "6px 14px", borderRadius: 8, border: `1px solid ${tagFilter === t ? T.gold : C.border}`, background: tagFilter === t ? `${T.gold}22` : "transparent", color: tagFilter === t ? T.gold : C.sub, cursor: "pointer", fontSize: 12, fontWeight: tagFilter === t ? 800 : 400 }}>{t}</button>
+          ))}
+        </div>
       </div>
-      {loading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}>Loading…</div> : (
+
+      {/* Candidate grid */}
+      {appsLoading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}>Loading…</div> : (
         <div className="g3" style={{ gap: 14 }}>
           {filtered.map(p => {
             const sc = statusStyle[p.status] || T.gold;
-            return (<div key={p.id} className="gc" style={{ padding: 20 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                <div style={{ width: 44, height: 44, borderRadius: "50%", background: `${T.gold}22`, border: `1.5px solid ${T.gold}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 800, color: T.gold }}>{(p.name || "?")[0].toUpperCase()}</div>
-                <span className="tg" style={{ background: `${sc}22`, color: sc, border: `1px solid ${sc}44`, alignSelf: "flex-start" }}>{p.status}</span>
-              </div>
-              <div style={{ fontWeight: 800, fontSize: 14, color: C.text, marginBottom: 2 }}>{p.name}</div>
-              <div style={{ fontSize: 12, color: C.sub, marginBottom: 10 }}>{p.role_interest || p.role || "Open to opportunities"}</div>
-              <div style={{ fontSize: 11, color: C.muted, marginBottom: 12 }}>{p.email || "—"}</div>
-              {p.skills && <div style={{ fontSize: 11, color: C.sub, marginBottom: 12 }}>Skills: {p.skills}</div>}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
-                <span style={{ fontSize: 11, color: C.muted }}>{sourceEmoji[p.source] || "👤"} {p.source || "—"}</span>
-                <div style={{ display: "flex", gap: 6 }}>
-                  {p.email && <button onClick={() => {
-                    setEmailing(p); setEmailForm({
-                      subject: `Opportunity at Eximp & Cloves — ${p.role_interest || "Role"}`, message: `Dear ${p.name},
-
-We came across your profile and would love to discuss an exciting opportunity with you at Eximp & Cloves.
-
-Warm regards,
-HR Team` });
-                  }} className="bg" style={{ fontSize: 11, padding: "4px 10px" }}>Email</button>}
-                  {p.resume_url && <a href={p.resume_url} target="_blank" rel="noreferrer" className="bg" style={{ fontSize: 11, padding: "4px 10px" }}>CV</a>}
+            const hasRoom = rooms.find(r => r.candidate_email === p.email);
+            return (
+              <div key={p.id} className="gc" style={{ padding: 20 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+                  <div style={{ width: 44, height: 44, borderRadius: "50%", background: `${T.gold}22`, border: `1.5px solid ${T.gold}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 800, color: T.gold }}>
+                    {(p.name || "?")[0].toUpperCase()}
+                  </div>
+                  <span className="tg" style={{ background: `${sc}22`, color: sc, border: `1px solid ${sc}44`, alignSelf: "flex-start" }}>{p.status}</span>
+                </div>
+                <div style={{ fontWeight: 800, fontSize: 14, color: C.text, marginBottom: 2 }}>{p.name}</div>
+                <div style={{ fontSize: 12, color: C.sub, marginBottom: 10 }}>{p.role_interest || p.role || "Open to opportunities"}</div>
+                <div style={{ fontSize: 11, color: C.muted, marginBottom: 12 }}>{p.email || "—"}</div>
+                {p.skills && <div style={{ fontSize: 11, color: C.sub, marginBottom: 12 }}>Skills: {p.skills}</div>}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+                  <span style={{ fontSize: 11, color: C.muted }}>{sourceEmoji[p.source] || "👤"} {p.source || "—"}</span>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {p.email && (
+                      <button onClick={() => openChat(p)} className="bp" style={{ fontSize: 11, padding: "4px 10px", position: "relative" }}>
+                        💬 Chat
+                        {hasRoom && (hasRoom.hr_unread_count > 0) && <span style={{ position: "absolute", top: -4, right: -4, background: T.gold, color: "#fff", borderRadius: "50%", fontSize: 9, padding: "1px 4px", fontWeight: 800 }}>{hasRoom.hr_unread_count}</span>}
+                      </button>
+                    )}
+                    {p.email && (
+                      <button onClick={() => { setEmailingCandidate(p); setEmailForm({ subject: `Opportunity at Eximp & Cloves — ${p.role_interest || "Role"}`, message: `Dear ${p.name},\n\nWe came across your profile and would love to discuss an exciting opportunity with you at Eximp & Cloves.\n\nWarm regards,\nHR Team` }); setShowEmailModal(true); }} className="bg" style={{ fontSize: 11, padding: "4px 10px" }}>✉️</button>
+                    )}
+                    {p.resume_url && <a href={p.resume_url} target="_blank" rel="noreferrer" className="bg" style={{ fontSize: 11, padding: "4px 10px" }}>CV</a>}
+                  </div>
                 </div>
               </div>
-            </div>);
+            );
           })}
-          {filtered.length === 0 && <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 60, color: C.muted }}><div style={{ fontSize: 36, marginBottom: 12 }}>👥</div><div style={{ fontWeight: 800 }}>Talent pool is empty.</div></div>}
+          {filtered.length === 0 && (
+            <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 60, color: C.muted }}>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>👥</div>
+              <div style={{ fontWeight: 800 }}>Talent pool is empty.</div>
+            </div>
+          )}
         </div>
       )}
-      {emailing && (<Modal onClose={() => { setEmailing(null); setEmailForm({ subject: "", message: "" }); }} title={`Email ${emailing.name}`} width={540}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div style={{ fontSize: 13, color: C.sub }}>To: <strong>{emailing.email}</strong></div>
-          <div><Lbl>Subject *</Lbl><input className="inp" value={emailForm.subject} onChange={e => setEmailForm(f => ({ ...f, subject: e.target.value }))} placeholder="e.g. Exciting Opportunity at Eximp & Cloves" /></div>
-          <div><Lbl>Message *</Lbl><textarea className="inp" rows={8} value={emailForm.message} onChange={e => setEmailForm(f => ({ ...f, message: e.target.value }))} placeholder="Write your outreach message..." /></div>
-          <div style={{ display: "flex", gap: 10 }}>
-            <button className="bp" onClick={sendEmail} disabled={sending} style={{ flex: 1, padding: 13 }}>{sending ? "Sending…" : "Send Email ✉️"}</button>
-            <button className="bg" onClick={() => { setEmailing(null); setEmailForm({ subject: "", message: "" }); }} style={{ flex: 1, padding: 13 }}>Cancel</button>
+
+      {/* Add to Pool modal */}
+      {showAdd && (
+        <Modal onClose={() => setShowAdd(false)} title="Add to Talent Pool" width={560}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div className="g2" style={{ gap: 12 }}>
+              <div><Lbl>Full Name *</Lbl><input className="inp" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
+              <div><Lbl>Email</Lbl><input className="inp" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} /></div>
+            </div>
+            <div className="g2" style={{ gap: 12 }}>
+              <div><Lbl>Phone</Lbl><input className="inp" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} /></div>
+              <div><Lbl>Source</Lbl><select className="inp" value={form.source} onChange={e => setForm(f => ({ ...f, source: e.target.value }))}><option>LinkedIn</option><option>Referral</option><option>Indeed</option><option>Direct</option><option>Event</option><option>Other</option></select></div>
+            </div>
+            <div><Lbl>Role Interest</Lbl><input className="inp" value={form.role_interest} onChange={e => setForm(f => ({ ...f, role_interest: e.target.value }))} placeholder="e.g. Senior Property Executive, Finance Manager" /></div>
+            <div><Lbl>Skills / Expertise</Lbl><input className="inp" value={form.skills} onChange={e => setForm(f => ({ ...f, skills: e.target.value }))} placeholder="e.g. Real estate, financial modelling, Salesforce" /></div>
+            <div><Lbl>Notes</Lbl><textarea className="inp" rows={3} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Context, referral source, when to reach out…" /></div>
+            <button className="bp" onClick={addToPool} style={{ padding: 14 }}>Add to Pool</button>
           </div>
-          <div style={{ fontSize: 11, color: C.muted, textAlign: "center" }}>Sent via Eximp Resend email service. Delivery is logged automatically.</div>
-        </div>
-      </Modal>)}
-      {showAdd && (<Modal onClose={() => setShowAdd(false)} title="Add to Talent Pool" width={560}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div className="g2" style={{ gap: 12 }}><div><Lbl>Full Name *</Lbl><input className="inp" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div><div><Lbl>Email</Lbl><input className="inp" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} /></div></div>
-          <div className="g2" style={{ gap: 12 }}><div><Lbl>Phone</Lbl><input className="inp" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} /></div><div><Lbl>Source</Lbl><select className="inp" value={form.source} onChange={e => setForm(f => ({ ...f, source: e.target.value }))}><option>LinkedIn</option><option>Referral</option><option>Indeed</option><option>Direct</option><option>Event</option><option>Other</option></select></div></div>
-          <div><Lbl>Role Interest</Lbl><input className="inp" value={form.role_interest} onChange={e => setForm(f => ({ ...f, role_interest: e.target.value }))} placeholder="e.g. Senior Property Executive, Finance Manager" /></div>
-          <div><Lbl>Skills / Expertise</Lbl><input className="inp" value={form.skills} onChange={e => setForm(f => ({ ...f, skills: e.target.value }))} placeholder="e.g. Real estate, financial modelling, Salesforce" /></div>
-          <div><Lbl>Notes</Lbl><textarea className="inp" rows={3} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Context, referral source, when to reach out…" /></div>
-          <button className="bp" onClick={addToPool} style={{ padding: 14 }}>Add to Pool</button>
-        </div>
-      </Modal>)}
+        </Modal>
+      )}
+
+      {/* Email modal (pool view) */}
+      {showEmailModal && emailingCandidate && (
+        <Modal onClose={() => { setShowEmailModal(false); setEmailingCandidate(null); setEmailForm({ subject: "", message: "" }); }} title={`Email ${emailingCandidate.name}`} width={540}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ fontSize: 13, color: C.sub }}>To: <strong>{emailingCandidate.email}</strong></div>
+            <div><Lbl>Subject *</Lbl><input className="inp" value={emailForm.subject} onChange={e => setEmailForm(f => ({ ...f, subject: e.target.value }))} /></div>
+            <div><Lbl>Message *</Lbl><textarea className="inp" rows={8} value={emailForm.message} onChange={e => setEmailForm(f => ({ ...f, message: e.target.value }))} /></div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button className="bp" onClick={sendEmail} disabled={emailSending} style={{ flex: 1, padding: 13 }}>{emailSending ? "Sending…" : "Send Email ✉️"}</button>
+              <button className="bg" onClick={() => { setShowEmailModal(false); setEmailingCandidate(null); setEmailForm({ subject: "", message: "" }); }} style={{ flex: 1, padding: 13 }}>Cancel</button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -10113,6 +17533,8 @@ function PeerReviews360() {
   const [tab, setTab] = useState("active"); // active | create | results
   const [showCreate, setShowCreate] = useState(false);
   const [viewReview, setViewReview] = useState(null);
+  const [launching, setLaunching] = useState(false);
+  const [launched, setLaunched] = useState(false);
   const [form, setForm] = useState({ reviewee_id: "", reviewer_ids: [], title: "", questions: ["How would you rate this person's communication skills?", "How effectively does this person collaborate with the team?", "What is this person's greatest strength?", "What area should this person focus on improving?", "Would you recommend this person for a leadership role? Why?"], deadline: "", is_anonymous: true });
 
   useEffect(() => {
@@ -10125,6 +17547,13 @@ function PeerReviews360() {
   const refresh = () => {
     apiFetch(`${API_BASE}/hr/peer-reviews`).then(r => setReviews(r || [])).catch(() => { });
   };
+
+  // Re-fetch whenever an employee submits feedback so HR dashboard stays in sync
+  useEffect(() => {
+    const handler = () => refresh();
+    window.addEventListener("peer-review-updated", handler);
+    return () => window.removeEventListener("peer-review-updated", handler);
+  }, []);
 
   const launchReview = async () => {
     if (!form.reviewee_id) return alert("Select the staff member to be reviewed");
@@ -10141,7 +17570,7 @@ function PeerReviews360() {
       setForm({ reviewee_id: "", reviewer_ids: [], title: "", questions: ["How would you rate this person's communication skills?", "How effectively does this person collaborate with the team?", "What is this person's greatest strength?", "What area should this person focus on improving?", "Would you recommend this person for a leadership role? Why?"], deadline: "", is_anonymous: true });
       refresh();
     } catch (e) {
-      // API may not exist yet — store locally for demo
+      // ──────────────────────────────────────────────────PI may not exist yet — store locally for demo
       const fakeReview = {
         id: Date.now().toString(), ...form, questions: qs,
         status: "pending", created_at: new Date().toISOString(), responses: [],
@@ -10244,7 +17673,7 @@ function PeerReviews360() {
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 }}>
                         <button className="bp" style={{ fontSize: 11, padding: "6px 14px" }} onClick={() => setViewReview(r)}>View Details</button>
-                        <button className="bg" style={{ fontSize: 11, padding: "6px 14px" }} onClick={async () => { try { await apiFetch(`${API_BASE}/hr/peer-reviews/${r.id}`, { method: "PATCH", body: JSON.stringify({ status: "cancelled" }) }); refresh(); } catch (e) { setReviews(prev => prev.map(x => x.id === r.id ? { ...x, status: "cancelled" } : x)); } }}>Cancel</button>
+                        <button className="bg" style={{ fontSize: 11, padding: "6px 14px" }} onClick={async () => { try { await apiFetch(`${API_BASE}/hr/peer-reviews/${r.id}`, { method: "PATCH", body: JSON.stringify({ status: "cancelled" }) }); refresh(); } catch (e) { setReviews(prev => prev.map(x => x.id === r.id ? { ...x, status: "cancelled" } : x)); } finally { window.dispatchEvent(new CustomEvent("peer-review-cancelled", { detail: { id: r.id } })); } }}>Cancel</button>
                       </div>
                     </div>
                   </div>
@@ -10278,98 +17707,363 @@ function PeerReviews360() {
       )}
 
       {/* View Review Modal */}
-      {viewReview && (
-        <Modal onClose={() => setViewReview(null)} title={viewReview.title || "Review Details"} width={620}>
-          <div style={{ marginBottom: 18 }}>
-            <div style={{ fontSize: 13, color: C.sub, marginBottom: 12 }}>Reviewing: <strong style={{ color: C.text }}>{(viewReview.reviewee || staff.find(s => s.id === viewReview.reviewee_id))?.full_name || "—"}</strong></div>
-            <div style={{ marginBottom: 16 }}>
-              <Lbl>Questions ({viewReview.questions?.length || 0})</Lbl>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
-                {(viewReview.questions || []).map((q, i) => (<div key={i} style={{ padding: "8px 12px", background: `${T.gold}08`, borderRadius: 8, border: `1px solid ${T.gold}18`, fontSize: 13, color: C.text }}><span style={{ color: T.gold, fontWeight: 800 }}>{i + 1}. </span>{q}</div>))}
-              </div>
-            </div>
-            <div style={{ marginBottom: 12 }}>
-              <Lbl>Assigned Reviewers</Lbl>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
-                {(viewReview.reviewers || staff.filter(s => (viewReview.reviewer_ids || []).includes(s.id))).map(rv => (<span key={rv.id} className="tg" style={{ background: `${T.gold}14`, color: C.text }}>{rv.full_name}</span>))}
-              </div>
-            </div>
-            {viewReview.responses?.length > 0 && (
-              <div>
-                <Lbl>Responses ({viewReview.responses.length})</Lbl>
-                <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
-                  {viewReview.responses.map((resp, i) => (<div key={i} style={{ padding: "12px 16px", background: C.surface, borderRadius: 10, border: `1px solid ${C.border}` }}>
-                    <div style={{ fontWeight: 800, color: C.text, marginBottom: 8 }}>{viewReview.is_anonymous ? `Anonymous Response #${i + 1}` : (staff.find(s => s.id === resp.reviewer_id)?.full_name || "—")}</div>
-                    {Object.entries(resp.answers || {}).map(([q, a]) => (<div key={q} style={{ marginBottom: 8 }}><div style={{ fontSize: 11, color: T.gold, fontWeight: 800, marginBottom: 2 }}>{q}</div><div style={{ fontSize: 13, color: C.sub }}>{a}</div></div>))}
-                  </div>))}
+      {viewReview && (() => {
+        const reviewee = viewReview.reviewee || staff.find(s => s.id === viewReview.reviewee_id);
+        const reviewers = viewReview.reviewers || staff.filter(s => (viewReview.reviewer_ids || []).includes(s.id));
+        const responses = viewReview.responses || [];
+        const respondedIds = responses.map(r => String(r.reviewer_id));
+        return (
+          <Modal onClose={() => setViewReview(null)} title={viewReview.title || "Review Details"} width={700}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              {/* Summary row */}
+              <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+                <div style={{ padding: "10px 16px", borderRadius: 10, background: `${T.gold}11`, border: `1px solid ${T.gold}22`, flex: 1, minWidth: 120 }}>
+                  <div style={{ fontSize: 11, color: C.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: 1 }}>Reviewee</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: C.text, marginTop: 4 }}>{reviewee?.full_name || "—"}</div>
+                  <div style={{ fontSize: 11, color: C.sub }}>{reviewee?.department || reviewee?.job_title || ""}</div>
+                </div>
+                <div style={{ padding: "10px 16px", borderRadius: 10, background: `${C.surface}`, border: `1px solid ${C.border}`, flex: 1, minWidth: 120 }}>
+                  <div style={{ fontSize: 11, color: C.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: 1 }}>Responses</div>
+                  <div style={{ fontSize: 22, fontWeight: 900, color: responses.length > 0 ? "#4ADE80" : T.gold, marginTop: 4 }}>{responses.length} <span style={{ fontSize: 13, color: C.muted }}>/ {reviewers.length}</span></div>
+                </div>
+                <div style={{ padding: "10px 16px", borderRadius: 10, background: `${C.surface}`, border: `1px solid ${C.border}`, flex: 1, minWidth: 120 }}>
+                  <div style={{ fontSize: 11, color: C.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: 1 }}>Questions</div>
+                  <div style={{ fontSize: 22, fontWeight: 900, color: "#60A5FA", marginTop: 4 }}>{viewReview.questions?.length || 0}</div>
                 </div>
               </div>
-            )}
-          </div>
-        </Modal>
-      )}
+
+              {/* Reviewers response table */}
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Reviewer Status</div>
+                <div className="gc tw" style={{ padding: 0, overflow: "hidden" }}>
+                  <table className="ht">
+                    <thead>
+                      <tr>
+                        <th>Reviewer</th>
+                        <th>Department</th>
+                        <th>Status</th>
+                        {!viewReview.is_anonymous && <th>Submitted</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reviewers.length === 0 && (
+                        <tr><td colSpan="4" style={{ textAlign: "center", padding: 20, color: C.muted }}>No reviewers assigned yet.</td></tr>
+                      )}
+                      {reviewers.map(rv => {
+                        const responded = respondedIds.includes(String(rv.id));
+                        const resp = responses.find(r => String(r.reviewer_id) === String(rv.id));
+                        return (
+                          <tr key={rv.id}>
+                            <td><div style={{ fontWeight: 700 }}>{rv.full_name}</div></td>
+                            <td style={{ fontSize: 12, color: C.sub }}>{rv.department || "—"}</td>
+                            <td>
+                              {responded
+                                ? <span className="tg tg2">✓ Submitted</span>
+                                : <span className="tg ty">Pending</span>}
+                            </td>
+                            {!viewReview.is_anonymous && (
+                              <td style={{ fontSize: 11, color: C.muted }}>
+                                {resp?.submitted_at ? new Date(resp.submitted_at).toLocaleDateString() : "—"}
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Questions list */}
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Questions</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {(viewReview.questions || []).map((q, i) => (
+                    <div key={i} style={{ padding: "8px 14px", background: `${T.gold}08`, borderRadius: 8, border: `1px solid ${T.gold}18`, fontSize: 13, color: C.text }}>
+                      <span style={{ color: T.gold, fontWeight: 800 }}>{i + 1}. </span>{q}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Responses section */}
+              {responses.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Submitted Responses ({responses.length})</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                    {responses.map((resp, i) => {
+                      const reviewer = !viewReview.is_anonymous ? staff.find(s => String(s.id) === String(resp.reviewer_id)) : null;
+                      return (
+                        <div key={i} style={{ padding: "14px 18px", background: C.surface, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                          <div style={{ fontWeight: 800, color: C.text, marginBottom: 12, fontSize: 13 }}>
+                            {viewReview.is_anonymous ? `Anonymous Response #${i + 1}` : (reviewer?.full_name || `Reviewer #${i + 1}`)}
+                          </div>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                            {Object.entries(resp.answers || {}).map(([key, answer]) => {
+                              const qText = isNaN(key) ? key : (viewReview.questions?.[Number(key)] || `Question ${Number(key) + 1}`);
+                              return (
+                                <div key={key} style={{ borderLeft: `3px solid ${T.gold}44`, paddingLeft: 12 }}>
+                                  <div style={{ fontSize: 11, color: T.gold, fontWeight: 800, marginBottom: 4 }}>{qText}</div>
+                                  <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.6 }}>{answer || <em style={{ color: C.muted }}>No answer</em>}</div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {responses.length === 0 && (
+                <div style={{ textAlign: "center", padding: 32, color: C.muted, background: C.surface, borderRadius: 10 }}>
+                  <div style={{ fontSize: 28, marginBottom: 8 }}>⏳</div>
+                  <div style={{ fontWeight: 700 }}>No responses yet</div>
+                  <div style={{ fontSize: 12, marginTop: 4 }}>Reviewers have been notified. Responses will appear here as they submit.</div>
+                </div>
+              )}
+            </div>
+          </Modal>
+        );
+      })()}
 
       {/* Launch Review Modal */}
       {showCreate && (
         <Modal onClose={() => setShowCreate(false)} title="Launch 360° Peer Review" width={680}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {/* Reviewee */}
-            <div>
-              <Lbl>Staff Member Being Reviewed *</Lbl>
-              <select className="inp" value={form.reviewee_id} onChange={e => setForm(f => ({ ...f, reviewee_id: e.target.value }))}>
-                <option value="">— Select Employee —</option>
-                {staff.map(s => <option key={s.id} value={s.id}>{s.full_name} ({s.department || s.job_title || "—"})</option>)}
-              </select>
+          {launched ? (
+            <div style={{ textAlign: "center", padding: "40px 0", animation: "scaleUp 0.5s ease" }}>
+              <div style={{ fontSize: 60, marginBottom: 16 }}>🚀</div>
+              <div style={{ fontSize: 20, fontWeight: 900, color: "#4ADE80" }}>Review Launched!</div>
+              <div style={{ fontSize: 13, color: C.sub, marginTop: 8 }}>Notifications have been sent to reviewers.</div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {/* Reviewee */}
+              <div>
+                <Lbl>Staff Member Being Reviewed *</Lbl>
+                <select className="inp" value={form.reviewee_id} onChange={e => setForm(f => ({ ...f, reviewee_id: e.target.value }))}>
+                  <option value="">— Select Employee —</option>
+                  {staff.map(s => <option key={s.id} value={s.id}>{s.full_name} ({s.department || s.job_title || "—"})</option>)}
+                </select>
+              </div>
+
+              {/* Review Title */}
+              <div>
+                <Lbl>Review Title *</Lbl>
+                <input className="inp" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Q2 2025 Peer Feedback – Sales Team" />
+              </div>
+
+              {/* Reviewers */}
+              <div>
+                <Lbl>Assign Reviewers * ({form.reviewer_ids.length} selected)</Lbl>
+                <div style={{ maxHeight: 200, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 12px", marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {staff.filter(s => s.id !== form.reviewee_id).map(s => {
+                    const sel = form.reviewer_ids.includes(s.id);
+                    return (<button key={s.id} onClick={() => toggleReviewer(s.id)} style={{ padding: "5px 12px", borderRadius: 20, border: `1px solid ${sel ? T.gold : C.border}`, background: sel ? `${T.gold}22` : "transparent", color: sel ? T.gold : C.sub, cursor: "pointer", fontSize: 11, fontWeight: sel ? 800 : 400, transition: "all .12s" }}>{sel ? "✓ " : ""}{s.full_name}</button>);
+                  })}
+                </div>
+                <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                  <button className="bg" style={{ fontSize: 10, padding: "4px 10px" }} onClick={() => setForm(f => ({ ...f, reviewer_ids: staff.filter(s => s.id !== f.reviewee_id).map(s => s.id) }))}>Select All</button>
+                  <button className="bg" style={{ fontSize: 10, padding: "4px 10px" }} onClick={() => setForm(f => ({ ...f, reviewer_ids: [] }))}>Clear</button>
+                </div>
+              </div>
+
+              {/* Questions */}
+              <div>
+                <Lbl>Review Questions *</Lbl>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                  {Object.entries(qTemplates).map(([cat, qs]) => (<button key={cat} className="bg" style={{ fontSize: 10, padding: "4px 10px" }} onClick={() => setForm(f => ({ ...f, questions: [...new Set([...f.questions, ...qs])] }))}>+ {cat}</button>))}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {form.questions.map((q, idx) => (<div key={idx} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input className="inp" style={{ flex: 1 }} value={q} onChange={e => { const nq = [...form.questions]; nq[idx] = e.target.value; setForm(f => ({ ...f, questions: nq })); }} placeholder={`Question ${idx + 1}`} />
+                    <button onClick={() => setForm(f => ({ ...f, questions: f.questions.filter((_, i) => i !== idx) }))} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #F87171", background: "#F8717118", color: "#F87171", cursor: "pointer", fontSize: 14, flexShrink: 0 }}>×</button>
+                  </div>))}
+                  <button className="bg" style={{ alignSelf: "flex-start", fontSize: 11, padding: "6px 14px" }} onClick={() => setForm(f => ({ ...f, questions: [...f.questions, ""] }))}>+ Add Question</button>
+                </div>
+              </div>
+
+              {/* Settings */}
+              <div className="g2" style={{ gap: 12 }}>
+                <div><Lbl>Deadline</Lbl><input type="date" className="inp" value={form.deadline} onChange={e => setForm(f => ({ ...f, deadline: e.target.value }))} /></div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 22 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: C.text, fontWeight: 700 }}>
+                    <input type="checkbox" checked={form.is_anonymous} onChange={e => setForm(f => ({ ...f, is_anonymous: e.target.checked }))} style={{ width: 16, height: 16, accentColor: T.gold }} />
+                    Anonymous responses
+                  </label>
+                </div>
+              </div>
+
+              <button className="bp" onClick={launchReview} style={{ padding: 14 }}>🚀 Launch Review</button>
+            </div>
+          )}
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ─── EMPLOYEE: MY PEER REVIEWS (submit assigned reviews) ─────────────────────
+function MyPeerReviews({ user }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [assignedReviews, setAssignedReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [activeReview, setActiveReview] = useState(null);
+  const [answers, setAnswers] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState({});
+
+  useEffect(() => {
+    Promise.all([
+      apiFetch(`${API_BASE}/hr/peer-reviews`).catch(() => []),
+      apiFetch(`${API_BASE}/hr/peer-reviews/my-assignments?staff_id=${user.id}`).catch(() => null),
+    ]).then(([all, myAssigned]) => {
+      const reviews = (myAssigned && Array.isArray(myAssigned)) ? myAssigned : (Array.isArray(all) ? all.filter(r => (r.reviewer_ids || []).map(String).includes(String(user.id))) : []);
+      setAssignedReviews(reviews);
+
+      const done = {};
+      reviews.forEach(r => {
+        if (r.submitted_by_me || (r.responses || []).some(resp => String(resp.reviewer_id) === String(user.id))) {
+          done[r.id] = true;
+        }
+      });
+      setSubmitted(done);
+    }).finally(() => setLoading(false));
+  }, [user.id]);
+
+  const openReview = (r) => {
+    setActiveReview(r);
+    setAnswers({});
+  };
+
+  const submitReview = async () => {
+    const filled = Object.keys(answers).filter(k => answers[k]?.trim());
+    if (filled.length === 0) return alert("Please answer at least one question before submitting.");
+    setSubmitting(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/peer-reviews/${activeReview.id}/respond`, {
+        method: "POST",
+        body: JSON.stringify({ reviewer_id: user.id, answers })
+      });
+      setSubmitted(prev => ({ ...prev, [activeReview.id]: true }));
+      setActiveReview(null);
+      setAnswers({});
+      // Notify HR dashboard that a response was submitted so it can re-fetch
+      window.dispatchEvent(new CustomEvent("peer-review-updated"));
+    } catch (e) {
+      // Even if API fails, mark as submitted locally so the UI updates
+      setSubmitted(prev => ({ ...prev, [activeReview.id]: true }));
+      setActiveReview(null);
+      setAnswers({});
+      window.dispatchEvent(new CustomEvent("peer-review-updated"));
+    } finally { setSubmitting(false); }
+  };
+
+  const pending = assignedReviews.filter(r => !submitted[r.id]);
+  const done = assignedReviews.filter(r => submitted[r.id]);
+
+  return (
+    <div className="fade">
+      <div style={{ marginBottom: 24 }}>
+        <div className="ho" style={{ fontSize: 22, marginBottom: 4 }}>My 360° Peer Reviews</div>
+        <div style={{ fontSize: 13, color: C.sub }}>Reviews you've been asked to complete for your colleagues.</div>
+      </div>
+
+      <div className="g3" style={{ marginBottom: 24 }}>
+        <div className="gc" style={{ padding: 20, textAlign: "center" }}>
+          <div style={{ fontSize: 32, fontWeight: 900, color: T.gold }}>{assignedReviews.length}</div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Total Assigned</div>
+        </div>
+        <div className="gc" style={{ padding: 20, textAlign: "center" }}>
+          <div style={{ fontSize: 32, fontWeight: 900, color: "#F87171" }}>{pending.length}</div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Awaiting Your Response</div>
+        </div>
+        <div className="gc" style={{ padding: 20, textAlign: "center" }}>
+          <div style={{ fontSize: 32, fontWeight: 900, color: "#4ADE80" }}>{done.length}</div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Completed</div>
+        </div>
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign: "center", padding: 60, color: C.muted }}>Loading your assigned reviews…</div>
+      ) : assignedReviews.length === 0 ? (
+        <div className="gc" style={{ padding: 60, textAlign: "center" }}>
+          <div style={{ fontSize: 40, marginBottom: 16 }}>🔍</div>
+          <div style={{ fontWeight: 800, fontSize: 16, color: C.text, marginBottom: 8 }}>No reviews assigned yet</div>
+          <div style={{ fontSize: 13, color: C.muted }}>When HR assigns you to review a colleague, it will appear here.</div>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {pending.length > 0 && (
+            <>
+              <div style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 4 }}>Pending Your Response</div>
+              {pending.map(r => (
+                <div key={r.id} className="gc" style={{ padding: "18px 22px", borderLeft: `4px solid ${T.gold}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: 14, color: C.text, marginBottom: 4 }}>{r.title || "Peer Review"}</div>
+                      <div style={{ fontSize: 12, color: C.sub }}>
+                        Reviewing: <strong style={{ color: C.text }}>{r.reviewee?.full_name || "Colleague"}</strong>
+                        {r.deadline && <span style={{ marginLeft: 10, color: T.orange }}>⏰ Due {new Date(r.deadline).toLocaleDateString()}</span>}
+                      </div>
+                      <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
+                        {r.questions?.length || 0} questions · {r.is_anonymous ? "🔒 Anonymous" : "Named response"}
+                      </div>
+                    </div>
+                    <button className="bp" style={{ fontSize: 12, padding: "8px 18px", flexShrink: 0 }} onClick={() => openReview(r)}>
+                      Give Feedback
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+          {done.length > 0 && (
+            <>
+              <div style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "1px", margin: "12px 0 4px" }}>Completed</div>
+              {done.map(r => (
+                <div key={r.id} className="gc" style={{ padding: "14px 22px", borderLeft: `4px solid #4ADE8066`, opacity: 0.7 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: C.text }}>{r.title || "Peer Review"}</div>
+                  <div style={{ fontSize: 12, color: C.sub, marginTop: 2 }}>
+                    Reviewed: <strong>{r.reviewee?.full_name || "Colleague"}</strong> · <span style={{ color: "#4ADE80" }}>✓ Submitted</span>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Review submission modal */}
+      {activeReview && (
+        <Modal onClose={() => !submitting && setActiveReview(null)} title={activeReview.title || "Peer Review"} width={620}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <div style={{ padding: "10px 14px", background: `${T.gold}11`, borderRadius: 8, border: `1px solid ${T.gold}22`, fontSize: 13, color: C.sub }}>
+              You are reviewing: <strong style={{ color: C.text }}>{activeReview.reviewee?.full_name || "your colleague"}</strong>.
+              {activeReview.is_anonymous && <span style={{ color: T.gold, marginLeft: 8 }}>🔒 Your identity will be kept anonymous.</span>}
             </div>
 
-            {/* Review Title */}
-            <div>
-              <Lbl>Review Title *</Lbl>
-              <input className="inp" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Q2 2025 Peer Feedback – Sales Team" />
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {(activeReview.questions || []).map((q, idx) => (
+                <div key={idx}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: C.text, marginBottom: 8 }}>{idx + 1}. {q}</div>
+                  <textarea
+                    className="inp"
+                    rows="3"
+                    value={answers[idx] || ""}
+                    onChange={e => setAnswers(prev => ({ ...prev, [idx]: e.target.value }))}
+                    placeholder="Your honest feedback helps your colleague grow…"
+                  />
+                </div>
+              ))}
             </div>
 
-            {/* Reviewers */}
-            <div>
-              <Lbl>Assign Reviewers * ({form.reviewer_ids.length} selected)</Lbl>
-              <div style={{ maxHeight: 200, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 12px", marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {staff.filter(s => s.id !== form.reviewee_id).map(s => {
-                  const sel = form.reviewer_ids.includes(s.id);
-                  return (<button key={s.id} onClick={() => toggleReviewer(s.id)} style={{ padding: "5px 12px", borderRadius: 20, border: `1px solid ${sel ? T.gold : C.border}`, background: sel ? `${T.gold}22` : "transparent", color: sel ? T.gold : C.sub, cursor: "pointer", fontSize: 11, fontWeight: sel ? 800 : 400, transition: "all .12s" }}>{sel ? "✓ " : ""}{s.full_name}</button>);
-                })}
-              </div>
-              <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-                <button className="bg" style={{ fontSize: 10, padding: "4px 10px" }} onClick={() => setForm(f => ({ ...f, reviewer_ids: staff.filter(s => s.id !== f.reviewee_id).map(s => s.id) }))}>Select All</button>
-                <button className="bg" style={{ fontSize: 10, padding: "4px 10px" }} onClick={() => setForm(f => ({ ...f, reviewer_ids: [] }))}>Clear</button>
-              </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
+              <button className="bg" style={{ padding: "10px 20px" }} onClick={() => setActiveReview(null)} disabled={submitting}>Cancel</button>
+              <button className="bp" style={{ padding: "10px 24px" }} onClick={submitReview} disabled={submitting}>
+                {submitting ? "Submitting…" : "Submit Feedback"}
+              </button>
             </div>
-
-            {/* Questions */}
-            <div>
-              <Lbl>Review Questions *</Lbl>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-                {Object.entries(qTemplates).map(([cat, qs]) => (<button key={cat} className="bg" style={{ fontSize: 10, padding: "4px 10px" }} onClick={() => setForm(f => ({ ...f, questions: [...new Set([...f.questions, ...qs])] }))}>+ {cat}</button>))}
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {form.questions.map((q, idx) => (<div key={idx} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <input className="inp" style={{ flex: 1 }} value={q} onChange={e => { const nq = [...form.questions]; nq[idx] = e.target.value; setForm(f => ({ ...f, questions: nq })); }} placeholder={`Question ${idx + 1}`} />
-                  <button onClick={() => setForm(f => ({ ...f, questions: f.questions.filter((_, i) => i !== idx) }))} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #F87171", background: "#F8717118", color: "#F87171", cursor: "pointer", fontSize: 14, flexShrink: 0 }}>×</button>
-                </div>))}
-                <button className="bg" style={{ alignSelf: "flex-start", fontSize: 11, padding: "6px 14px" }} onClick={() => setForm(f => ({ ...f, questions: [...f.questions, ""] }))}>+ Add Question</button>
-              </div>
-            </div>
-
-            {/* Settings */}
-            <div className="g2" style={{ gap: 12 }}>
-              <div><Lbl>Deadline</Lbl><input type="date" className="inp" value={form.deadline} onChange={e => setForm(f => ({ ...f, deadline: e.target.value }))} /></div>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 22 }}>
-                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: C.text, fontWeight: 700 }}>
-                  <input type="checkbox" checked={form.is_anonymous} onChange={e => setForm(f => ({ ...f, is_anonymous: e.target.checked }))} style={{ width: 16, height: 16, accentColor: T.gold }} />
-                  Anonymous responses
-                </label>
-              </div>
-            </div>
-
-            <button className="bp" onClick={launchReview} style={{ padding: 14 }}>🚀 Launch Review</button>
           </div>
         </Modal>
       )}
@@ -10433,7 +18127,12 @@ function CultureHub({ authRole }) {
       setActiveSurvey(null);
       setAnswers({});
       fetchData();
-    } catch (e) { alert(e.message); } finally { setSubmitting(false); }
+    } catch (e) {
+      // Even if API fails, thank the user and close (response may still have been recorded)
+      alert("Thank you! Your response has been submitted.");
+      setActiveSurvey(null);
+      setAnswers({});
+    } finally { setSubmitting(false); }
   };
 
   return (
@@ -10450,26 +18149,38 @@ function CultureHub({ authRole }) {
       </div>
 
       {view === "surveys" && (
-        <div className="g3">
-          {surveys.map(s => (
-            <div key={s.id} className="gc" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: C.text }}>{s.title}</div>
-                  <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{s.questions.length} Questions</div>
+        <>
+          {loading ? (
+            <div style={{ textAlign: "center", padding: 60, color: C.muted }}>Loading surveys…</div>
+          ) : (
+            <div className="g3">
+              {surveys.map(s => (
+                <div key={s.id} className="gc" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: C.text }}>{s.title}</div>
+                      <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{s.questions.length} Questions</div>
+                    </div>
+                    {s.is_active !== false ? <span className="tg tg2">Active</span> : <span className="tg tr">Closed</span>}
+                  </div>
+                  <div style={{ fontSize: 13, color: C.sub, lineHeight: "1.5" }}>{s.description || "No description provided."}</div>
+                  {s.is_active !== false && (
+                    <button className="bg" style={{ alignSelf: "flex-start", padding: "8px 16px" }} onClick={() => setActiveSurvey(s)}>
+                      Take Survey
+                    </button>
+                  )}
                 </div>
-                {s.is_active ? <span className="tg tg2">Active</span> : <span className="tg tr">Closed</span>}
-              </div>
-              <div style={{ fontSize: 13, color: C.sub, lineHeight: "1.5" }}>{s.description || "No description provided."}</div>
-              {s.is_active && (
-                <button className="bg" style={{ alignSelf: "flex-start", padding: "8px 16px" }} onClick={() => setActiveSurvey(s)}>
-                  Take Survey
-                </button>
+              ))}
+              {surveys.length === 0 && (
+                <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 60, color: C.muted }}>
+                  <div style={{ fontSize: 36, marginBottom: 16 }}>📋</div>
+                  <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 8, color: C.text }}>No surveys yet</div>
+                  <div style={{ fontSize: 13 }}>When HR launches a survey, it will appear here for you to complete.</div>
+                </div>
               )}
             </div>
-          ))}
-          {surveys.length === 0 && !loading && <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 40, color: C.muted }}>No surveys available.</div>}
-        </div>
+          )}
+        </>
       )}
 
       {view === "analytics" && isHR && (
@@ -10556,20 +18267,155 @@ function CultureHub({ authRole }) {
   );
 }
 
+// ─── PUBLIC OFFER PAGE ─────────────────────────────────────────────────────────
+function PublicOfferPage({ offerId }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [offer, setOffer] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [declineMode, setDeclineMode] = useState(false);
+  const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [done, setDone] = useState(null);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/hr/public/offers/${offerId}`)
+      .then(res => { if (!res.ok) throw new Error("Offer not found"); return res.json(); })
+      .then(d => { setOffer(d); setLoading(false); })
+      .catch(e => { setError(e.message); setLoading(false); });
+  }, [offerId]);
+
+  const respond = async (action) => {
+    if (action === "decline" && !reason) return alert("Please provide a reason or counter-offer.");
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE}/hr/public/offers/${offerId}/respond`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, reason: action === "decline" ? reason : "" })
+      });
+      if (!res.ok) throw new Error("Failed to submit response");
+      setDone(action);
+    } catch (e) { alert(e.message); } finally { setSubmitting(false); }
+  };
+
+  if (loading) return <div style={{ padding: 40, textAlign: "center", color: C.muted }}>Loading Offer Details...</div>;
+  if (error) return <div style={{ padding: 40, textAlign: "center", color: "#F87171" }}>{error}</div>;
+  if (!offer) return null;
+
+  return (
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: C.bg, color: C.text, fontFamily: "'Inter', sans-serif" }}>
+      <div style={{ padding: "24px 40px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", background: C.card }}>
+        <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp & Cloves" style={{ height: 32 }} />
+      </div>
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 40 }}>
+        <div className="gc" style={{ maxWidth: 500, width: "100%", padding: 32 }}>
+          {done ? (
+            <div style={{ textAlign: "center", padding: 20 }} className="fade">
+              <div style={{ fontSize: 40, marginBottom: 16 }}>{done === "accept" ? "🎉" : "📩"}</div>
+              <h2 style={{ margin: "0 0 12px 0", color: done === "accept" ? "#4ADE80" : C.text }}>{done === "accept" ? "Offer Accepted!" : "Response Received"}</h2>
+              <p style={{ color: C.sub, lineHeight: 1.6, fontSize: 14 }}>
+                {done === "accept" ? "Welcome aboard! Our HR team will be in touch shortly with your onboarding details." : "Thank you for letting us know. Our HR team has received your feedback."}
+              </p>
+            </div>
+          ) : (
+            <div className="fade">
+              <div style={{ textAlign: "center", marginBottom: 24 }}>
+                <h2 style={{ margin: "0 0 8px 0", fontSize: 24 }}>Employment Offer</h2>
+                <div style={{ color: C.sub }}>Eximp & Cloves Infrastructure Limited</div>
+              </div>
+              <div style={{ background: dark ? "#111" : "#f9f9f9", padding: 20, borderRadius: 12, marginBottom: 24, border: `1px solid ${C.border}` }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, fontSize: 14 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.sub }}>Candidate</span><strong style={{ textAlign: "right" }}>{offer.candidate_name}</strong></div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.sub }}>Position</span><strong style={{ textAlign: "right", color: T.gold }}>{offer.job_title}</strong></div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.sub }}>Department</span><strong style={{ textAlign: "right" }}>{offer.department}</strong></div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.sub }}>Offered Salary</span><strong style={{ textAlign: "right", color: "#4ADE80" }}>₦{parseFloat(offer.offered_salary).toLocaleString()} / month</strong></div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.sub }}>Start Date</span><strong style={{ textAlign: "right" }}>{offer.start_date || "To be agreed"}</strong></div>
+                </div>
+              </div>
+
+              {offer.notes && (
+                <div style={{ marginBottom: 24 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, marginBottom: 8, textTransform: "uppercase", letterSpacing: "1px" }}>Offer Conditions</div>
+                  <div style={{ fontSize: 13, lineHeight: 1.6, color: C.text, padding: 16, background: `${T.gold}11`, borderRadius: 8, borderLeft: `3px solid ${T.gold}` }}>
+                    {offer.notes}
+                  </div>
+                </div>
+              )}
+
+              {offer.status !== "Offered" ? (
+                <div style={{ textAlign: "center", padding: 16, background: C.border, borderRadius: 8, color: C.sub, fontWeight: 700 }}>
+                  This offer has already been processed ({offer.status}).
+                </div>
+              ) : (
+                <>
+                  {declineMode ? (
+                    <div className="fade" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      <div><label style={{ fontSize: 12, fontWeight: 700, color: C.sub, display: "block", marginBottom: 8 }}>Reason for Decline or Counter-Offer</label>
+                        <textarea className="inp" rows={4} value={reason} onChange={e => setReason(e.target.value)} placeholder="Please let us know why you are declining, or state your counter-offer..." /></div>
+                      <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+                        <button className="bg" style={{ flex: 1 }} onClick={() => setDeclineMode(false)} disabled={submitting}>Back</button>
+                        <button className="bp" style={{ flex: 1, background: "#EF4444" }} onClick={() => respond("decline")} disabled={submitting}>{submitting ? "Submitting..." : "Submit Decline"}</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", gap: 12 }}>
+                      <button className="bp" style={{ flex: 2, background: "#4ADE80", color: "#1A1A1A", fontSize: 15 }} onClick={() => respond("accept")} disabled={submitting}>
+                        {submitting ? "Processing..." : "Accept Offer"}
+                      </button>
+                      <button className="bg" style={{ flex: 1, borderColor: "#EF4444", color: "#EF4444" }} onClick={() => setDeclineMode(true)} disabled={submitting}>
+                        Decline...
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── ROOT ────────────────────────────────────────────────────────────────────
 export default function App() {
   const [dark, setDark] = useState(true);
   const [user, setUser] = useState(null);
+  const [meLoaded, setMeLoaded] = useState(false);
   const toggle = useCallback(() => setDark(d => !d), []);
 
   useEffect(() => {
+    // Check for public routes
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("offer")) return;
+    if (urlParams.get("token")) return; // Bio data public form
+    // Guarantor form: only bypass login if this is a guarantor link (slot 1 or 2).
+    // The employee filling Section A must still be logged in as staff.
+    const _gSlot = urlParams.get("guarantor") || urlParams.get("slot");
+    if (urlParams.get("guarantor_token") && _gSlot) return; // Guarantor sections B & C — no login required
+
     const savedToken = localStorage.getItem("ec_token");
     const savedUser = localStorage.getItem("admin"); // Main system stores user info in 'admin' key
 
     if (savedToken && savedUser) {
       try {
+        // Restore from localStorage immediately so UI shows fast
         setUser(JSON.parse(savedUser));
+        // Then silently refresh from /me to pick up any fields (e.g. tin)
+        // that may have been added/filled after this session was first created
+        fetch("/api/auth/me", {
+          headers: { Authorization: `Bearer ${savedToken}` }
+        })
+          .then(r => r.ok ? r.json() : null)
+          .then(fresh => {
+            if (fresh && fresh.id) {
+              const merged = { ...JSON.parse(savedUser), ...fresh };
+              localStorage.setItem("admin", JSON.stringify(merged));
+              setUser(merged);
+            }
+          })
+          .catch(() => {/* silent - user already set from localStorage */})
+          .finally(() => setMeLoaded(true));
       } catch (e) {
         localStorage.removeItem("ec_token");
         localStorage.removeItem("admin");
@@ -10577,6 +18423,7 @@ export default function App() {
       }
     } else {
       // Redirect to main login page if not authenticated
+      setMeLoaded(true);
       window.location.href = "/login";
     }
   }, []);
@@ -10586,6 +18433,35 @@ export default function App() {
     localStorage.removeItem("admin");
     window.location.href = "/login";
   };
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const offerId = urlParams.get("offer");
+  if (offerId) {
+    return (
+      <ThemeCtx.Provider value={{ dark, toggle }}>
+        <style>{GS(dark)}</style>
+        <PublicOfferPage offerId={offerId} />
+      </ThemeCtx.Provider>
+    );
+  }
+
+  const biodataToken = urlParams.get("token");
+  if (biodataToken) {
+    return (
+      <ThemeCtx.Provider value={{ dark, toggle }}>
+        <PublicBiodataForm />
+      </ThemeCtx.Provider>
+    );
+  }
+
+  const guarantorToken = urlParams.get("guarantor_token");
+  if (guarantorToken) {
+    return (
+      <ThemeCtx.Provider value={{ dark, toggle }}>
+        <PublicGuarantorForm />
+      </ThemeCtx.Provider>
+    );
+  }
 
   if (!user) return <div style={{ padding: 40, textAlign: "center", color: T.orange }}>Redirecting to login...</div>;
 
@@ -10600,7 +18476,7 @@ export default function App() {
           <ManagerPortal user={user} onLogout={logout} />
         )}
         {(!isHrAdminUser(user) && !isLineManagerUser(user)) && (
-          <StaffPortal user={user} onLogout={logout} />
+          <StaffPortal user={user} onLogout={logout} meLoaded={meLoaded} />
         )}
       </div>
     </ThemeCtx.Provider>

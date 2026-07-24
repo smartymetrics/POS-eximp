@@ -1,0 +1,555 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Procurement Dashboard - Eximp & Cloves</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        
+        header {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .project-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .project-info div {
+            padding: 10px;
+            background: #f5f5f5;
+            border-left: 4px solid #667eea;
+            border-radius: 4px;
+        }
+        
+        .project-info strong {
+            display: block;
+            color: #333;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+        
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .kpi-card {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            border-left: 5px solid #667eea;
+        }
+        
+        .kpi-card.warning {
+            border-left-color: #f59e0b;
+        }
+        
+        .kpi-card.success {
+            border-left-color: #10b981;
+        }
+        
+        .kpi-card.danger {
+            border-left-color: #ef4444;
+        }
+        
+        .kpi-label {
+            font-size: 12px;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        
+        .kpi-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .kpi-subtext {
+            font-size: 13px;
+            color: #666;
+        }
+        
+        .chart-section {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        
+        .chart-section h2 {
+            margin-bottom: 20px;
+            color: #333;
+            font-size: 20px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+        
+        .risks-section {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        
+        .risks-section h2 {
+            margin-bottom: 20px;
+            color: #333;
+            font-size: 20px;
+            border-bottom: 2px solid #f59e0b;
+            padding-bottom: 10px;
+        }
+        
+        .risk-item {
+            padding: 15px;
+            margin-bottom: 15px;
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            border-radius: 4px;
+        }
+        
+        .risk-item.high {
+            background: #fee2e2;
+            border-left-color: #ef4444;
+        }
+        
+        .risk-item.medium {
+            background: #fef3c7;
+            border-left-color: #f59e0b;
+        }
+        
+        .risk-item.low {
+            background: #dbeafe;
+            border-left-color: #3b82f6;
+        }
+        
+        .risk-type {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .risk-description {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        
+        .risk-recommendation {
+            color: #555;
+            font-size: 13px;
+            font-style: italic;
+            padding-top: 8px;
+            border-top: 1px solid rgba(0,0,0,0.1);
+        }
+        
+        .top-items {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        
+        .top-items h2 {
+            margin-bottom: 20px;
+            color: #333;
+            font-size: 20px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        
+        .item-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .item-row:last-child {
+            border-bottom: none;
+        }
+        
+        .item-name {
+            flex: 1;
+            font-weight: 500;
+            color: #333;
+        }
+        
+        .item-amount {
+            font-weight: bold;
+            color: #667eea;
+            min-width: 120px;
+            text-align: right;
+        }
+        
+        .item-percentage {
+            color: #999;
+            min-width: 70px;
+            text-align: right;
+        }
+        
+        .recommendations {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .recommendations h2 {
+            margin-bottom: 20px;
+            color: #333;
+            font-size: 20px;
+            border-bottom: 2px solid #10b981;
+            padding-bottom: 10px;
+        }
+        
+        .recommendation-item {
+            padding: 12px 0;
+            padding-left: 30px;
+            position: relative;
+            color: #555;
+            line-height: 1.6;
+        }
+        
+        .recommendation-item::before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #10b981;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        
+        footer {
+            text-align: center;
+            color: white;
+            padding: 20px;
+            font-size: 12px;
+        }
+        
+        @media (max-width: 768px) {
+            .kpi-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            h1 {
+                font-size: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>🏢 Procurement Dashboard</h1>
+            <p style="color: #999; margin: 5px 0;">Eximp & Cloves Infrastructure Limited</p>
+            
+            <div class="project-info">
+                <div>
+                    <strong>Location</strong>
+                    AGBOWA IKORODU
+                </div>
+                <div>
+                    <strong>Quotation Date</strong>
+                    2026-04-22
+                </div>
+                <div>
+                    <strong>Sections</strong>
+                    2 sections
+                </div>
+                <div>
+                    <strong>Items</strong>
+                    12 line items
+                </div>
+                <div>
+                    <strong>Generated</strong>
+                    2026-05-04 14:59:46
+                </div>
+            </div>
+        </header>
+        
+        <!-- KPI Cards -->
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <div class="kpi-label">Total Project Budget</div>
+                <div class="kpi-value">₦18,810,000</div>
+                <div class="kpi-subtext">All procurement costs</div>
+            </div>
+            
+            <div class="kpi-card warning">
+                <div class="kpi-label">Average Item Cost</div>
+                <div class="kpi-value">₦1,567,500</div>
+                <div class="kpi-subtext">Across 12 items</div>
+            </div>
+            
+            <div class="kpi-card danger">
+                <div class="kpi-label">High-Value Items</div>
+                <div class="kpi-value">3</div>
+                <div class="kpi-subtext">Items >10% of budget</div>
+            </div>
+            
+            <div class="kpi-card success">
+                <div class="kpi-label">Cost Optimization</div>
+                <div class="kpi-value">1</div>
+                <div class="kpi-subtext">Savings opportunities identified</div>
+            </div>
+        </div>
+        
+        <!-- Charts Section -->
+        <div class="charts-grid">
+            <div class="chart-section">
+                <h2>Cost Breakdown by Section</h2>
+                <div class="chart-container">
+                    <canvas id="sectionChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="chart-section">
+                <h2>Cost Breakdown by Category</h2>
+                <div class="chart-container">
+                    <canvas id="categoryChart"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Top Expense Items -->
+        <div class="top-items">
+            <h2>Top 10 Expense Items</h2>
+            
+            <div class="item-row">
+                <div class="item-name">1. Blocks</div>
+                <div class="item-amount">₦9,000,000</div>
+                <div class="item-percentage">47.8%</div>
+            </div>
+            
+            <div class="item-row">
+                <div class="item-name">2. Cement</div>
+                <div class="item-amount">₦3,900,000</div>
+                <div class="item-percentage">20.7%</div>
+            </div>
+            
+            <div class="item-row">
+                <div class="item-name">3. Excavator</div>
+                <div class="item-amount">₦1,350,000</div>
+                <div class="item-percentage">7.2%</div>
+            </div>
+            
+            <div class="item-row">
+                <div class="item-name">4. Pay loader</div>
+                <div class="item-amount">₦1,140,000</div>
+                <div class="item-percentage">6.1%</div>
+            </div>
+            
+            <div class="item-row">
+                <div class="item-name">5. Gravel</div>
+                <div class="item-amount">₦1,050,000</div>
+                <div class="item-percentage">5.6%</div>
+            </div>
+            
+            <div class="item-row">
+                <div class="item-name">6. Sharp Sand</div>
+                <div class="item-amount">₦900,000</div>
+                <div class="item-percentage">4.8%</div>
+            </div>
+            
+            <div class="item-row">
+                <div class="item-name">7. Lowbed Truck</div>
+                <div class="item-amount">₦800,000</div>
+                <div class="item-percentage">4.3%</div>
+            </div>
+            
+            <div class="item-row">
+                <div class="item-name">8. Iron Rods (12mm)</div>
+                <div class="item-amount">₦500,000</div>
+                <div class="item-percentage">2.7%</div>
+            </div>
+            
+            <div class="item-row">
+                <div class="item-name">9. Hotel Accomodation</div>
+                <div class="item-amount">₦60,000</div>
+                <div class="item-percentage">0.3%</div>
+            </div>
+            
+            <div class="item-row">
+                <div class="item-name">10. Water Container Truck</div>
+                <div class="item-amount">₦45,000</div>
+                <div class="item-percentage">0.2%</div>
+            </div>
+            
+        </div>
+        
+        <!-- Risks Section -->
+        <div class="risks-section"><h2>⚠️ Identified Risks & Concerns</h2>
+            <div class="risk-item medium">
+                <div class="risk-type">HIGH-VALUE CONCENTRATION - MEDIUM</div>
+                <div class="risk-description">2 items represent >10% of budget each</div>
+                <div class="risk-recommendation">→ Request multiple quotes for high-value items</div>
+            </div>
+            
+            <div class="risk-item low">
+                <div class="risk-type">EQUIPMENT RENTAL DEPENDENCY - LOW</div>
+                <div class="risk-description">Equipment rental represents 17.7% of budget</div>
+                <div class="risk-recommendation">→ Negotiate long-term rates or consider purchase</div>
+            </div>
+            </div>
+        
+        <!-- Recommendations -->
+        <div class="recommendations">
+            <h2>Management Recommendations</h2>
+            <div class="recommendation-item">ADDRESS IDENTIFIED RISKS: 2 risk areas identified requiring management attention</div><div class="recommendation-item">PURSUE COST SAVINGS: 1 optimization opportunities identified</div><div class="recommendation-item">REQUEST MULTIPLE QUOTES for high-value items to ensure competitive pricing</div><div class="recommendation-item">ESTABLISH VENDOR MANAGEMENT POLICY to ensure ongoing cost control</div><div class="recommendation-item">IMPLEMENT CONTINGENCY RESERVE: Current budget should include 10-15% contingency</div>
+        </div>
+        
+        <!-- Key Insights -->
+        <div class="chart-section" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; margin-bottom: 30px;">
+            <h2 style="border-bottom-color: rgba(255,255,255,0.3); color: white;">Key Insights & Findings</h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 15px;">
+                
+            <div style="padding: 15px; background: rgba(255,255,255,0.1); border-radius: 8px; border-left: 4px solid white;">
+                <div style="font-size: 18px; margin-bottom: 8px;">⚠️</div>
+                <div style="font-size: 14px; line-height: 1.5;">⚠ Fencing  Agbowa accounts for 82.0% of total project cost (₦15,430,000)</div>
+            </div>
+            
+            <div style="padding: 15px; background: rgba(255,255,255,0.1); border-radius: 8px; border-left: 4px solid white;">
+                <div style="font-size: 18px; margin-bottom: 8px;">📊</div>
+                <div style="font-size: 14px; line-height: 1.5;">📊 Top 10 items represent 99.7% of budget (₦18,745,000) - high spending concentration</div>
+            </div>
+            
+            <div style="padding: 15px; background: rgba(255,255,255,0.1); border-radius: 8px; border-left: 4px solid white;">
+                <div style="font-size: 18px; margin-bottom: 8px;">💰</div>
+                <div style="font-size: 14px; line-height: 1.5;">💰 Identified ₦84,500 in cost optimization opportunities (0.4% of budget)</div>
+            </div>
+            
+            </div>
+        </div>
+        
+        <footer>
+            Generated on 2026-05-04 at 14:59:46 | Eximp & Cloves Infrastructure Limited
+        </footer>
+    </div>
+    
+    <script>
+        // Section Chart
+        const sectionData = {"Fencing  Agbowa": 15430000.0, "Site Clearing Works": 3380000.0};
+        new Chart(document.getElementById('sectionChart'), {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(sectionData),
+                datasets: [{
+                    data: Object.values(sectionData),
+                    backgroundColor: [
+                        '#667eea',
+                        '#764ba2',
+                        '#f093fb',
+                        '#4facfe',
+                        '#43e97b'
+                    ],
+                    borderColor: '#fff',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+        
+        // Category Chart
+        const categoryData = {"Materials & Supplies": 81.79160021265285, "Equipment & Machinery": 17.729930887825624, "Other Services": 0.3189792663476874, "Labour & Services": 0.1594896331738437};
+        new Chart(document.getElementById('categoryChart'), {
+            type: 'bar',
+            data: {
+                labels: Object.keys(categoryData),
+                datasets: [{
+                    label: 'Cost Distribution (%)',
+                    data: Object.values(categoryData),
+                    backgroundColor: '#667eea',
+                    borderColor: '#667eea',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y',
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        max: 100
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

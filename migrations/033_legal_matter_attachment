@@ -1,0 +1,104 @@
+-- Migration: Legal Matter Attachments (Document Management System)
+-- Date: May 2026
+-- Purpose: Create the Document Vault for the Legal DMS
+-- Run this in your Supabase SQL editor
+
+-- ────────────────────────────────────────────────────────────────
+-- STEP 1: CREATE THE ATTACHMENTS TABLE
+-- ────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS legal_matter_attachments (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    matter_id       UUID NOT NULL REFERENCES legal_matters(id) ON DELETE CASCADE,
+    
+    -- File metadata
+    original_filename   TEXT NOT NULL,           -- "Employment_Contract_Draft.pdf"
+    stored_path         TEXT NOT NULL,           -- "matters/{matter_id}/{uuid}_{filename}"
+    file_type           TEXT NOT NULL CHECK (file_type IN ('pdf', 'doc', 'docx')),
+    file_size_bytes     BIGINT NOT NULL,
+    mime_type           TEXT NOT NULL,           -- "application/pdf" etc.
+    
+    -- Version control
+    version_number      INTEGER NOT NULL DEFAULT 1,    -- 1, 2, 3 ...
+    version_label       TEXT,                          -- "Initial Draft", "Revision 2", etc.
+    is_latest           BOOLEAN NOT NULL DEFAULT TRUE, -- Only ONE per matter should be TRUE
+    
+    -- Uploader info
+    uploader_id         UUID REFERENCES admins(id) ON DELETE SET NULL,
+    uploader_name       TEXT NOT NULL,
+    
+    -- Status
+    status              TEXT NOT NULL DEFAULT 'Active' CHECK (status IN ('Active', 'Superseded', 'Deleted')),
+    
+    -- Timestamps (WAT = UTC+1)
+    uploaded_at         TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- ────────────────────────────────────────────────────────────────
+-- STEP 2: INDEXES FOR PERFORMANCE
+-- ────────────────────────────────────────────────────────────────
+
+CREATE INDEX IF NOT EXISTS idx_attachments_matter     ON legal_matter_attachments(matter_id);
+CREATE INDEX IF NOT EXISTS idx_attachments_uploader   ON legal_matter_attachments(uploader_id);
+CREATE INDEX IF NOT EXISTS idx_attachments_latest     ON legal_matter_attachments(matter_id, is_latest) WHERE is_latest = TRUE;
+CREATE INDEX IF NOT EXISTS idx_attachments_status     ON legal_matter_attachments(status);
+
+-- ────────────────────────────────────────────────────────────────
+-- STEP 3: AUTO-UPDATE updated_at TRIGGER
+-- ────────────────────────────────────────────────────────────────
+
+CREATE OR REPLACE FUNCTION update_attachment_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_attachment_updated_at ON legal_matter_attachments;
+CREATE TRIGGER trg_attachment_updated_at
+    BEFORE UPDATE ON legal_matter_attachments
+    FOR EACH ROW
+    EXECUTE FUNCTION update_attachment_timestamp();
+
+-- ────────────────────────────────────────────────────────────────
+-- STEP 4: RLS (Row-Level Security) — same pattern as legal_matters
+-- ────────────────────────────────────────────────────────────────
+
+ALTER TABLE legal_matter_attachments ENABLE ROW LEVEL SECURITY;
+
+-- Service role (backend) bypasses all RLS
+CREATE POLICY "service_role_all" ON legal_matter_attachments
+    FOR ALL USING (true) WITH CHECK (true);
+
+-- ────────────────────────────────────────────────────────────────
+-- STEP 5: CREATE THE SUPABASE STORAGE BUCKET
+-- Run this separately in Supabase Dashboard > Storage > New Bucket
+-- Or via the Supabase client in your apply_legal_migration.py script
+-- ────────────────────────────────────────────────────────────────
+
+-- Bucket name:   legal-vault
+-- Public:        FALSE  (private — all access via signed URLs)
+-- File size:     20MB max per file
+-- MIME types:    application/pdf, application/msword,
+--               application/vnd.openxmlformats-officedocument.wordprocessingml.document
+
+-- ────────────────────────────────────────────────────────────────
+-- STEP 6: STORAGE RLS POLICIES (run in Supabase SQL editor)
+-- ────────────────────────────────────────────────────────────────
+
+-- Allow authenticated service role to read/write
+-- (Your FastAPI backend uses the service key, so it bypasses storage RLS by default)
+
+-- NOTE: If you add user-facing direct uploads later, add policies here.
+-- For now, all storage ops go through the backend API.
+
+-- ────────────────────────────────────────────────────────────────
+-- VERIFICATION QUERY
+-- ────────────────────────────────────────────────────────────────
+
+-- After running, verify with:
+-- SELECT column_name, data_type FROM information_schema.columns
+-- WHERE table_name = 'legal_matter_attachments'
+-- ORDER BY ordinal_position;

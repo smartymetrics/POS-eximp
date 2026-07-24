@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request, Depends, HTTPException, status
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from contextlib import asynccontextmanager
@@ -31,6 +31,7 @@ from routers import (
     crm,
     crm_professional,
     payouts,
+    procurement_submissions,
     support,
     revenue_intelligence,
     scheduling,
@@ -38,8 +39,15 @@ from routers import (
     subscriptions,
     hr,
     hr_legal,
-    ws_support
+    ws_support,
+    hrm_talent_chat,
+    biodata,
+    guarantor,
+    kyc_links,
+    discount_codes
 )
+from routers import refunds
+from routers import feedback
 from routers.auth import require_roles, resolve_admin_token
 from database import init_db
 from scheduler import start_scheduler, stop_scheduler
@@ -53,6 +61,14 @@ async def lifespan(app: FastAPI):
     # Stop the background scheduler
     await stop_scheduler()
 
+# Raise multipart upload limit to 50 MB (default is 1 MB)
+# This affects file uploads on the guarantor form and video uploads on feedback forms
+try:
+    from starlette.formparsers import MultiPartParser
+    MultiPartParser.max_part_size = 50 * 1024 * 1024  # 50 MB
+except Exception:
+    pass  # Non-fatal — falls back to starlette default
+
 app = FastAPI(title="Eximp & Cloves - Finance System", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
@@ -63,9 +79,86 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from fastapi import Request as FastAPIRequest
+import json
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """
+    Log exactly what failed in the 422 error.
+    This helps us see if it's a bad email format or missing field.
+
+    Sanitizes the entire error payload before JSON-serialising it so that
+    non-serialisable values (raw bytes from a multipart body, UploadFile
+    objects, etc.) never crash the error handler itself.
+    """
+    def _sanitize(obj):
+        """Recursively make any value safe for json.dumps."""
+        if isinstance(obj, bytes):
+            # Raw request body bytes — show length only, never the content
+            return f"<binary {len(obj)} bytes>"
+        if isinstance(obj, dict):
+            return {k: _sanitize(v) for k, v in obj.items()}
+        if isinstance(obj, (list, tuple)):
+            return [_sanitize(v) for v in obj]
+        try:
+            json.dumps(obj)
+            return obj
+        except Exception:
+            try:
+                return repr(obj)
+            except Exception:
+                return str(type(obj).__name__)
+
+    safe_errors = _sanitize(exc.errors())
+    safe_body = _sanitize(exc.body)
+
+    # Log with the sanitized version to avoid flooding logs with binary data
+    print(f"[ERROR] VALIDATION ERROR at {request.url.path}: {safe_errors}")
+
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": safe_errors, "body": safe_body},
+    )
+
+@app.exception_handler(HTTPException)
+async def auth_exception_handler(request: Request, exc: HTTPException):
+    """
+    Professionally handle Auth errors.
+    If a user is not logged in or doesn't have access, 
+    redirect them to login instead of showing raw JSON.
+    """
+    if exc.status_code in [401, 403]:
+        # Only redirect if it's a browser page request
+        accept = request.headers.get("accept", "")
+        if "text/html" in accept:
+            return RedirectResponse(url="/login?next=" + str(request.url.path))
+    
+    # Otherwise return the standard JSON error (for API calls)
+    from fastapi.responses import JSONResponse
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.get("/hr", include_in_schema=False)
+@app.get("/hr/", include_in_schema=False)
+async def hr_index():
+    return FileResponse("hrm-portal/dist/index.html")
+
+# Jinja2 3.1.3 + Starlette 0.36+ has a bug where the LRUCache receives
+# a dict as a cache key when auto_reload is on. Fix: use a custom Environment
+# with cache_size=0 (disabled) so the faulty code path is never hit.
+from jinja2 import Environment, FileSystemLoader
+_jinja_env = Environment(
+    loader=FileSystemLoader("templates"),
+    autoescape=True,
+    auto_reload=False,
+)
+_jinja_env.cache = None   # fully disable the cache
+templates = Jinja2Templates(env=_jinja_env)
 app.mount("/hr", StaticFiles(directory="hrm-portal/dist", html=True), name="hr")
-templates = Jinja2Templates(directory="templates")
 
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(clients.router, prefix="/api/clients", tags=["clients"])
@@ -93,6 +186,7 @@ app.include_router(marketing_events.router, prefix="/api/marketing/events", tags
 app.include_router(crm.router, prefix="/api/crm", tags=["crm"], dependencies=[Depends(require_roles(["admin", "super_admin", "operations", "sales", "customer_support"]))])
 app.include_router(crm_professional.router, prefix="/api/crm/pro", tags=["crm"], dependencies=[Depends(require_roles(["admin", "super_admin", "operations", "sales", "customer_support"]))])
 app.include_router(payouts.router, prefix="/api/payouts", tags=["payouts"])
+app.include_router(procurement_submissions.router, prefix="/api/payouts", tags=["procurement"])
 app.include_router(support.router, prefix="/api/support", tags=["support"])
 app.include_router(revenue_intelligence.router, prefix="/api/intelligence", tags=["intelligence"])
 app.include_router(scheduling.router, prefix="/api/scheduling", tags=["scheduling"])
@@ -101,6 +195,17 @@ app.include_router(ws_support.router, prefix="/api", tags=["live-chat"])
 app.include_router(subscriptions.router, tags=["subscriptions"])
 app.include_router(hr.router, prefix="/api/hr", tags=["hr"])
 app.include_router(hr_legal.router, prefix="/api/hr-legal", tags=["hr-legal"])
+app.include_router(biodata.router, prefix="/api/biodata", tags=["biodata"])
+app.include_router(guarantor.router, prefix="/api/guarantor", tags=["guarantor"])
+
+# KYC Links API
+app.include_router(kyc_links.router, tags=["kyc-links"])
+
+# Discount Codes API
+app.include_router(discount_codes.router, prefix="/api/discount-codes", tags=["discount-codes"])
+
+app.include_router(refunds.router, prefix="/api/refunds", tags=["refunds"])
+app.include_router(feedback.router, prefix="/api/feedback", tags=["feedback"])
 
 
 
@@ -112,7 +217,7 @@ async def root(request: Request):
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request):
-    response = templates.TemplateResponse("dashboard.html", {"request": request})
+    response = templates.TemplateResponse(request, "dashboard.html", {"request": request})
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
@@ -121,7 +226,7 @@ async def dashboard(request: Request):
 
 @app.get("/crm", response_class=HTMLResponse)
 async def crm_dashboard(request: Request):
-    return templates.TemplateResponse("professional_crm.html", {"request": request})
+    return templates.TemplateResponse(request, "professional_crm.html", {"request": request})
 
 
 @app.get("/crm/professional", response_class=HTMLResponse)
@@ -131,17 +236,17 @@ async def crm_professional_dashboard(request: Request):
 
 @app.get("/marketing", response_class=HTMLResponse)
 async def marketing_dashboard(request: Request):
-    return templates.TemplateResponse("marketing_dashboard.html", {"request": request})
+    return templates.TemplateResponse(request, "marketing_dashboard.html", {"request": request})
 
 
 @app.get("/legal", response_class=HTMLResponse)
 async def legal_dashboard(request: Request):
-    return templates.TemplateResponse("legal_dashboard.html", {"request": request})
+    return templates.TemplateResponse(request, "legal_dashboard.html", {"request": request})
 
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request})
+    return templates.TemplateResponse(request, "login.html", {"request": request})
 
 
 @app.get("/crm-pro", response_class=HTMLResponse)
@@ -151,99 +256,126 @@ async def professional_crm_dashboard(request: Request):
 
 @app.get("/clients", response_class=HTMLResponse)
 async def clients_page(request: Request):
-    return templates.TemplateResponse("clients.html", {"request": request})
+    return templates.TemplateResponse(request, "clients.html", {"request": request})
 
 
 @app.get("/invoices", response_class=HTMLResponse)
 async def invoices_page(request: Request):
-    return templates.TemplateResponse("invoices.html", {"request": request})
+    return templates.TemplateResponse(request, "invoices.html", {"request": request})
 
 
 @app.get("/new-transaction", response_class=HTMLResponse)
 async def new_transaction_page(request: Request):
-    return templates.TemplateResponse("new_transaction.html", {"request": request})
+    return templates.TemplateResponse(request, "new_transaction.html", {"request": request})
 
 
 @app.get("/marketing", response_class=HTMLResponse)
 async def marketing_dashboard_page(request: Request):
-    return templates.TemplateResponse("marketing_dashboard.html", {"request": request})
+    return templates.TemplateResponse(request, "marketing_dashboard.html", {"request": request})
 
 
 @app.get("/marketing/editor", response_class=HTMLResponse)
 async def marketing_editor_page(request: Request, id: str):
-    return templates.TemplateResponse("marketing_editor.html", {"request": request, "campaign_id": id})
+    return templates.TemplateResponse(request, "marketing_editor.html", {"request": request, "campaign_id": id})
+
+
+@app.get("/marketing/editor_v2", response_class=HTMLResponse)
+async def marketing_editor_v2_page(request: Request, id: str):
+    return templates.TemplateResponse(request, "marketing_editor_v2.html", {"request": request, "campaign_id": id})
 
 
 @app.get("/marketing/manual", response_class=HTMLResponse)
 async def marketing_manual_page(request: Request):
-    return templates.TemplateResponse("marketing_manual.html", {"request": request})
+    return templates.TemplateResponse(request, "marketing_manual.html", {"request": request})
 
 
 @app.get("/legal", response_class=HTMLResponse)
 async def legal_dashboard_page(request: Request):
-    return templates.TemplateResponse("legal_dashboard.html", {"request": request})
+    return templates.TemplateResponse(request, "legal_dashboard.html", {"request": request})
 
 
 @app.get("/legal/editor", response_class=HTMLResponse)
 async def legal_editor_page(request: Request, id: str):
-    return templates.TemplateResponse("legal_editor.html", {"request": request, "invoice_id": id})
+    return templates.TemplateResponse(request, "legal_editor.html", {"request": request, "invoice_id": id})
 
 
 @app.get("/legal/advanced-editor", response_class=HTMLResponse)
 async def legal_advanced_editor_page(request: Request, id: str = None):
-    return templates.TemplateResponse("personnel_editor.html", {"request": request, "matter_id": id})
+    return templates.TemplateResponse(request, "personnel_editor.html", {"request": request, "matter_id": id})
 
 
 @app.get("/signing/{signing_token}", response_class=HTMLResponse)
 async def signing_page(request: Request, signing_token: str):
     """Render the digital signing page."""
-    return templates.TemplateResponse("personnel_signing.html", {"request": request, "signing_token": signing_token, "is_preview": False})
+    return templates.TemplateResponse(request, "personnel_signing.html", {"request": request, "signing_token": signing_token, "is_preview": False})
 
 
 @app.get("/preview/{preview_token}", response_class=HTMLResponse)
 async def preview_page(request: Request, preview_token: str):
     """Render the digital signing page in Read-Only Preview Mode."""
-    return templates.TemplateResponse("personnel_signing.html", {"request": request, "signing_token": None, "preview_token": preview_token, "is_preview": True})
+    return templates.TemplateResponse(request, "personnel_signing.html", {"request": request, "signing_token": None, "preview_token": preview_token, "is_preview": True})
 
 
 @app.get("/legal/my-matters", response_class=HTMLResponse)
 async def staff_legal_portal(request: Request):
     """Staff HR Portal: View assigned legal matters marked visible."""
-    return templates.TemplateResponse("staff_legal_portal.html", {"request": request})
+    return templates.TemplateResponse(request, "staff_legal_portal.html", {"request": request})
 
 
 @app.get("/legal/view", response_class=HTMLResponse)
 async def staff_document_viewer(request: Request, id: str):
     """Staff HR Portal: View a specific legal document."""
-    return templates.TemplateResponse("staff_document_viewer.html", {"request": request, "matter_id": id})
+    return templates.TemplateResponse(request, "staff_document_viewer.html", {"request": request, "matter_id": id})
 
 
 @app.get("/legal/manual", response_class=HTMLResponse)
 async def legal_manual_page(request: Request):
-    return templates.TemplateResponse("legal_manual.html", {"request": request})
+    return templates.TemplateResponse(request, "legal_manual.html", {"request": request})
 
 
 @app.get("/finance/payouts", response_class=HTMLResponse)
 async def payouts_dashboard_page(request: Request):
-    return templates.TemplateResponse("payouts_dashboard.html", {"request": request})
+    return templates.TemplateResponse(request, "payouts_dashboard.html", {"request": request})
+
+@app.get("/finance/procurement", response_class=HTMLResponse)
+async def procurement_dashboard_page(request: Request, start_date: str = None, end_date: str = None, current_admin=Depends(require_roles(["super_admin"]))):
+    """Clean URL for the Procurement Dashboard (Super Admin Only)."""
+    from report_service import ReportService
+    from datetime import datetime, timedelta
+    
+    if not start_date and not end_date:
+        now = datetime.now()
+        start_date = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+        end_date = now.strftime("%Y-%m-%d")
+        
+    analytics = await ReportService.get_procurement_analytics(start_date=start_date, end_date=end_date)
+    return templates.TemplateResponse(request, "procurement_dashboard.html", {
+        "request": request,
+        "admin": current_admin,
+        "analytics": analytics
+    })
 
 
 @app.get("/finance/manual", response_class=HTMLResponse)
 async def finance_manual_page(request: Request):
-    return templates.TemplateResponse("finance_manual.html", {"request": request})
+    return templates.TemplateResponse(request, "finance_manual.html", {"request": request})
 
+
+@app.get("/procurement/portal", response_class=HTMLResponse)
+async def procurement_portal_page(request: Request):
+    return templates.TemplateResponse(request, "procurement_portal.html", {"request": request})
 
 @app.get("/payout/portal/{token}", response_class=HTMLResponse)
 async def payout_portal_page(request: Request, token: str):
-    return templates.TemplateResponse("payout_portal.html", {"request": request, "token": token})
+    return templates.TemplateResponse(request, "payout_portal.html", {"request": request, "token": token})
 
 @app.get("/book-inspection", response_class=HTMLResponse)
 async def book_inspection_page(request: Request):
-    return templates.TemplateResponse("book_inspection.html", {"request": request})
+    return templates.TemplateResponse(request, "book_inspection.html", {"request": request})
 
 @app.get("/support/portal/{ticket_id}", response_class=HTMLResponse)
 async def support_portal_page(request: Request, ticket_id: str):
-    return templates.TemplateResponse("support_portal.html", {"request": request, "ticket_id": ticket_id})
+    return templates.TemplateResponse(request, "support_portal.html", {"request": request, "ticket_id": ticket_id})
 
 @app.get("/support/chat/join/{invite_token}", response_class=HTMLResponse)
 async def chat_join_page(request: Request, invite_token: str):

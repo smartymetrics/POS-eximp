@@ -7,6 +7,26 @@ from routers.analytics import log_activity
 from datetime import datetime, timedelta
 from marketing_service import apply_segment_filters, get_financial_segment_contacts
 
+async def inject_ltv(contacts: List[Dict]):
+    if not contacts: return contacts
+    db = get_db()
+    # Fetch all non-voided invoices to calculate LTV based on amount_paid
+    inv_res = await db_execute(lambda: db.table("invoices").select("client_id, amount_paid").neq("status", "voided").execute())
+    invoices = inv_res.data or []
+    
+    # Map LTV to client_id
+    ltv_map = {}
+    for inv in invoices:
+        cid = inv.get("client_id")
+        if cid:
+            ltv_map[cid] = ltv_map.get(cid, 0) + float(inv.get("amount_paid") or 0)
+    
+    # Inject LTV into contacts
+    for contact in contacts:
+        cid = contact.get("client_id")
+        contact["total_revenue_attributed"] = ltv_map.get(cid, 0) if cid else 0
+    return contacts
+
 router = APIRouter()
 
 class SegmentCreate(BaseModel):
@@ -51,27 +71,37 @@ async def create_segment(data: SegmentCreate, current_admin=Depends(verify_token
 @router.delete("/{id}")
 async def delete_segment(id: str, current_admin=Depends(verify_token)):
     db = get_db()
+    # Fetch name before deleting for the log message
+    seg_res = await db_execute(lambda: db.table("marketing_segments").select("name").eq("id", id).execute())
+    seg_name = seg_res.data[0].get("name", id) if seg_res.data else id
     await db_execute(lambda: db.table("marketing_segments").delete().eq("id", id).execute())
+    await log_activity(
+        "marketing_segment_deleted",
+        f"Segment '{seg_name}' deleted.",
+        current_admin["sub"]
+    )
     return {"status": "ok"}
 
 @router.get("/{id}/contacts")
-async def get_segment_contacts(id: str, current_admin=Depends(verify_token)):
-    """Preview contacts who match a dynamic or static segment."""
+async def get_segment_contacts(id: str, current_admin=Depends(verify_token), limit: int = 100, offset: int = 0):
+    """Preview contacts who match a dynamic or static segment with pagination."""
     db = get_db()
     
     # Handle Smart Segments
     if id == 'engaged':
-        res = await db_execute(lambda: db.table("marketing_contacts").select("*").gt("total_emails_opened", 0).eq("is_subscribed", True).execute())
-        return res.data
+        res = await db_execute(lambda: db.table("marketing_contacts").select("*").gt("total_emails_opened", 0).eq("is_subscribed", True).range(offset, offset + limit - 1).execute())
+        return await inject_ltv(res.data)
     elif id == 'hot':
-        res = await db_execute(lambda: db.table("marketing_contacts").select("*").gt("engagement_score", 50).eq("is_subscribed", True).execute())
-        return res.data
+        res = await db_execute(lambda: db.table("marketing_contacts").select("*").gte("engagement_score", 70).eq("is_subscribed", True).range(offset, offset + limit - 1).execute())
+        return await inject_ltv(res.data)
     elif id == 'recent':
         thirty_days_ago = (datetime.utcnow() - timedelta(days=30)).isoformat()
-        res = await db_execute(lambda: db.table("marketing_contacts").select("*").gt("created_at", thirty_days_ago).eq("is_subscribed", True).execute())
-        return res.data
+        res = await db_execute(lambda: db.table("marketing_contacts").select("*").gt("created_at", thirty_days_ago).eq("is_subscribed", True).range(offset, offset + limit - 1).execute())
+        return await inject_ltv(res.data)
     elif id.startswith("financial_"):
-        return get_financial_segment_contacts(id)
+        contacts = get_financial_segment_contacts(id)
+        paginated_contacts = contacts[offset : offset + limit]
+        return paginated_contacts
 
     # Handle Custom Segments
     seg_res = await db_execute(lambda: db.table("marketing_segments").select("*").eq("id", id).execute())
@@ -83,14 +113,17 @@ async def get_segment_contacts(id: str, current_admin=Depends(verify_token)):
         res = db.table("marketing_segment_contacts")\
             .select("marketing_contacts(*)")\
             .eq("segment_id", id)\
+            .range(offset, offset + limit - 1)\
             .execute()
-        return [r["marketing_contacts"] for r in res.data if r.get("marketing_contacts")]
+        contacts = [r["marketing_contacts"] for r in res.data if r.get("marketing_contacts")]
+        return await inject_ltv(contacts)
     
     rules = segment.get("filter_rules") or []
     query = db.table("marketing_contacts").select("*").eq("is_subscribed", True)
     query = apply_segment_filters(query, rules)
-    result = await db_execute(lambda: query.limit(100).execute())
-    return result.data
+    query = query.range(offset, offset + limit - 1)
+    result = await db_execute(lambda: query.execute())
+    return await inject_ltv(result.data)
 
 @router.post("/preview")
 async def preview_segment_rules(rules: List[Dict[str, Any]], current_admin=Depends(verify_token)):

@@ -40,6 +40,7 @@ async def sync_client_to_marketing(client_data: dict):
             "client_id": client_data.get("id"),
             "is_subscribed": False if is_placeholder else True, # Suppress placeholders
             "engagement_score": 100, # Client conversion = Max score
+            "dob": client_data.get("dob"),
             "updated_at": datetime.utcnow().isoformat()
         }
 

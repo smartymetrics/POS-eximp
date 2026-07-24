@@ -3,6 +3,7 @@ from typing import List, Optional
 from database import get_db, db_execute
 from routers.auth import verify_token
 from datetime import datetime, timedelta
+from marketing_service import get_financial_segment_contacts
 
 router = APIRouter()
 
@@ -11,12 +12,19 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
     """Fetch high-level KPIs for the marketing dashboard."""
     db = get_db()
     
-    # 1. Total Contacts stats
-    total_contacts_res = await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").execute())
-    total_contacts = total_contacts_res.count or 0
+    # 1. Fetch contacts and filter out suppressed domains
+    all_contacts_res = await db_execute(lambda: db.table("marketing_contacts").select("id, email, is_subscribed, created_at").execute())
+    all_contacts = all_contacts_res.data or []
     
-    subscribed_res = await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").eq("is_subscribed", True).execute())
-    subscribed = subscribed_res.count or 0
+    from marketing_service import SUPPRESSED_DOMAINS
+    valid_contacts = []
+    for c in all_contacts:
+        email = (c.get("email") or "").lower().strip()
+        if not any(d in email for d in SUPPRESSED_DOMAINS):
+            valid_contacts.append(c)
+            
+    total_contacts = len(valid_contacts)
+    subscribed = len([c for c in valid_contacts if c.get("is_subscribed")])
     
     # 2. Campaign Stats — fetch ALL campaigns (not limited to 30 days) so historical spend is included
     campaigns_res = await db_execute(lambda: db.table("email_campaigns").select("*").execute())
@@ -40,8 +48,7 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
     open_delta = f"↑ {avg_open_val:.1f}% vs avg" if avg_open_val > 0 else "↑ 0% vs avg"
     
     # 4. Deltas (Month over Month)
-    new_this_month_res = await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").gte("created_at", last_30_days).execute())
-    new_this_month = new_this_month_res.count or 0
+    new_this_month = len([c for c in valid_contacts if c.get("created_at", "") >= last_30_days])
     previous_total = total_contacts - new_this_month
     
     if previous_total == 0 and new_this_month > 0:
@@ -59,14 +66,14 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
     for i in range(13, -1, -1):
         d = (datetime.utcnow() - timedelta(days=i)).date()
         date_str = d.isoformat()
-        day_res = await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").lte("created_at", (d + timedelta(days=1)).isoformat()).execute())
-        count = day_res.count or 0
+        cutoff = (d + timedelta(days=1)).isoformat()
+        count = len([c for c in valid_contacts if c.get("created_at", "") <= cutoff])
         growth_data.append({"date": date_str, "count": count})
 
     # 6. Total Attributed Revenue & Segment ROI/CPA
     try:
-        revenue_res = await db_execute(lambda: db.table("invoices").select("amount, marketing_campaign_id").not_.is_("marketing_campaign_id", "null").eq("status", "paid").execute())
-        total_revenue = sum([i["amount"] for i in revenue_res.data]) if revenue_res.data else 0
+        revenue_res = await db_execute(lambda: db.table("invoices").select("amount_paid, marketing_campaign_id").not_.is_("marketing_campaign_id", "null").neq("status", "voided").execute())
+        total_revenue = sum([i["amount_paid"] for i in revenue_res.data]) if revenue_res.data else 0
         attributed_invoices = revenue_res.data or []
     except Exception:
         total_revenue = 0
@@ -118,7 +125,7 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
 
     # 7. Engagement stats
     opens_count_res = await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").gt("total_emails_opened", 0).execute())
-    hot_leads_res = await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").gte("engagement_score", 50).execute())
+    hot_leads_res = await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").gte("engagement_score", 70).execute())
     warm_leads_res = await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").lt("engagement_score", 50).gte("engagement_score", 30).execute())
     cold_leads_res = await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").lt("engagement_score", 30).execute())
 
@@ -144,6 +151,11 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
             "warm_leads": warm_leads_res.count or 0,
             "cold_leads": cold_leads_res.count or 0
         },
+        "financial": {
+            "overdue": len(get_financial_segment_contacts("financial_overdue")),
+            "outstanding": len(get_financial_segment_contacts("financial_outstanding")),
+            "paid_fully": len(get_financial_segment_contacts("financial_paid_fully"))
+        },
         "segment_stats": segment_stats,
         "growth": growth_data
     }
@@ -160,7 +172,7 @@ async def get_campaign_report(id: str, current_admin=Depends(verify_token)):
     campaign = camp_res.data[0]
     
     # 2. Recipient stats
-    recs = db.table("campaign_recipients").select("status, open_count, click_count").eq("campaign_id", id).execute().data
+    recs = db.table("campaign_recipients").select("status, open_count, click_count, variant").eq("campaign_id", id).execute().data or []
     
     total = len(recs)
     delivered = len([r for r in recs if r["status"] == "delivered"])
@@ -168,10 +180,13 @@ async def get_campaign_report(id: str, current_admin=Depends(verify_token)):
     clicked = len([r for r in recs if (r["click_count"] or 0) > 0])
     bounced = len([r for r in recs if r["status"] == "bounced"])
     
-    return {
+    is_ab_test = campaign.get("is_ab_test", False)
+    
+    report_data = {
         "campaign_id": id,
         "name": campaign["name"],
         "subject": campaign["subject_a"],
+        "is_ab_test": is_ab_test,
         "stats": {
             "total_recipients": total,
             "delivered": {"count": delivered, "percent": (delivered/total*100) if total > 0 else 0},
@@ -180,6 +195,47 @@ async def get_campaign_report(id: str, current_admin=Depends(verify_token)):
             "bounced": {"count": bounced, "percent": (bounced/total*100) if total > 0 else 0}
         }
     }
+    
+    if is_ab_test:
+        # Group by variant (A or B, treating None/null or "A" as A)
+        recs_a = [r for r in recs if r.get("variant") in [None, "", "A"]]
+        recs_b = [r for r in recs if r.get("variant") == "B"]
+        
+        total_a = len(recs_a)
+        delivered_a = len([r for r in recs_a if r["status"] == "delivered"])
+        opened_a = len([r for r in recs_a if (r["open_count"] or 0) > 0])
+        clicked_a = len([r for r in recs_a if (r["click_count"] or 0) > 0])
+        
+        total_b = len(recs_b)
+        delivered_b = len([r for r in recs_b if r["status"] == "delivered"])
+        opened_b = len([r for r in recs_b if (r["open_count"] or 0) > 0])
+        clicked_b = len([r for r in recs_b if (r["click_count"] or 0) > 0])
+        
+        report_data["ab_stats"] = {
+            "variant_a": {
+                "subject": campaign.get("subject_a"),
+                "total_assigned": total_a,
+                # "sent" = actually sent or delivered (not pending/failed)
+                "sent": len([r for r in recs_a if r["status"] in ("sent", "delivered")]),
+                "delivered": delivered_a,
+                "opened": opened_a,
+                "clicked": clicked_a,
+                # Rates use delivered as denominator (most accurate); fall back to total_a
+                "open_rate": (opened_a/delivered_a*100) if delivered_a > 0 else 0,
+                "click_rate": (clicked_a/delivered_a*100) if delivered_a > 0 else 0,
+            },
+            "variant_b": {
+                "subject": campaign.get("subject_b") or (campaign.get("subject_a") + " (Variant B)"),
+                "total_assigned": total_b,
+                "sent": len([r for r in recs_b if r["status"] in ("sent", "delivered")]),
+                "delivered": delivered_b,
+                "opened": opened_b,
+                "clicked": clicked_b,
+                "open_rate": (opened_b/delivered_b*100) if delivered_b > 0 else 0,
+                "click_rate": (clicked_b/delivered_b*100) if delivered_b > 0 else 0,
+            }
+        }
+    return report_data
 
 @router.get("/campaign/{id}/recipients")
 async def get_campaign_recipients(id: str, current_admin=Depends(verify_token)):
@@ -188,7 +244,7 @@ async def get_campaign_recipients(id: str, current_admin=Depends(verify_token)):
     
     # Fetch recipients joined with contact details
     res = db.table("campaign_recipients")\
-        .select("*, marketing_contacts(first_name, last_name, email)")\
+        .select("*, marketing_contacts(id, first_name, last_name, email)")\
         .eq("campaign_id", id)\
         .order("open_count", desc=True)\
         .execute()
@@ -200,11 +256,11 @@ async def get_campaign_conversions(id: str, current_admin=Depends(verify_token))
     """Fetch the list of actual invoices and clients that make up the campaign ROI."""
     db = get_db()
     
-    # Fetch paid invoices attributed to this campaign joined with client names
+    # Fetch non-voided invoices attributed to this campaign joined with client names
     res = db.table("invoices")\
-        .select("invoice_number, amount, paid_at, clients(full_name)")\
+        .select("invoice_number, amount_paid, paid_at, clients(full_name)")\
         .eq("marketing_campaign_id", id)\
-        .eq("status", "paid")\
+        .neq("status", "voided")\
         .order("paid_at", desc=True)\
         .execute()
         

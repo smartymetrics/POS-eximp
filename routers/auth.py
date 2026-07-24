@@ -61,8 +61,17 @@ def has_any_role(admin_payload: dict, *roles) -> bool:
             flat_roles.extend(r)
         else:
             flat_roles.append(r)
-    user_roles = {r.strip() for r in (admin_payload.get("role") or "").split(",") if r.strip()}
-    return bool(user_roles & {r.strip() for r in flat_roles if r})
+    role_str = admin_payload.get("role") or ""
+    primary_role_str = admin_payload.get("primary_role") or ""
+    all_roles_str = f"{role_str},{primary_role_str}"
+    
+    user_roles = {r.strip().lower().replace(" ", "_") for r in all_roles_str.split(",") if r.strip()}
+    flat_roles_normalized = {r.strip().lower().replace(" ", "_") for r in flat_roles if r}
+    
+    # Always allow super_admin
+    if "super_admin" in user_roles:
+        return True
+    return bool(user_roles & flat_roles_normalized)
 
 
 # Alias for dependency consistency
@@ -103,9 +112,11 @@ async def login(data: AdminLogin):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if admin.get("is_archived"):
         raise HTTPException(status_code=403, detail="This account has been archived")
-    # Fetch staff type from profiles
-    profile_res = await db_execute(lambda: db.table("staff_profiles").select("staff_type").eq("admin_id", admin["id"]).execute())
-    staff_type = profile_res.data[0]["staff_type"] if profile_res.data else "full"
+    # Fetch staff info from profiles
+    profile_res = await db_execute(lambda: db.table("staff_profiles").select("staff_type, tin").eq("admin_id", admin["id"]).execute())
+    profile = profile_res.data[0] if profile_res.data else {}
+    staff_type = profile.get("staff_type", "full")
+    tin = profile.get("tin")
 
     token = create_token({
         "sub": admin["id"], 
@@ -122,7 +133,8 @@ async def login(data: AdminLogin):
             "email": admin["email"], 
             "role": admin.get("role") or "staff",
             "primary_role": admin.get("primary_role", "staff"),
-            "staff_type": staff_type
+            "staff_type": staff_type,
+            "tin": tin
         }
     }
 
@@ -131,8 +143,17 @@ async def login(data: AdminLogin):
 @router.get("/me")
 async def me(current_admin=Depends(verify_token)):
     db = get_db()
-    result = await db_execute(lambda: db.table("admins").select("id, full_name, email, role, primary_role, created_at").eq("id", current_admin["sub"]).execute())
-    return result.data[0] if result.data else {}
+    res = await db_execute(lambda: db.table("admins").select("id, full_name, email, role, primary_role, created_at").eq("id", current_admin["sub"]).execute())
+    if not res.data: return {}
+    admin = res.data[0]
+    
+    # Fetch profile
+    prof_res = await db_execute(lambda: db.table("staff_profiles").select("staff_type, tin").eq("admin_id", admin["id"]).execute())
+    profile = prof_res.data[0] if prof_res.data else {}
+    
+    admin["staff_type"] = profile.get("staff_type", "full")
+    admin["tin"] = profile.get("tin")
+    return admin
 
 
 # CREATE TEAM MEMBER (admin only)
@@ -184,10 +205,10 @@ async def list_admins(current_admin=Depends(verify_token)):
 def require_roles(allowed_roles: list[str]):
     """
     Returns a dependency that checks if the current user has any of the required roles.
+    Uses resolve_admin_token to support both Header and Query Param tokens.
     """
-    async def role_checker(current_admin=Depends(verify_token)):
-        user_roles = [r.strip() for r in current_admin.get("role", "").split(",")]
-        if not any(role in user_roles for role in allowed_roles):
+    async def role_checker(current_admin=Depends(resolve_admin_token)):
+        if not has_any_role(current_admin, allowed_roles):
             raise HTTPException(
                 status_code=403, 
                 detail=f"Access denied. Required roles: {', '.join(allowed_roles)}"
@@ -279,12 +300,21 @@ async def archive_admin(admin_id: str, current_admin=Depends(verify_token)):
     return {"message": f"{target.data[0]['full_name']} has been archived"}
 
 
-# UPDATE ROLES (admin/super_admin only)
+# UPDATE ROLES (admin/super_admin full access; hr_admin restricted access)
+# HR admins may assign only these roles — they cannot elevate staff to admin-level roles.
+HR_ASSIGNABLE_ROLES = {"sales_rep", "staff", "line_manager", "customer_support", "sales"}
+
 @router.patch("/admins/{admin_id}/roles")
 async def update_admin_roles(admin_id: str, data: dict, current_admin=Depends(verify_token)):
     current_roles = (current_admin.get("role") or "").split(",")
-    if not any(r.strip() in ["admin", "super_admin"] for r in current_roles):
-        raise HTTPException(status_code=403, detail="Admins only")
+    caller_role_set = {r.strip().lower() for r in current_roles if r.strip()}
+
+    is_full_admin = bool(caller_role_set & {"admin", "super_admin"})
+    is_hr_admin   = "hr_admin" in caller_role_set
+
+    if not (is_full_admin or is_hr_admin):
+        raise HTTPException(status_code=403, detail="Only admins or HR admins can update roles")
+
     if current_admin.get("sub") == admin_id:
         raise HTTPException(status_code=400, detail="Use 'My Profile' to change your own roles")
 
@@ -295,6 +325,17 @@ async def update_admin_roles(admin_id: str, data: dict, current_admin=Depends(ve
 
     if not role:
         raise HTTPException(status_code=400, detail="At least one role is required")
+
+    # HR admins may only assign roles within the permitted set.
+    if is_hr_admin and not is_full_admin:
+        requested_roles = {r.strip().lower() for r in role.split(",") if r.strip()}
+        forbidden = requested_roles - HR_ASSIGNABLE_ROLES
+        if forbidden:
+            raise HTTPException(
+                status_code=403,
+                detail=f"HR can only assign: {', '.join(sorted(HR_ASSIGNABLE_ROLES))}. "
+                       f"Forbidden role(s): {', '.join(sorted(forbidden))}"
+            )
 
     db = get_db()
     target = await db_execute(lambda: db.table("admins").select("id, full_name").eq("id", admin_id).execute())

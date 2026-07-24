@@ -52,12 +52,43 @@ class SubscriptionService:
             "nok_address": data.get("nok_address"),
             "source_of_income": data.get("source_of_income"),
             "referral_source": data.get("referral_source"),
+            "client_type": "client",
         }
 
-        # Check existing
-        client_res = await db_execute(lambda: db.table("clients").select("id").eq("email", email).execute())
-        if client_res.data:
-            client_id = client_res.data[0]["id"]
+        # 1b. Enhanced Matching (Email or Phone)
+        client_id = None
+        # FIX: fetch email and assigned_rep_id so we can (a) correctly handle placeholder
+        # emails and (b) preserve the rep assignment on update (prevents nulling it out).
+        match_query = db.table("clients").select("id, email, assigned_rep_id")
+        match_filters = []
+        if email: match_filters.append(f"email.eq.{email}")
+        if phone: match_filters.append(f"phone.eq.{phone}")
+        
+        if match_filters:
+            match_res = await db_execute(lambda: match_query.or_(",".join(match_filters)).execute())
+            if match_res.data:
+                existing_row = match_res.data[0]
+                client_id = existing_row["id"]
+                existing_email = existing_row.get("email") or ""
+                existing_rep_id = existing_row.get("assigned_rep_id")
+
+                # FIX: Resolve which email to use:
+                # - If existing email is a lead_ placeholder and the form provides a real one, use the real one.
+                # - If form email is blank but existing real email is on file, keep the existing one.
+                # - Otherwise the form email (already in client_data) is authoritative.
+                is_placeholder = existing_email.startswith("lead_") or existing_email.endswith("@temp-eximps.com")
+                if is_placeholder and email and not email.startswith("lead_"):
+                    client_data["email"] = email  # upgrade placeholder → real
+                elif not email and existing_email and not is_placeholder:
+                    client_data["email"] = existing_email  # keep real email if form left it blank
+
+                # FIX: Preserve the assigned_rep_id from the existing lead record so the
+                # sales rep's client view still shows this record after conversion.
+                # Only override if the subscription form explicitly carries a rep id.
+                if not client_data.get("assigned_rep_id") and existing_rep_id:
+                    client_data["assigned_rep_id"] = existing_rep_id
+
+        if client_id:
             await db_execute(lambda: db.table("clients").update(jsonable_encoder(client_data)).eq("id", client_id).execute())
         else:
             new_client = await db_execute(lambda: db.table("clients").insert(jsonable_encoder(client_data)).execute())
@@ -86,6 +117,8 @@ class SubscriptionService:
         # 4. Property Matching & Numeric Casting
         property_id = None
         property_location = None
+        prop = None
+        target_size = None
         
         # Explicitly cast form strings to numbers
         try:
@@ -102,36 +135,113 @@ class SubscriptionService:
             plot_size_str = data.get("plot_size", "")
             size_match = re.search(r'(\d+)', plot_size_str)
             target_size = float(size_match.group(1)) if size_match else None
+            
+            # Is this an installment purchase?
+            # Note: The form values are "Outright", "3 Months", "6 Months", "12 Months"
+            payment_duration = data.get("payment_duration") or "Outright"
+            is_installment_request = payment_duration != "Outright"
 
             prop_query = db.table("properties").select("*").ilike("name", f"%{data['property_name']}%").eq("is_active", True)
             prop_res = await db_execute(lambda: prop_query.execute())
             
             if prop_res.data:
-                # Find best match based on plot size if available
-                prop = prop_res.data[0] # Default to first
+                # 1. Filter by size if available
+                matches = prop_res.data
                 if target_size:
-                    for p in prop_res.data:
-                        p_size = float(p.get("plot_size_sqm") or 0)
-                        if abs(p_size - target_size) < 1: # Close enough match
-                            prop = p
-                            break
+                    matches = [p for p in matches if abs(float(p.get("plot_size_sqm") or 0) - target_size) < 1]
+                
+                if not matches: matches = prop_res.data # Fallback to all if size filter fails
+                
+                # 2. Filter by Plan (Installment vs Outright)
+                plan_matches = []
+                for p in matches:
+                    desc = (p.get("description") or "").lower()
+                    name = (p.get("name") or "").lower()
+                    is_inst_row = "installment" in desc or "installment" in name
+                    
+                    if is_installment_request == is_inst_row:
+                        plan_matches.append(p)
+                
+                # Use the best plan match, otherwise fallback to first available
+                prop = plan_matches[0] if plan_matches else matches[0]
                 
                 property_id = prop["id"]
                 property_location = prop.get("location")
                 
                 if total_amount <= 0:
-                    # Priority order for price columns based on user database feedback
                     unit_price = float(prop.get("total_price") or prop.get("starting_price") or prop.get("price_per_sqm") or 0)
                     total_amount = unit_price * quantity
 
+        # 4.5 Discount Code processing
+        discount_code = (data.get("discount_code") or "").strip().upper()
+        discount_amount = 0.0
+        
+        if discount_code:
+            code_res = await db_execute(lambda: db.table("discount_codes").select("*").eq("code", discount_code).execute())
+            if code_res.data:
+                code_rec = code_res.data[0]
+                if code_rec.get("is_active", True):
+                    is_expired = False
+                    expires_str = code_rec.get("expires_at")
+                    if expires_str:
+                        try:
+                            t_str = expires_str.replace("Z", "+00:00")
+                            expires_at = datetime.fromisoformat(t_str)
+                            from datetime import timezone
+                            now = datetime.now(timezone.utc)
+                            if expires_at < now:
+                                is_expired = True
+                        except Exception:
+                            pass
+                    
+                    max_uses = code_rec.get("max_uses")
+                    uses_count = code_rec.get("uses_count", 0)
+                    is_exhausted = max_uses is not None and uses_count >= max_uses
+                    
+                    if not is_expired and not is_exhausted:
+                        d_val = float(code_rec.get("discount_value") or 0)
+                        d_type = code_rec.get("discount_type", "percentage")
+                        if d_type == "percentage":
+                            discount_amount = total_amount * d_val / 100.0
+                        else:
+                            discount_amount = min(d_val, total_amount)
+                        
+                        # Increment uses count
+                        await db_execute(lambda: db.table("discount_codes").update({
+                            "uses_count": uses_count + 1
+                        }).eq("id", code_rec["id"]).execute())
+                    else:
+                        discount_code = None
+                else:
+                    discount_code = None
+            else:
+                discount_code = None
+                
+        final_total = max(0.0, total_amount - discount_amount)
+        
+        # Split calculations (90 / 2.5 / 7.5 / 0)
+        land_cost = final_total * 0.90
+        allocation_fee = final_total * 0.025
+        documentation_fee = final_total * 0.075
+        vat_amount = 0.0
+
         # 5. Create Invoice record
+        plot_size_sqm = target_size
+        if not plot_size_sqm and prop and prop.get("plot_size_sqm"):
+            try:
+                plot_size_sqm = float(prop["plot_size_sqm"])
+            except (ValueError, TypeError):
+                pass
+
+        calculated_unit_price = total_amount / quantity if quantity > 0 else 0.0
+
         invoice_insert = {
             "invoice_number": invoice_number,
             "client_id": client_id,
             "property_id": property_id,
             "property_name": data.get("property_name"),
             "property_location": property_location,
-            "amount": total_amount,
+            "amount": final_total,
             "amount_paid": deposit_amount,
             "payment_terms": data.get("payment_duration", "Outright"),
             "invoice_date": str(date.today()),
@@ -142,8 +252,19 @@ class SubscriptionService:
             "co_owner_email": data.get("co_owner_email"),
             "signature_url": data.get("signature_url"),
             "payment_proof_url": data.get("payment_receipt_url"),
+            "purchase_for": data.get("purchase_for"),
+            "purchase_purpose": data.get("purchase_purpose"),
             "source": "custom_portal",
-            "pipeline_stage": "inspection"
+            "pipeline_stage": "interest",
+            "land_cost": land_cost,
+            "allocation_fee": allocation_fee,
+            "documentation_fee": documentation_fee,
+            "vat_amount": vat_amount,
+            "discount_code": discount_code if discount_amount > 0 else None,
+            "discount_amount": discount_amount if discount_amount > 0 else None,
+            "plot_size_sqm": plot_size_sqm,
+            "unit_price": calculated_unit_price,
+            "quantity": quantity
         }
         
         inv_res = await db_execute(lambda: db.table("invoices").insert(jsonable_encoder(invoice_insert)).execute())
@@ -156,7 +277,7 @@ class SubscriptionService:
             'gender', 'date_of_birth', 'residential_address', 'email', 'whatsapp_phone', 
             'marital_status', 'occupation', 'nationality', 'passport_photo_url', 
             'nin_id_number', 'nin_document_url', 'international_passport_url', 
-            'property_name', 'plot_size', 'ownership_type', 'purchase_purpose', 
+            'property_name', 'plot_size', 'ownership_type', 'purchase_purpose', 'purchase_for', 
             'nok_full_name', 'nok_phone', 'nok_email', 'nok_occupation', 'nok_relationship', 
             'nok_address', 'co_owner_name', 'co_owner_address', 'co_owner_occupation', 
             'co_owner_phone', 'co_owner_email', 'payment_duration', 'deposit_amount', 
@@ -164,7 +285,7 @@ class SubscriptionService:
             'referral_source', 'signature_url', 'consent_given', 'consented_at', 
             'ip_address', 'user_agent', 'city', 'state', 'phone', 'quantity', 
             'total_amount', 'sales_rep_name', 'utm_source', 'utm_medium', 
-            'utm_campaign', 'utm_content', 'utm_term'
+            'utm_campaign', 'utm_content', 'utm_term', 'discount_code', 'discount_amount'
         }
 
         subscription_record = {
@@ -172,7 +293,9 @@ class SubscriptionService:
             "status": "processed",
             "date_of_birth": data.get("date_of_birth") or data.get("dob"),
             "nin_id_number": data.get("nin_id_number") or data.get("id_number"),
-            "nin_document_url": data.get("nin_document_url") or data.get("id_document_url")
+            "nin_document_url": data.get("nin_document_url") or data.get("id_document_url"),
+            "discount_code": discount_code if discount_amount > 0 else None,
+            "discount_amount": discount_amount if discount_amount > 0 else None
         }
         
         # Add all valid incoming data to the record

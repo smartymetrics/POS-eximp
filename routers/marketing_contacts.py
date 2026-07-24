@@ -29,9 +29,11 @@ class ContactUpdate(BaseModel):
     is_subscribed: Optional[bool] = None
     engagement_score: Optional[int] = None
     contact_type: Optional[str] = None
+    dob: Optional[str] = None  # Date of Birth (YYYY-MM-DD) – used for birthday sequence trigger
+
 
 @router.get("/")
-async def list_contacts(current_admin=Depends(verify_token), type: Optional[str] = None, q: Optional[str] = None):
+async def list_contacts(current_admin=Depends(verify_token), type: Optional[str] = None, q: Optional[str] = None, limit: int = 100, offset: int = 0):
     db = get_db()
     query = db.table("marketing_contacts").select("*")
     
@@ -41,8 +43,38 @@ async def list_contacts(current_admin=Depends(verify_token), type: Optional[str]
         # Search across multiple fields
         query = query.or_(f"first_name.ilike.%{q}%,last_name.ilike.%{q}%,email.ilike.%{q}%")
         
-    result = await db_execute(lambda: query.order("created_at", desc=True).execute())
-    return result.data
+    query = query.order("created_at", desc=True).range(offset, offset + limit - 1)
+    result = await db_execute(lambda: query.execute())
+    contacts = result.data or []
+    
+    # Financial Bridge: Calculate LTV and sync client DOBs for each contact
+    if contacts:
+        # Fetch all non-voided invoices to calculate LTV based on amount_paid
+        inv_res = await db_execute(lambda: db.table("invoices").select("client_id, amount_paid").neq("status", "voided").execute())
+        invoices = inv_res.data or []
+        
+        # Map LTV to client_id
+        ltv_map = {}
+        for inv in invoices:
+            cid = inv.get("client_id")
+            if cid:
+                ltv_map[cid] = ltv_map.get(cid, 0) + float(inv.get("amount_paid") or 0)
+        
+        # Fetch client DOBs
+        client_ids = [c.get("client_id") for c in contacts if c.get("client_id")]
+        client_dob_map = {}
+        if client_ids:
+            clients_res = await db_execute(lambda: db.table("clients").select("id, dob").in_("id", client_ids).execute())
+            client_dob_map = {cl["id"]: cl.get("dob") for cl in (clients_res.data or []) if cl.get("dob")}
+        
+        # Inject LTV and DOB into contacts
+        for contact in contacts:
+            cid = contact.get("client_id")
+            contact["total_revenue_attributed"] = ltv_map.get(cid, 0) if cid else 0
+            if cid and not contact.get("dob") and cid in client_dob_map:
+                contact["dob"] = client_dob_map[cid]
+            
+    return contacts
 
 @router.post("/")
 async def create_contact(data: ContactCreate, current_admin=Depends(verify_token)):
@@ -68,11 +100,98 @@ async def create_contact(data: ContactCreate, current_admin=Depends(verify_token
 @router.put("/{id}")
 async def update_contact(id: str, data: ContactUpdate, current_admin=Depends(verify_token)):
     db = get_db()
-    update_dict = {k: v for k, v in data.dict().items() if v is not None}
+    raw = data.dict()
+    # Allow explicit None for dob (so user can clear a birthday), filter only truly unset fields
+    update_dict = {}
+    for k, v in raw.items():
+        if k == "dob":
+            update_dict[k] = v  # always include dob (even if None, to allow clearing)
+        elif v is not None:
+            update_dict[k] = v
     update_dict["updated_at"] = datetime.utcnow().isoformat()
     
     result = await db_execute(lambda: db.table("marketing_contacts").update(update_dict).eq("id", id).execute())
-    return result.data[0]
+    if result.data:
+        updated_contact = result.data[0]
+        cid = updated_contact.get("client_id")
+        if cid and "dob" in update_dict:
+            # Sync DOB changes to the clients table
+            await db_execute(lambda: db.table("clients").update({
+                "dob": update_dict["dob"],
+                "updated_at": datetime.utcnow().isoformat()
+            }).eq("id", cid).execute())
+        # Build a human-readable summary of what changed
+        changed_fields = [k for k in update_dict.keys() if k not in ("updated_at",)]
+        field_summary = ", ".join(changed_fields) if changed_fields else "no fields changed"
+        email = updated_contact.get("email", id)
+        await log_activity(
+            "marketing_contact_updated",
+            f"Contact '{email}' profile updated. Changed: {field_summary}.",
+            current_admin["sub"]
+        )
+        return updated_contact
+    return None
+
+@router.patch("/{id}/unsubscribe")
+async def unsubscribe_contact(id: str, current_admin=Depends(verify_token)):
+    """TASK 3A: Manually unsubscribe a contact."""
+    db = get_db()
+    res = await db_execute(lambda: db.table("marketing_contacts").select("email, is_subscribed").eq("id", id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    
+    contact = res.data[0]
+    if not contact["is_subscribed"]:
+        raise HTTPException(status_code=400, detail="Contact is already unsubscribed.")
+    
+    timestamp = datetime.utcnow().isoformat()
+    await db_execute(lambda: db.table("marketing_contacts").update({
+        "is_subscribed": False,
+        "unsubscribed_at": timestamp,
+        "engagement_score": 0
+    }).eq("id", id).execute())
+    
+    await db_execute(lambda: db.table("marketing_unsubscribes").insert({
+        "contact_id": id,
+        "email": contact["email"],
+        "reason": "manual_admin",
+        "unsubscribed_at": timestamp
+    }).execute())
+    
+    await log_activity(
+        "marketing_contact_unsubscribed",
+        f"Contact {contact['email']} manually unsubscribed by admin.",
+        current_admin["sub"]
+    )
+    return {"message": "Contact unsubscribed.", "contact_id": id}
+
+@router.patch("/{id}/resubscribe")
+async def resubscribe_contact(id: str, current_admin=Depends(verify_token)):
+    """TASK 3B: Manually resubscribe a contact."""
+    db = get_db()
+    res = await db_execute(lambda: db.table("marketing_contacts").select("email, is_subscribed, is_bounced").eq("id", id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    
+    contact = res.data[0]
+    if contact["is_subscribed"]:
+        raise HTTPException(status_code=400, detail="Contact is already subscribed.")
+    
+    if contact.get("is_bounced"):
+        raise HTTPException(status_code=400, detail="Cannot resubscribe a hard-bounced contact. The email address is invalid.")
+    
+    await db_execute(lambda: db.table("marketing_contacts").update({
+        "is_subscribed": True,
+        "unsubscribed_at": None,
+        "unsubscribe_reason": None
+    }).eq("id", id).execute())
+    
+    await log_activity(
+        "marketing_contact_resubscribed",
+        f"Contact {contact['email']} manually resubscribed by admin {current_admin['sub']}.",
+        current_admin["sub"]
+    )
+    return {"message": "Contact resubscribed.", "contact_id": id}
 
 @router.get("/{id}")
 async def get_contact(id: str, current_admin=Depends(verify_token)):
@@ -80,7 +199,23 @@ async def get_contact(id: str, current_admin=Depends(verify_token)):
     res = await db_execute(lambda: db.table("marketing_contacts").select("*").eq("id", id).execute())
     if not res.data:
         raise HTTPException(status_code=404, detail="Contact not found")
-    return res.data[0]
+    
+    contact = res.data[0]
+    cid = contact.get("client_id")
+    
+    # Fetch LTV and DOB for this specific client
+    ltv = 0
+    if cid:
+        inv_res = await db_execute(lambda: db.table("invoices").select("amount_paid").eq("client_id", cid).neq("status", "voided").execute())
+        ltv = sum([float(inv.get("amount_paid") or 0) for inv in inv_res.data or []])
+        
+        if not contact.get("dob"):
+            client_res = await db_execute(lambda: db.table("clients").select("dob").eq("id", cid).execute())
+            if client_res.data and client_res.data[0].get("dob"):
+                contact["dob"] = client_res.data[0]["dob"]
+    
+    contact["total_revenue_attributed"] = ltv
+    return contact
 
 @router.post("/import")
 async def import_contacts(source: Optional[str] = "csv_import", file: UploadFile = File(...), current_admin=Depends(verify_token)):
@@ -135,6 +270,12 @@ async def import_contacts(source: Optional[str] = "csv_import", file: UploadFile
     else:
         import_count = 0
 
+    await log_activity(
+        "marketing_contacts_imported",
+        f"CSV import completed: {import_count} contact(s) processed, {skipped_count} row(s) skipped (invalid email). Source: '{source}'.",
+        current_admin["sub"]
+    )
+
     return {
         "message": f"Import complete. {import_count} contacts processed.",
         "skipped_invalid": skipped_count,
@@ -171,6 +312,11 @@ async def sync_clients(current_admin=Depends(verify_token)):
     
     if marketing_entries:
         res = await db_execute(lambda: db.table("marketing_contacts").upsert(marketing_entries, on_conflict="email").execute())
+        await log_activity(
+            "marketing_contacts_client_sync",
+            f"All active clients synced to marketing contacts list. {len(res.data)} contact(s) upserted.",
+            current_admin["sub"]
+        )
         return {"synced_count": len(res.data)}
     return {"synced_count": 0}
 
@@ -215,6 +361,11 @@ async def deduplicate_contacts(current_admin=Depends(verify_token)):
             await db_execute(lambda: db.table("marketing_contacts").delete().in_("id", chunk).execute())
             
     final_count = (await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").execute())).count
+    await log_activity(
+        "marketing_contacts_deduplicated",
+        f"Contact list deduplicated: {len(to_delete)} duplicate(s) removed. Final count: {final_count} contacts.",
+        current_admin["sub"]
+    )
     return {"status": "success", "deleted_duplicates": len(to_delete), "final_count": final_count}
 @router.get("/{id}/history")
 async def get_contact_history(id: str, current_admin=Depends(verify_token)):
@@ -291,6 +442,11 @@ async def sync_all_marketing_stats(current_admin=Depends(verify_token)):
         }).eq("id", uid).execute()
         updated_count += 1
         
+    await log_activity(
+        "marketing_bulk_stats_synced",
+        f"Bulk stats re-sync complete: {len(camp_stats)} campaign(s) and {updated_count} contact(s) updated.",
+        current_admin["sub"]
+    )
     return {
         "message": "Bulk stats sync complete.",
         "campaigns_updated": len(camp_stats),

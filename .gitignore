@@ -3,6 +3,7 @@
 __pycache__
 pos-eximp/
 .aider*
+.gemini
 node_modules/
 */node_modules/
 dist/

@@ -39,30 +39,47 @@ async def process_active_sequences():
             sequence_id = enrollment["sequence_id"]
             current_step_num = enrollment["current_step"]
             
+            # TASK 4C: Update the sequencer engine guard
+            # 1. Fetch sequence is_active status
+            if not sequence.get("is_active", True):
+                logger.info(f"Skipping sequence {sequence_id} — sequence is disabled.")
+                continue
+
+            # 2. Fetch contact subscribed/bounced status
+            if not contact.get("is_subscribed") or contact.get("is_bounced"):
+                logger.info(f"Stopping sequence for contact {contact['id']} — unsubscribed or bounced.")
+                eid = enrollment["id"]
+                await db_execute(lambda eid=eid: db.table("contact_sequence_status").update({"status": "exited"}).eq("id", eid).execute())
+                continue
+            
             # --- 2. UNIVERSAL EXIT RULE (Professional Logic) ---
             # If the contact is now a 'client', immediately exit any 'Lead' sequences
             # to avoid unprofessional automated emails post-purchase.
             if contact.get("contact_type") == "client" and "Lead" in (sequence.get("name") or ""):
                 logger.info(f"Auto-exiting contact {contact['email']} from Lead sequence (now a client).")
-                await db_execute(lambda: db.table("contact_sequence_status").update({
+                eid = enrollment["id"]
+                await db_execute(lambda eid=eid: db.table("contact_sequence_status").update({
                     "status": "exited",
                     "last_step_at": datetime.utcnow().isoformat()
-                }).eq("id", enrollment["id"]).execute())
+                }).eq("id", eid).execute())
                 continue
 
             # --- 3. FETCH STEP DETAILS ---
-            step_res = await db_execute(lambda: db.table("sequence_steps")\
+            _sid = sequence_id
+            _stepnum = current_step_num
+            step_res = await db_execute(lambda _sid=_sid, _stepnum=_stepnum: db.table("sequence_steps")\
                 .select("*, email_campaigns(*)")\
-                .eq("sequence_id", sequence_id)\
-                .eq("step_number", current_step_num)\
+                .eq("sequence_id", _sid)\
+                .eq("step_number", _stepnum)\
                 .execute())
                 
             if not step_res.data:
                 # No more steps? Mark sequence as completed
-                await db_execute(lambda: db.table("contact_sequence_status").update({
+                eid = enrollment["id"]
+                await db_execute(lambda eid=eid: db.table("contact_sequence_status").update({
                     "status": "completed",
                     "last_step_at": datetime.utcnow().isoformat()
-                }).eq("id", enrollment["id"]).execute())
+                }).eq("id", eid).execute())
                 continue
             
             step = step_res.data[0]
@@ -72,12 +89,16 @@ async def process_active_sequences():
             # If the step requires interaction from a previous step
             if step.get("requires_interaction") and current_step_num > 1:
                 prev_step_num = current_step_num - 1
-                prev_step_res = await db_execute(lambda: db.table("sequence_steps").select("campaign_id").eq("sequence_id", sequence_id).eq("step_number", prev_step_num).execute())
+                _sid = sequence_id
+                _prev = prev_step_num
+                prev_step_res = await db_execute(lambda _sid=_sid, _prev=_prev: db.table("sequence_steps").select("campaign_id").eq("sequence_id", _sid).eq("step_number", _prev).execute())
                 
                 if prev_step_res.data:
                     prev_camp_id = prev_step_res.data[0]["campaign_id"]
+                    _pcid = prev_camp_id
+                    _cid = contact["id"]
                     # Check if the contact interacted with that campaign
-                    rec_res = await db_execute(lambda: db.table("campaign_recipients").select("opened_at, clicked_at").eq("campaign_id", prev_camp_id).eq("contact_id", contact["id"]).execute())
+                    rec_res = await db_execute(lambda _pcid=_pcid, _cid=_cid: db.table("campaign_recipients").select("opened_at, clicked_at").eq("campaign_id", _pcid).eq("contact_id", _cid).execute())
                     
                     interacted = False
                     if rec_res.data:
@@ -144,18 +165,31 @@ async def auto_enroll_contact(contact_id: str, trigger_event: str):
     seq_res = await db_execute(lambda: db.table("marketing_sequences").select("id").eq("trigger_event", trigger_event).eq("is_active", True).execute())
     
     for seq in seq_res.data:
-        # Check if already in it
-        existing = await db_execute(lambda: db.table("contact_sequence_status").select("id").eq("contact_id", contact_id).eq("sequence_id", seq["id"]).execute())
+        _seq_id = seq["id"]
+        # Check if already enrolled. Birthday trigger is recurring annually, so we only check for active status.
+        if trigger_event == "birthday":
+            existing = await db_execute(lambda _seq_id=_seq_id: db.table("contact_sequence_status")\
+                .select("id")\
+                .eq("contact_id", contact_id)\
+                .eq("sequence_id", _seq_id)\
+                .eq("status", "active")\
+                .execute())
+        else:
+            existing = await db_execute(lambda _seq_id=_seq_id: db.table("contact_sequence_status")\
+                .select("id")\
+                .eq("contact_id", contact_id)\
+                .eq("sequence_id", _seq_id)\
+                .execute())
         if not existing.data:
             # Enroll starting at Step 1 (delay 0 usually)
-            await db_execute(lambda: db.table("contact_sequence_status").insert({
+            await db_execute(lambda _seq_id=_seq_id: db.table("contact_sequence_status").insert({
                 "contact_id": contact_id,
-                "sequence_id": seq["id"],
+                "sequence_id": _seq_id,
                 "current_step": 1,
                 "status": "active",
                 "next_send_date": datetime.utcnow().date().isoformat()
             }).execute())
-            logger.info(f"Auto-enrolled contact {contact_id} into sequence {seq['id']} via {trigger_event}")
+            logger.info(f"Auto-enrolled contact {contact_id} into sequence {_seq_id} via {trigger_event}")
 
 async def process_segment_triggers():
     """
@@ -207,9 +241,11 @@ async def process_segment_triggers():
                     
                 if not existing.data:
                     try:
-                        await db_execute(lambda: db.table("contact_sequence_status").insert({
-                            "contact_id": contact_id,
-                            "sequence_id": seq_id,
+                        _cid = contact_id
+                        _sid = seq_id
+                        await db_execute(lambda _cid=_cid, _sid=_sid: db.table("contact_sequence_status").insert({
+                            "contact_id": _cid,
+                            "sequence_id": _sid,
                             "current_step": 1,
                             "status": "active",
                             "next_send_date": datetime.utcnow().date().isoformat()

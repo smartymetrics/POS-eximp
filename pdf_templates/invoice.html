@@ -330,20 +330,32 @@
             </div>
           </td>
           <td class="text-right">
-            {% if invoice.unit_price %}
+            {% if invoice.unit_price and invoice.unit_price > 0 %}
             {{ format_currency(invoice.unit_price) }}
             {% else %}
-            {{ format_currency(invoice.amount / (invoice.quantity or 1)) }}
+            {{ format_currency((invoice.amount + (invoice.discount_amount or 0)) / (invoice.quantity or 1)) }}
             {% endif %}
           </td>
           <td class="text-right">{{ invoice.quantity | default(1) }}</td>
-          <td class="text-right"><strong>{{ format_currency(invoice.amount) }}</strong></td>
+          <td class="text-right"><strong>{{ format_currency(invoice.amount + (invoice.discount_amount or 0)) }}</strong></td>
         </tr>
       </tbody>
     </table>
 
     <!-- Totals -->
     <table class="totals-table" border="0" cellspacing="0" cellpadding="0">
+      {% if invoice.discount_amount and invoice.discount_amount > 0 %}
+      <tr class="totals-row">
+        <td>Subtotal</td>
+        <td align="right">{{ format_currency(invoice.amount + invoice.discount_amount) }}</td>
+      </tr>
+      <tr class="totals-row">
+        <td>Discount {% if invoice.discount_code %}({{ invoice.discount_code }}){% endif %}</td>
+        <td align="right" style="color: #E74C3C;">-{{ format_currency(invoice.discount_amount) }}</td>
+      </tr>
+      {% endif %}
+
+
       <tr class="totals-row">
         <td>Total Price</td>
         <td align="right">{{ format_currency(invoice.amount) }}</td>

@@ -1,16 +1,39 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks, UploadFile, File
 from fastapi.responses import Response
 import os
+import asyncio
 from database import get_db, db_execute, SUPABASE_URL
 import os
 from routers.auth import verify_token, verify_token_optional, resolve_admin_token
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import json
 import uuid
 import pdf_service
 
+import uuid as uuid_lib
+import os
+from fastapi import Form
+from database import supabase
+
 router = APIRouter()
 APP_BASE_URL = os.getenv("APP_BASE_URL", "https://app.eximps-cloves.com")
+
+
+# ── HELPER: NOTIFICATION DISPATCHER ──────────────────────────────────
+async def _create_notification(db, recipient_admin_id: str, notif_type: str, title: str, message: str, matter_id: str = None):
+    """Non-critical helper — inserts a notification for a specific admin. Never raises."""
+    try:
+        await db_execute(lambda: db.table("legal_notifications").insert({
+            "recipient_id": recipient_admin_id,
+            "type": notif_type,
+            "title": title,
+            "message": message,
+            "matter_id": matter_id,
+            "is_read": False,
+        }).execute())
+    except Exception as e:
+        print(f"[Notification] Failed to create notification: {e}")
+
 
 # ── HELPER: LEGAL BRANDING ──
 async def get_branding_urls():
@@ -58,48 +81,63 @@ async def get_branding_urls():
 # ── HELPER: PERMISSION CHECK ──
 async def check_matter_access(matter_id: str, current_admin: dict, required_level: str = "View"):
     """
-    Verifies if an admin has access to a legal matter.
-    Levels: 'View', 'Edit', 'Full' (Drafter has 'Full')
+    Verifies if an admin has access to a specific legal matter.
+
+    ACCESS LEVELS: View < Edit < Full
+    ─────────────────────────────────────────────────────────
+    • super_admin / admin  → always Full (oversight role)
+    • Drafter              → always Full (owns the matter)
+    • Explicit collaborator → granted at their invited level only
+    • Everyone else        → 403, regardless of job role.
+
+    There are NO role-based backdoors. No Personnel bypass.
+    HR cannot see legal matters they were not invited to.
+    Lawyers cannot see HR contracts they were not invited to.
+    Invitation is the ONLY cross-role gateway.
     """
     db = get_db()
     admin_id = current_admin["sub"]
     user_roles = {r.strip() for r in (current_admin.get("role") or "").split(",") if r.strip()}
-    
-    # 1. Is the admin the drafter or a super-admin?
-    matter_res = await db_execute(lambda: db.table("legal_matters").select("drafter_id, category").eq("id", matter_id).execute())
+
+    # 1. Fetch the matter (we need drafter_id at minimum)
+    matter_res = await db_execute(
+        lambda: db.table("legal_matters").select("drafter_id, title").eq("id", matter_id).execute()
+    )
     if not matter_res.data:
         raise HTTPException(status_code=404, detail="Legal matter not found")
-    
     matter = matter_res.data[0]
-    
-    # Check if admin is the drafter
+
+    # 2. Super admins — full unrestricted oversight
+    if any(r in ["admin", "super_admin"] for r in user_roles):
+        return "Full"
+
+    # 3. Drafter — full access to their own matter
     if str(matter.get("drafter_id")) == str(admin_id):
         return "Full"
-        
-    # Global 'View' bypass for HR and Legal on Personnel matters
-    if required_level == "View" and matter.get("category") == "Personnel":
-        if any(r in ["admin", "super_admin", "legal", "hr_admin", "hr"] for r in user_roles):
-            return "View"
-        
-    # Check roles for Super Admin
-    # (Simplified for now - assuming we can fetch role if needed, but for now we check collaborators)
-    
-    # 2. Check collaborators table
-    collab_res = await db_execute(lambda: db.table("legal_matter_collaborators")\
-        .select("permission_level")\
-        .eq("matter_id", matter_id)\
-        .eq("admin_id", admin_id).execute())
-    
+
+    # 4. Explicit collaborator — access at their invited level only
+    collab_res = await db_execute(
+        lambda: db.table("legal_matter_collaborators")
+        .select("permission_level")
+        .eq("matter_id", matter_id)
+        .eq("admin_id", admin_id)
+        .execute()
+    )
     if collab_res.data:
         level = collab_res.data[0]["permission_level"]
-        # Basic check: Edit requires 'Edit' or 'Full'. View requires anything.
         if required_level == "Edit" and level not in ["Edit", "Full"]:
-            raise HTTPException(status_code=403, detail="Insufficient permissions to edit this matter")
+            raise HTTPException(
+                status_code=403,
+                detail="You have View-only access to this matter. Ask the drafter to upgrade your permissions."
+            )
         return level
 
-    raise HTTPException(status_code=403, detail="You do not have permission to access this legal matter")
+    # 5. No access — clear, honest message
+    raise HTTPException(
+        status_code=403,
+        detail="Access denied. You were not invited to this legal matter."
+    )
 
-# ── ENDPOINTS ──
 
 @router.get("/branding")
 async def get_legal_branding_api(current_admin=Depends(verify_token_optional)):
@@ -122,75 +160,273 @@ async def get_collaborator_candidates(current_admin=Depends(verify_token)):
 
 @router.get("/matters")
 async def get_legal_matters(category: str = None, staff_id: str = None, current_admin=Depends(verify_token)):
-    """Fetch all legal matters accessible to the current admin."""
+    """
+    Fetch legal matters accessible to the current admin.
+
+    ACCESS MODEL:
+    ─────────────────────────────────────────────────────────
+    • super_admin / admin  → sees ALL matters (oversight only)
+    • All other roles (legal, hr, hr_admin, operations, etc.) → sees ONLY:
+        - Matters they drafted themselves
+        - Matters they were explicitly invited to as a collaborator
+    • Staff portal → handled by /staff/self/visible-matters
+
+    Invitation is the ONLY cross-role gateway.
+    HR cannot see legal matters. Lawyers cannot see HR contracts.
+    Unless the drafter explicitly invites them.
+    """
+    import asyncio
     db = get_db()
     admin_id = current_admin["sub"]
     user_roles = {r.strip() for r in (current_admin.get("role") or "").split(",") if r.strip()}
-    
-    # If the user is a lawyer, super_admin, or HR, they can see everything.
-    # Otherwise, they only see matters where they are the drafter or collaborator.
-    is_privileged = any(r in ["admin", "super_admin", "legal", "hr_admin", "operations"] for r in user_roles)
-    
-    query = db.table("legal_matters").select("*")
+    is_super = any(r in ["admin", "super_admin"] for r in user_roles)
+
+    select_clause = (
+        "*, "
+        "drafter:admins!legal_matters_drafter_id_fkey(full_name), "
+        "staff:admins!legal_matters_staff_id_fkey(full_name)"
+    )
+
+    if is_super:
+        # ── Super admins: unrestricted oversight ──
+        query = db.table("legal_matters").select(select_clause)
+        if category:
+            query = query.eq("category", category)
+        if staff_id:
+            query = query.eq("staff_id", staff_id)
+        res = await db_execute(lambda: query.order("created_at", desc=True).execute())
+        matters = res.data or []
+        for m in matters:
+            m["is_drafter"]  = str(m.get("drafter_id")) == str(admin_id)
+            m["can_edit"]    = True
+            m["can_delete"]  = True
+            m["access_via"]  = "super_admin"
+        return matters
+
+    # ── Invitation-gated: all other roles ──
+    # 1. Get all matters this admin was invited to (and the permission level)
+    collab_res = await db_execute(
+        lambda: db.table("legal_matter_collaborators")
+        .select("matter_id, permission_level")
+        .eq("admin_id", admin_id)
+        .execute()
+    )
+    collab_map   = {c["matter_id"]: c["permission_level"] for c in (collab_res.data or [])}
+    invited_ids  = list(collab_map.keys())
+
+    # 2. Build queries
+    drafted_q = db.table("legal_matters").select(select_clause).eq("drafter_id", admin_id)
     if category:
-        query = query.eq("category", category)
+        drafted_q = drafted_q.eq("category", category)
     if staff_id:
-        query = query.eq("staff_id", staff_id)
-    elif not is_privileged:
-        # Restricted view: Only drafted or collaborated
-        # This is slightly tricky for PostgREST 'or' logic, so we'll fetch drafted mostly
-        query = query.eq("drafter_id", admin_id)
-        
-    res = await db_execute(lambda: query.order("created_at", desc=True).execute())
-    return res.data or []
+        drafted_q = drafted_q.eq("staff_id", staff_id)
+
+    async def fetch_drafted():
+        return await db_execute(lambda: drafted_q.order("created_at", desc=True).execute())
+
+    async def fetch_invited():
+        if not invited_ids:
+            return type("R", (), {"data": []})()
+        q = db.table("legal_matters").select(select_clause).in_("id", invited_ids)
+        if category:
+            q = q.eq("category", category)
+        if staff_id:
+            q = q.eq("staff_id", staff_id)
+        return await db_execute(lambda: q.order("created_at", desc=True).execute())
+
+    drafted_res, invited_res = await asyncio.gather(fetch_drafted(), fetch_invited())
+
+    # 3. Merge, deduplicate (drafter wins)
+    seen    = set()
+    matters = []
+
+    for m in (drafted_res.data or []):
+        m["is_drafter"] = True
+        m["can_edit"]   = True
+        m["can_delete"] = True
+        m["access_via"] = "drafter"
+        seen.add(m["id"])
+        matters.append(m)
+
+    for m in (invited_res.data or []):
+        if m["id"] in seen:
+            continue
+        level = collab_map.get(m["id"], "View")
+        m["is_drafter"] = False
+        m["can_edit"]   = level in ["Edit", "Full"]
+        m["can_delete"] = False
+        m["access_via"] = f"invited:{level}"
+        seen.add(m["id"])
+        matters.append(m)
+
+    matters.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    return matters
+
 
 @router.get("/staff/{staff_id}/matters")
 async def get_staff_matters(staff_id: str, current_admin=Depends(verify_token)):
-    """HR Portal: Fetch all matters for a specific employee (HR/Legal only)."""
-    user_roles = {r.strip() for r in (current_admin.get("role") or "").split(",") if r.strip()}
-    if not any(r in ["admin", "super_admin", "hr_admin", "hr", "legal"] for r in user_roles):
-        raise HTTPException(status_code=403, detail="Only HR and Legal staff can view staff matters")
-    
+    """
+    HR Portal: Fetch matters linked to a specific staff member.
+
+    ACCESS MODEL:
+    • super_admin / admin  → sees all matters for this staff member
+    • HR / Legal / others  → sees only matters they drafted OR were invited to
+      (visibility is per-matter via invitation, not role-based)
+    • Staff portal         → handled by /staff/self/visible-matters (staff_visible=true only)
+    """
+    import asyncio
     db = get_db()
-    res = await db_execute(lambda: db.table("legal_matters")\
-        .select("*")\
-        .eq("staff_id", staff_id)\
-        .order("created_at", desc=True).execute())
-    return res.data or []
+    admin_id = current_admin["sub"]
+    user_roles = {r.strip() for r in (current_admin.get("role") or "").split(",") if r.strip()}
+
+    # Gate: only admins/HR/Legal can query staff matters at all
+    allowed_roles = ["admin", "super_admin", "hr_admin", "hr", "legal"]
+    if not any(r in allowed_roles for r in user_roles):
+        raise HTTPException(status_code=403, detail="Only HR, Legal, and Admins can view staff matters")
+
+    select_clause = (
+        "*, "
+        "drafter:admins!legal_matters_drafter_id_fkey(full_name), "
+        "staff:admins!legal_matters_staff_id_fkey(full_name)"
+    )
+    is_super = any(r in ["admin", "super_admin"] for r in user_roles)
+
+    if is_super:
+        # Super admins see everything for this staff member
+        res = await db_execute(
+            lambda: db.table("legal_matters")
+            .select(select_clause)
+            .eq("staff_id", staff_id)
+            .order("created_at", desc=True)
+            .execute()
+        )
+        matters = res.data or []
+        for m in matters:
+            m["access_via"] = "super_admin"
+            m["can_edit"]   = True
+            m["is_drafter"] = str(m.get("drafter_id")) == str(admin_id)
+        return matters
+
+    # For all other roles: invitation-gated
+    # Fetch collaborated matter IDs for this admin
+    collab_res = await db_execute(
+        lambda: db.table("legal_matter_collaborators")
+        .select("matter_id, permission_level")
+        .eq("admin_id", admin_id)
+        .execute()
+    )
+    collab_map  = {c["matter_id"]: c["permission_level"] for c in (collab_res.data or [])}
+    invited_ids = list(collab_map.keys())
+
+    # Matters this admin drafted, filtered to this staff member
+    async def fetch_drafted():
+        return await db_execute(
+            lambda: db.table("legal_matters")
+            .select(select_clause)
+            .eq("staff_id", staff_id)
+            .eq("drafter_id", admin_id)
+            .order("created_at", desc=True)
+            .execute()
+        )
+
+    # Invited matters for this staff member
+    async def fetch_invited():
+        if not invited_ids:
+            return type("R", (), {"data": []})()
+        return await db_execute(
+            lambda: db.table("legal_matters")
+            .select(select_clause)
+            .eq("staff_id", staff_id)
+            .in_("id", invited_ids)
+            .order("created_at", desc=True)
+            .execute()
+        )
+
+    drafted_res, invited_res = await asyncio.gather(fetch_drafted(), fetch_invited())
+
+    seen    = set()
+    matters = []
+    for m in (drafted_res.data or []):
+        m["is_drafter"] = True
+        m["can_edit"]   = True
+        m["can_delete"] = True
+        m["access_via"] = "drafter"
+        seen.add(m["id"])
+        matters.append(m)
+
+    for m in (invited_res.data or []):
+        if m["id"] in seen:
+            continue
+        level = collab_map.get(m["id"], "View")
+        m["is_drafter"] = False
+        m["can_edit"]   = level in ["Edit", "Full"]
+        m["can_delete"] = False
+        m["access_via"] = f"invited:{level}"
+        seen.add(m["id"])
+        matters.append(m)
+
+    matters.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    return matters
+
 
 @router.post("/matters")
 async def initiate_matter(data: dict, current_admin=Depends(verify_token)):
-    """Create a new legal matter."""
+    """Create a new legal matter. If drafter_id is provided by a privileged user, that admin becomes the drafter."""
     db = get_db()
     admin_id = current_admin["sub"]
-    
+    user_roles = {r.strip() for r in (current_admin.get("role") or "").split(",") if r.strip()}
+    is_privileged = any(r in ["admin", "super_admin", "hr_admin", "hr", "legal"] for r in user_roles)
+
+    # Allow privileged users (HR, Admin) to assign a different drafter
+    requested_drafter = data.get("drafter_id")
+    if requested_drafter and is_privileged and str(requested_drafter) != str(admin_id):
+        # Validate that the requested drafter actually exists
+        drafter_check = await db_execute(lambda: db.table("admins").select("id, full_name").eq("id", requested_drafter).eq("is_active", True).execute())
+        if not drafter_check.data:
+            raise HTTPException(status_code=400, detail="Assigned drafter does not exist or is inactive")
+        drafter_id = requested_drafter
+        drafter_name = drafter_check.data[0].get("full_name", "Unknown")
+    else:
+        drafter_id = admin_id
+        drafter_name = current_admin.get("full_name", "Unknown")
+
     matter_data = {
         "title": data.get("title", "Untitled Case"),
         "category": data.get("category", "General"),
-        "drafter_id": admin_id,
+        "drafter_id": drafter_id,
         "staff_id": data.get("staff_id"),
         "external_party_name": data.get("external_party_name"),
         "external_party_email": data.get("external_party_email"),
         "priority": data.get("priority", "Normal"),
         "hr_memo": data.get("hr_memo"),
-        "status": data.get("status", "Draft")
+        "status": data.get("status", "Draft"),
+        "staff_visible": data.get("staff_visible", False),  # Always private by default
     }
-    
+
     res = await db_execute(lambda: db.table("legal_matters").insert(matter_data).execute())
     if not res.data:
         raise HTTPException(status_code=500, detail="Failed to initiate legal matter")
-    
+
     matter = res.data[0]
-    
-    # Log audit
+
+    # Build audit description — distinguish initiator from drafter when they differ
+    initiator_name = current_admin.get("full_name", "Unknown")
+    if str(drafter_id) != str(admin_id):
+        description = f"New {matter['category']} matter initiated by {initiator_name} and assigned to drafter: {drafter_name}"
+    else:
+        description = f"New {matter['category']} matter created via {'HR' if data.get('hr_memo') else 'Legal'} Portal"
+
     await db_execute(lambda: db.table("legal_matter_history").insert({
         "matter_id": matter["id"],
         "action": "Matter Initiated",
         "performed_by": admin_id,
-        "description": f"New {matter['category']} matter created via { 'HR' if data.get('hr_memo') else 'Legal'} Portal"
+        "performed_by_name": initiator_name,
+        "description": description
     }).execute())
-    
+
     return matter
+
+
 
 @router.get("/matters/{matter_id}")
 async def get_matter_details(matter_id: str, current_admin=Depends(verify_token)):
@@ -209,6 +445,37 @@ async def get_matter_details(matter_id: str, current_admin=Depends(verify_token)
         "history": history_res.data or []
     }
 
+@router.delete("/matters/{matter_id}")
+async def delete_matter(matter_id: str, current_admin=Depends(verify_token)):
+    """Permanently delete a legal matter and all associated records. Drafter or admin only."""
+    db = get_db()
+    admin_id = current_admin["sub"]
+    user_roles = {r.strip() for r in (current_admin.get("role") or "").split(",") if r.strip()}
+    is_super = any(r in ["admin", "super_admin"] for r in user_roles)
+
+    # Verify the matter exists and check access
+    matter_res = await db_execute(lambda: db.table("legal_matters").select("id, title, drafter_id").eq("id", matter_id).execute())
+    if not matter_res.data:
+        raise HTTPException(status_code=404, detail="Legal matter not found")
+
+    matter = matter_res.data[0]
+
+    # Only the drafter or an admin/super_admin may delete
+    if not is_super and str(matter.get("drafter_id")) != str(admin_id):
+        raise HTTPException(status_code=403, detail="Only the drafter or an administrator can delete this matter")
+
+    # Cascade-delete all related records first
+    await db_execute(lambda: db.table("legal_matter_collaborators").delete().eq("matter_id", matter_id).execute())
+    await db_execute(lambda: db.table("legal_matter_history").delete().eq("matter_id", matter_id).execute())
+    await db_execute(lambda: db.table("hr_matter_memos").delete().eq("matter_id", matter_id).execute())
+    await db_execute(lambda: db.table("legal_signing_requests").delete().eq("matter_id", matter_id).execute())
+
+    # Delete the matter itself
+    await db_execute(lambda: db.table("legal_matters").delete().eq("id", matter_id).execute())
+
+    return {"status": "deleted", "id": matter_id, "title": matter.get("title")}
+
+
 @router.post("/matters/{matter_id}/collaborators")
 async def add_collaborator(matter_id: str, data: dict, current_admin=Depends(verify_token)):
     """Add a new collaborator to a matter."""
@@ -225,15 +492,62 @@ async def add_collaborator(matter_id: str, data: dict, current_admin=Depends(ver
     res = await db_execute(lambda: db.table("legal_matter_collaborators").insert(collab_data).execute())
     if not res.data:
         raise HTTPException(status_code=500, detail="Failed to add collaborator")
-        
+
+    # Fetch matter title/category and collaborator's name+email in parallel
+    matter_info, collab_info = await asyncio.gather(
+        db_execute(lambda: db.table("legal_matters").select("title, category").eq("id", matter_id).execute()),
+        db_execute(lambda: db.table("admins").select("full_name, email").eq("id", collab_data["admin_id"]).execute()),
+    )
+    matter_title = matter_info.data[0]["title"] if matter_info.data else "a legal matter"
+    matter_cat = matter_info.data[0]["category"] if matter_info.data else "Contract"
+    inviter_name = current_admin.get("full_name", "HR")
+    invitation_note = data.get("invitation_note", "")
+
+    collab_name = collab_info.data[0]["full_name"] if collab_info.data else "Collaborator"
+    collab_email = collab_info.data[0]["email"] if collab_info.data else None
+
     # Audit
     await db_execute(lambda: db.table("legal_matter_history").insert({
         "matter_id": matter_id,
-        "action": "Permission Granted",
+        "action": "Lawyer Invited",
         "performed_by": admin_id,
-        "description": f"Granted {collab_data['permission_level']} access to admin {data.get('admin_id')}"
+        "performed_by_name": inviter_name,
+        "description": f"Granted {collab_data['permission_level']} access to {collab_name}. Invitation note: {invitation_note or 'None'}"
     }).execute())
-    
+
+    # Bell notification
+    notif_msg = (
+        f"{inviter_name} has invited you to collaborate on a {matter_cat}: \"{matter_title}\". "
+        f"Permission: {collab_data['permission_level']}."
+    )
+    if invitation_note:
+        notif_msg += f" Note: {invitation_note}"
+
+    await _create_notification(
+        db,
+        recipient_admin_id=collab_data["admin_id"],
+        notif_type="invite",
+        title="⚖️ You've been invited to collaborate",
+        message=notif_msg,
+        matter_id=matter_id,
+    )
+
+    # Email notification — non-blocking, never raises
+    try:
+        from email_service import send_collaborator_invite_email
+        await send_collaborator_invite_email(
+            recipient_name=collab_name,
+            recipient_email=collab_email,
+            inviter_name=inviter_name,
+            matter_title=matter_title,
+            matter_category=matter_cat,
+            permission_level=collab_data["permission_level"],
+            matter_id=matter_id,
+            invitation_note=invitation_note,
+        )
+    except Exception as _email_err:
+        print(f"[CollabInvite] Email failed (non-fatal): {_email_err}")
+
     return res.data[0]
 
 @router.delete("/matters/{matter_id}/collaborators/{target_admin_id}")
@@ -254,6 +568,7 @@ async def remove_collaborator(matter_id: str, target_admin_id: str, current_admi
         "matter_id": matter_id,
         "action": "Permission Revoked",
         "performed_by": admin_id,
+        "performed_by_name": current_admin.get("full_name", "Unknown"),
         "description": f"Revoked access for admin {target_admin_id}"
     }).execute())
     
@@ -280,6 +595,7 @@ async def save_matter_content(matter_id: str, data: dict, current_admin=Depends(
         "matter_id": matter_id,
         "action": "Edit",
         "performed_by": admin_id,
+        "performed_by_name": current_admin.get("full_name", "Unknown"),
         "description": "Updated document draft content"
     }).execute())
     
@@ -812,7 +1128,8 @@ async def submit_signature(signing_token: str, data: dict):
         signer_name  = data.get("signer_name", "Signatory")
         signer_email = data.get("signer_email", "")
         sig_image    = data.get("signature_image", "")
-        signed_at    = datetime.now().strftime("%d %B %Y, %H:%M")
+        lagos_tz = timezone(timedelta(hours=1))
+        signed_at = datetime.now(lagos_tz).strftime("%d %B %Y, %H:%M")
 
         # ── Resolve placeholders in existing content_html ──
         branding = await get_branding_urls()
@@ -865,8 +1182,8 @@ async def submit_signature(signing_token: str, data: dict):
 
         update_data = {
             "status": "Executed",
-            "signed_at": datetime.now().isoformat(),
-            "executed_at": datetime.now().isoformat(),
+            "signed_at": datetime.now(timezone(timedelta(hours=1))).isoformat(),
+            "executed_at": datetime.now(timezone(timedelta(hours=1))).isoformat(),
             "signed_by": signer_email,
             "staff_visible": True,
             "content_html": patched_html,
@@ -874,7 +1191,7 @@ async def submit_signature(signing_token: str, data: dict):
                 "signing_token": signing_token[:8],
                 "signer_name": signer_name,
                 "signer_email": signer_email,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now(timezone(timedelta(hours=1))).isoformat()
             }
         }
         
@@ -890,7 +1207,7 @@ async def submit_signature(signing_token: str, data: dict):
                         "staff_id": matter["staff_id"],
                         "document_type": "Legal Contract - Executed",
                         "document_link": f"/api/hr-legal/matters/{matter_id}/export",
-                        "uploaded_at": datetime.now().isoformat()
+                        "uploaded_at": datetime.now(timezone(timedelta(hours=1))).isoformat()
                     }).execute()
                 )
             except:
@@ -903,6 +1220,38 @@ async def submit_signature(signing_token: str, data: dict):
         "performed_by": None,
         "description": f"Contract signed by {data.get('signer_name')} ({data.get('signer_email')})"
     }).execute())
+
+    # ── Notify all collaborators: client has signed ──
+    try:
+        collab_res = await db_execute(
+            lambda: db.table("legal_matter_collaborators")
+                .select("admin_id")
+                .eq("matter_id", matter_id)
+                .execute()
+        )
+        matter_title_res = await db_execute(
+            lambda: db.table("legal_matters").select("title, drafter_id").eq("id", matter_id).execute()
+        )
+        matter_title = matter_title_res.data[0]["title"] if matter_title_res.data else "Contract"
+        drafter_id   = matter_title_res.data[0].get("drafter_id") if matter_title_res.data else None
+
+        recipients = set()
+        if drafter_id:
+            recipients.add(drafter_id)
+        for row in (collab_res.data or []):
+            recipients.add(row["admin_id"])
+
+        signer_name  = data.get("signer_name", "Client")
+        signer_email = data.get("signer_email", "")
+        for rid in recipients:
+            await _create_notification(
+                db, rid, "signing",
+                title=f"✍️ Contract signed — {matter_title}",
+                message=f"{signer_name} ({signer_email}) has signed the contract.",
+                matter_id=matter_id
+            )
+    except Exception as _ne:
+        print(f"[Notification] signing notify error: {_ne}")
 
     # ── Fire post-execution confirmation email (non-blocking) ──
     await _send_matter_executed_email(
@@ -953,93 +1302,103 @@ async def _send_matter_executed_email(matter_id: str, signing_token: str, signer
         
         # Ensure weasyprint can resolve logos
         body_html = body_html.replace(f"{APP_BASE_URL}/static/img/logo_firm.png", logo_uri)
+        
+        # ── BLANK PAGE PREVENTION: CLEANUP ──
+        # 1. Remove trailing empty paragraphs and spaces
+        import re
+        body_html = body_html.strip()
+        body_html = re.sub(r'(<p[^>]*>(&nbsp;|\s)*</p>|<br\s*/?>)+$', '', body_html)
+        
+        # 2. Remove trailing page breaks which force a blank page at the end
+        body_html = re.sub(r'<div[^>]*page-break-after:\s*always[^>]*>\s*</div>$', '', body_html)
+        
         audit_entries = exec_audit.data or []
 
         # Build full PDF (Using the shared styles we established earlier)
         pdf_full_html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Tinos:ital,wght@0,400;0,700;1,400;1,700&display=swap');
-  @page {{size:A4;margin:0;}}
-  body{{font-family:'Tinos', 'Times New Roman',serif;font-size:11pt;color:#000;background:white;margin:0;}}
-  .page{{width:210mm;min-height:297mm;display:flex;flex-direction:column;}}
-  /* BUG1 FIX: min-height so absolute bars are contained; body cannot overlap letterhead */
-  .letterhead{{position:relative;min-height:50px;}}
-  .header-bar-black{{position:absolute;top:0;left:0;width:60%;height:40px;background:#000;border-bottom-right-radius:40px;z-index:2;}}
-  /* BUG2 FIX: gold bar 70% to match browser and signing page */
-  .header-bar-gold{{position:absolute;top:0;right:0;width:70%;height:30px;background:#C47D0A;z-index:1;}}
-  /* BUG1 FIX: padding-top 50px clears the 40px black bar */
-  .letterhead-inner{{display:flex;justify-content:space-between;align-items:center;padding:50px 60px 20px;position:relative;z-index:3;}}
-  .lh-contact{{border-left:2px solid #000;padding:4px 15px;font-size:9pt;line-height:1.5;color:#111;font-weight:700;font-variant-caps:all-small-caps;letter-spacing:0.05em;font-family:'Inter', sans-serif;}}
-  .lh-contact a{{color:#C47D0A;text-decoration:none;}}
-  .text-brand-gold{{color:#C47D0A;}}
-  .lh-divider{{height:2px;background:#eee;margin:0 60px;}}
-  /* BUG8 FIX: consistent body padding 28px 72px (matches export PDF) */
-  .body{{padding:28px 72px;flex:1;line-height:1.6;}}
-  /* BUG3 FIX: constrain all images incl. signature PNGs */
-  .body img{{max-width:100%;height:auto;display:block;}}
-  .footer{{margin-top:auto;}}
-  .footer-bars{{display:flex;height:12px;}}
-  .fb{{flex:1;background:#000;}}.fg{{flex:1;background:#C47D0A;}}
-  .body p {{ margin-bottom: 12pt; text-align: justify; min-height: 1.2em; }}
-  .body h1 {{ font-size: 18pt; font-family: 'Inter', sans-serif; font-weight: 800; margin: 20pt 0 10pt; }}
-  .body h2 {{ font-size: 14pt; font-family: 'Inter', sans-serif; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin: 16pt 0 8pt; }}
-  .body h3 {{ font-size: 12pt; font-family: 'Inter', sans-serif; font-weight: 600; margin: 14pt 0 6pt; }}
-  .body ol, .body ul {{ margin: 0 0 12pt 24pt; padding: 0; }}
-  .body li {{ margin-bottom: 4pt; }}
-  .body ol[type="a"], .body ol.lower-alpha {{ list-style-type: lower-alpha; }}
-  .body ol[type="A"], .body ol.upper-alpha {{ list-style-type: upper-alpha; }}
-  .body ol[type="i"], .body ol.lower-roman {{ list-style-type: lower-roman; }}
-  .body ol[type="I"], .body ol.upper-roman {{ list-style-type: upper-roman; }}
-  .body table {{ width: 100%; border-collapse: collapse; margin: 12pt 0; }}
-  .body td, .body th {{ border: 1px solid #ccc; padding: 6pt 8pt; font-size: 10pt; vertical-align: top; }}
-  .body th {{ background: #f5f5f5; font-weight: 700; }}
-  .body hr {{ border: none; border-top: 1px solid #ccc; margin: 20pt 0; }}
-  .body p:empty::before {{ content: "\\00a0"; }}
-  .body [data-indent="1"] {{ margin-left: 40px !important; }}
-  .body [data-indent="2"] {{ margin-left: 80px !important; }}
-  .body [data-indent="3"] {{ margin-left: 120px !important; }}
-  .body [data-indent="4"] {{ margin-left: 160px !important; }}
-  .body [data-indent="5"] {{ margin-left: 200px !important; }}
-  .body [data-indent="6"] {{ margin-left: 240px !important; }}
-  .body [data-indent="7"] {{ margin-left: 280px !important; }}
-  .legal-badge {{ display: inline-flex !important; vertical-align: middle; margin: 10px; }}
-  /* BUG4 FIX: hide Tiptap page-break widget, emit real CSS page break */
-  .body [data-page-break="true"],
-  .body .editor-page-break {{
-    display: block !important;
-    height: 0 !important;
-    overflow: hidden !important;
-    visibility: hidden !important;
-    page-break-after: always !important;
-    break-after: page !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    border: none !important;
-  }}
-  /* BUG5 FIX: strip editor-only styling from unresolved merge-field tokens */
-  .body .merge-field {{
-    background: none !important;
-    border: none !important;
-    padding: 0 !important;
-    font-family: inherit !important;
-    font-size: inherit !important;
-    color: #000 !important;
-  }}
-</style></head>
-<body><div class="page">
-  <div class="letterhead">
-    <div class="header-bar-black"></div><div class="header-bar-gold"></div>
-    <div class="letterhead-inner">
-      <img src="{logo_uri}" style="height:70px;width:auto;">
-      <div class="lh-contact">
+  @page {{ size: A4; margin: 0; }}
+  body {{ font-family: 'Tinos', 'Times New Roman', serif; font-size: 11pt; color: #000; background: white; margin: 0; padding: 0; -webkit-print-color-adjust: exact; }}
+  
+  /* ── ABSOLUTE BARS (Pinned to Page Top) ── */
+  .bar-black {{ position: absolute; top: 0; left: 0; width: 60%; height: 40px; background: #000; border-bottom-right-radius: 40px; z-index: 100; }}
+  .bar-gold {{ position: absolute; top: 0; right: 0; width: 70%; height: 30px; background: #C47D0A; z-index: 90; }}
+  
+  /* ── MAIN CONTENT (Pushed down by padding) ── */
+  .main-wrapper {{ position: relative; z-index: 200; width: 100%; }}
+  
+  .header-content {{ padding: 50px 60px 10px; width: 100%; box-sizing: border-box; }}
+  .logo-box {{ float: left; width: 50%; }}
+  .contact-box {{ float: right; width: 45%; border-left: 2px solid #000; padding: 4px 15px; font-size: 9pt; line-height: 1.4; color: #111; font-weight: 700; font-variant-caps: all-small-caps; letter-spacing: 0.05em; font-family: 'Inter', sans-serif; }}
+  .contact-box a {{ color: #C47D0A; text-decoration: none; }}
+  
+  .clear {{ clear: both; height: 1px; }}
+  .divider {{ height: 2px; background: #eee; margin: 10px 60px 0; }}
+  
+  .body-content {{ padding: 30px 72px; line-height: 1.6; text-align: justify; }}
+  .body-content p {{ margin-bottom: 12pt; min-height: 1.2em; }}
+  .body-content ol, .body-content ul {{ padding: 0 0 0 40px; margin: 12pt 0; list-style-position: outside; }}
+  .body-content li {{ margin-bottom: 8pt; padding-left: 5px; }}
+  
+  /* Automatic Parent-Child Nesting */
+  .body-content ol {{ list-style-type: decimal; }}
+  .body-content ol ol {{ list-style-type: lower-alpha; margin: 6pt 0; }}
+  .body-content ol ol ol {{ list-style-type: lower-roman; margin: 4pt 0; }}
+  .body-content ul {{ list-style-type: disc; }}
+  .body-content ul ul {{ list-style-type: circle; }}
+  
+  /* Force specific types if overridden by user */
+  .body-content ol[type="a"] {{ list-style-type: lower-alpha !important; }}
+  .body-content ol[type="A"] {{ list-style-type: upper-alpha !important; }}
+  .body-content ol[type="i"] {{ list-style-type: lower-roman !important; }}
+  .body-content ol[type="I"] {{ list-style-type: upper-roman !important; }}
+  
+  /* Indentation Levels */
+  .body-content [data-indent="1"] {{ margin-left: 40px !important; }}
+  .body-content [data-indent="2"] {{ margin-left: 80px !important; }}
+  .body-content [data-indent="3"] {{ margin-left: 120px !important; }}
+  .body-content [data-indent="4"] {{ margin-left: 160px !important; }}
+  .body-content [data-indent="5"] {{ margin-left: 200px !important; }}
+  .body-content [data-indent="6"] {{ margin-left: 240px !important; }}
+  .body-content [data-indent="7"] {{ margin-left: 280px !important; }}
+  
+  /* Tables */
+  .body-content table {{ border-collapse: collapse; width: 100% !important; margin: 12pt 0; }}
+  .body-content td, .body-content th {{ border: 1px solid #000 !important; padding: 4px 8px; vertical-align: top; }}
+  .body-content th {{ background: #f8f9fa; font-weight: bold; }}
+  
+  .body-content img {{ max-width: 100%; height: auto; display: block; }}
+  
+  h1, h2, h3, h4 {{ page-break-after: avoid; }}
+  .footer {{ position: absolute; bottom: 0; left: 0; width: 100%; height: 12px; }}
+  .footer-bars {{ display: flex; height: 12px; width: 100%; }}
+  .fb {{ flex: 1; background: #000; }}
+  .fg {{ flex: 1; background: #C47D0A; }}
+</style>
+</head>
+<body>
+  <div class="bar-black"></div>
+  <div class="bar-gold"></div>
+  
+  <div class="main-wrapper">
+    <div class="header-content">
+      <div class="logo-box">
+        <img src="{logo_uri}" style="height:70px; width:auto;">
+      </div>
+      <div class="contact-box">
         {contact_html}
       </div>
+      <div class="clear"></div>
     </div>
-    <div class="lh-divider"></div>
+    <div class="divider"></div>
+    <div class="body-content">{body_html}</div>
   </div>
-  <div class="body">{body_html}</div>
-  <div class="footer"><div class="footer-bars"><div class="fb"></div><div class="fg"></div></div></div>
-</div></body></html>"""
+  
+  <div class="footer">
+    <div class="footer-bars"><div class="fb"></div><div class="fg"></div></div>
+  </div>
+</body></html>"""
 
         pdf_bytes = WeasyprintHTML(string=pdf_full_html, base_url=APP_BASE_URL).write_pdf()
 
@@ -1103,7 +1462,7 @@ async def acknowledge_document(signing_token: str, data: dict):
     await db_execute(
         lambda: db.table("legal_signing_requests").update({
             "status": "Acknowledged",
-            "acknowledged_at": datetime.now().isoformat(),
+            "acknowledged_at": datetime.now(timezone(timedelta(hours=1))).isoformat(),
             "signer_name": signer_name,
             "signer_email": signer_email,
             "signature_metadata": {
@@ -1118,7 +1477,8 @@ async def acknowledge_document(signing_token: str, data: dict):
     branding = await get_branding_urls()
     logo_url = branding.get("firm_logo")
     stamp_url = branding.get("stamp_url")
-    signed_date_str = datetime.now().strftime("%d %B %Y, %H:%M")
+    lagos_tz = timezone(timedelta(hours=1))
+    signed_date_str = datetime.now(lagos_tz).strftime("%d %B %Y, %H:%M")
     
     seal_html = f"""<div class="legal-badge seal-badge" style="display:inline-flex;flex-direction:column;align-items:center;border:3px solid #C47D0A;border-radius:50%;width:110px;height:110px;justify-content:center;padding:8px;text-align:center;box-shadow:0 0 0 2px #C47D0A inset;line-height:1.1;background:rgba(196,125,10,0.05);color:#C47D0A;vertical-align:middle;margin:10px;"><img src="{logo_url}" style="height:40px;width:auto;margin-bottom:2px;opacity:0.9;"><span style="font-size:6.5pt;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;">OFFICIAL<br>CORPORATE SEAL</span></div>"""
     
@@ -1168,7 +1528,39 @@ async def acknowledge_document(signing_token: str, data: dict):
         "performed_by": None,
         "description": f"Contract acknowledged by {signer_name or 'staff member'} ({signer_email or 'unknown email'})"
     }).execute())
-    
+
+    # ── Notify collaborators: witness/staff has acknowledged ──
+    try:
+        collab_res2 = await db_execute(
+            lambda: db.table("legal_matter_collaborators")
+                .select("admin_id")
+                .eq("matter_id", matter_id)
+                .execute()
+        )
+        matter_title_res2 = await db_execute(
+            lambda: db.table("legal_matters").select("title, drafter_id").eq("id", matter_id).execute()
+        )
+        matter_title2 = matter_title_res2.data[0]["title"] if matter_title_res2.data else "Contract"
+        drafter_id2   = matter_title_res2.data[0].get("drafter_id") if matter_title_res2.data else None
+
+        recipients2 = set()
+        if drafter_id2:
+            recipients2.add(drafter_id2)
+        for row in (collab_res2.data or []):
+            recipients2.add(row["admin_id"])
+
+        ack_name  = signer_name or "Staff member"
+        ack_email = signer_email or ""
+        for rid in recipients2:
+            await _create_notification(
+                db, rid, "witness",
+                title=f"🖊️ Document acknowledged — {matter_title2}",
+                message=f"{ack_name} ({ack_email}) has acknowledged/witnessed the document.",
+                matter_id=matter_id
+            )
+    except Exception as _ne2:
+        print(f"[Notification] acknowledge notify error: {_ne2}")
+
     # ── Fire post-acknowledgment confirmation email (non-blocking) ──
     if signer_email:
         await _send_matter_executed_email(
@@ -1306,37 +1698,43 @@ async def get_case_categories(current_admin=Depends(verify_token)):
 @router.patch("/matters/{matter_id}/visibility")
 async def toggle_matter_visibility(matter_id: str, data: dict, current_admin=Depends(verify_token)):
     """
-    HR/Legal only: Toggle whether staff member can see this matter.
-    Only matters marked staff_visible=true are shown to the personnel.
+    Toggle whether a staff member can see this matter in their portal.
+
+    ACCESS: Only the drafter, an invited collaborator with Edit access,
+    or a super_admin can change visibility.
+    Role alone (e.g. 'hr') is NOT sufficient — you must own or be invited to the matter.
     """
-    user_roles = {r.strip() for r in (current_admin.get("role") or "").split(",") if r.strip()}
-    if not any(r in ["admin", "super_admin", "hr_admin", "hr", "legal"] for r in user_roles):
-        raise HTTPException(status_code=403, detail="Only HR and Legal can control visibility")
-    
+    # Uses check_matter_access — this enforces invitation-gated access automatically
+    await check_matter_access(matter_id, current_admin, required_level="Edit")
+
     admin_id = current_admin["sub"]
     db = get_db()
-    
-    # Verify matter exists
-    matter_res = await db_execute(lambda: db.table("legal_matters").select("id").eq("id", matter_id).execute())
+
+    matter_res = await db_execute(
+        lambda: db.table("legal_matters").select("id, title").eq("id", matter_id).execute()
+    )
     if not matter_res.data:
         raise HTTPException(status_code=404, detail="Matter not found")
-    
-    # Update visibility
+
     staff_visible = data.get("staff_visible", False)
-    await db_execute(lambda: db.table("legal_matters").update({
-        "staff_visible": staff_visible,
-        "updated_at": datetime.now().isoformat()
-    }).eq("id", matter_id).execute())
-    
-    # Audit trail
+
+    await db_execute(
+        lambda: db.table("legal_matters").update({
+            "staff_visible": staff_visible,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }).eq("id", matter_id).execute()
+    )
+
     await db_execute(lambda: db.table("legal_matter_history").insert({
         "matter_id": matter_id,
         "action": "Visibility Changed",
         "performed_by": admin_id,
-        "description": f"Matter marked as {'visible' if staff_visible else 'confidential'} to staff member"
+        "performed_by_name": current_admin.get("full_name", "Unknown"),
+        "description": f"Contract marked as {'PUBLIC (visible to staff)' if staff_visible else 'PRIVATE (hidden from staff)'} by {current_admin.get('full_name', 'Unknown')}"
     }).execute())
-    
+
     return {"status": "updated", "staff_visible": staff_visible}
+
 
 @router.get("/staff/self/visible-matters")
 async def get_staff_visible_matters(current_admin=Depends(verify_token)):
@@ -1541,7 +1939,11 @@ async def export_matter_pdf(matter_id: str, token: str = None, request: Request 
     if current_admin:
         admin_id = current_admin.get("sub")
         roles = current_admin.get("role", "").lower().split(",")
-        is_privileged = any(r.strip() in ["hr", "lawyer", "legal", "admin", "super_admin"] for r in roles)
+        primary_role = current_admin.get("primary_role", "").lower()
+        is_privileged = (
+            any(r.strip() in ["hr", "hr_admin", "lawyer", "legal", "admin", "super_admin"] for r in roles)
+            or primary_role in ["hr", "legal", "admin"]
+        )
         query = matter_query.eq("id", matter_id)
         if not is_privileged:
             query = query.eq("staff_id", admin_id).eq("staff_visible", True)
@@ -1631,131 +2033,97 @@ async def export_matter_pdf(matter_id: str, token: str = None, request: Request 
   }}
 
   /* ── LETTERHEAD ── */
-  /* BUG1 FIX: min-height ensures absolutely-positioned bars are contained
-     and the body can never start behind the letterhead */
-  .letterhead {{ position: relative; padding: 0; min-height: 50px; }}
-  .header-bar-black {{
-    position: absolute; top: 0; left: 0;
-    width: 60%; height: 40px;
-    background: #000;
-    border-bottom-right-radius: 40px;
-    z-index: 2;
+  @page {{ size: A4; margin: 0; }}
+  body {{ font-family: 'Tinos', 'Times New Roman', serif; font-size: 11pt; color: #000; background: white; margin: 0; padding: 0; }}
+  
+  .bar-black {{ position: absolute; top: 0; left: 0; width: 60%; height: 40px; background: #000; border-bottom-right-radius: 40px; z-index: 100; }}
+  .bar-gold {{ position: absolute; top: 0; right: 0; width: 70%; height: 30px; background: #C47D0A; z-index: 90; }}
+  
+  .main-wrapper {{ position: relative; z-index: 200; width: 100%; }}
+  .header-content {{ padding: 50px 60px 10px; width: 100%; box-sizing: border-box; }}
+  .logo-box {{ float: left; width: 50%; }}
+  .contact-box {{ float: right; width: 45%; border-left: 2px solid #000; padding: 4px 15px; font-size: 9pt; line-height: 1.4; color: #111; font-weight: 700; font-variant-caps: all-small-caps; letter-spacing: 0.05em; font-family: 'Inter', sans-serif; }}
+  .contact-box a {{ color: #C47D0A; text-decoration: none; }}
+  
+  .clear {{ clear: both; height: 1px; }}
+  .divider {{ height: 2px; background: #eee; margin: 10px 60px 0; }}
+  
+  .body-content {{ padding: 30px 72px; line-height: 1.6; text-align: justify; }}
+  .body-content p {{ margin-bottom: 12pt; min-height: 1.2em; }}
+  .body-content ol, .body-content ul {{ padding: 0 0 0 40px; margin: 12pt 0; list-style-position: outside; }}
+  .body-content li {{ margin-bottom: 8pt; padding-left: 5px; }}
+  /* Automatic Parent-Child Nesting */
+  .body-content ol {{ list-style-type: decimal; }}
+  .body-content ol ol {{ list-style-type: lower-alpha; margin: 6pt 0; }}
+  .body-content ol ol ol {{ list-style-type: lower-roman; margin: 4pt 0; }}
+  .body-content ul {{ list-style-type: disc; }}
+  .body-content ul ul {{ list-style-type: circle; }}
+  /* Force specific types if overridden by user */
+  .body-content ol[type="a"] {{ list-style-type: lower-alpha !important; }}
+  .body-content ol[type="A"] {{ list-style-type: upper-alpha !important; }}
+  .body-content ol[type="i"] {{ list-style-type: lower-roman !important; }}
+  .body-content ol[type="I"] {{ list-style-type: upper-roman !important; }}
+  
+  /* Indentation Levels */
+  .body-content [data-indent="1"] {{ margin-left: 40px !important; }}
+  .body-content [data-indent="2"] {{ margin-left: 80px !important; }}
+  .body-content [data-indent="3"] {{ margin-left: 120px !important; }}
+  .body-content [data-indent="4"] {{ margin-left: 160px !important; }}
+  .body-content [data-indent="5"] {{ margin-left: 200px !important; }}
+  .body-content [data-indent="6"] {{ margin-left: 240px !important; }}
+  .body-content [data-indent="7"] {{ margin-left: 280px !important; }}
+  
+  /* ── TABLES ── */
+  .body-content table {{
+    border-collapse: collapse;
+    table-layout: fixed;
+    width: 100% !important;
+    margin: 12pt 0;
+    overflow: hidden;
   }}
-  /* BUG2 FIX: gold bar must be 70% (matches browser/signing page) not 40% */
-  .header-bar-gold {{
-    position: absolute; top: 0; right: 0;
-    width: 70%; height: 30px;
-    background: #C47D0A;
-    z-index: 1;
-  }}
-  .letterhead-inner {{
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    /* BUG1 FIX: top padding must clear the tallest absolute bar (40px black) */
-    padding: 50px 60px 20px;
+  .body-content td, .body-content th {{
+    min-width: 1em;
+    border: 1px solid #000 !important;
+    padding: 4px 8px;
+    vertical-align: top;
+    box-sizing: border-box;
     position: relative;
-    z-index: 3;
   }}
-  .logo-img {{ height: 70px; width: auto; }}
-  .lh-contact {{
-    border-left: 2px solid #000;
-    padding: 4px 15px;
-    font-size: 9pt;
-    line-height: 1.5;
-    color: #111;
-    font-weight: 700;
-    font-variant-caps: all-small-caps;
-    letter-spacing: 0.05em;
-    font-family: 'Inter', sans-serif;
+  .body-content th {{
+    font-weight: bold;
+    text-align: left;
+    background-color: #f8f9fa;
   }}
-  .lh-contact a {{ color: var(--brand-gold); text-decoration: none; }}
-  .text-brand-gold {{ color: var(--brand-gold); }}
-  .letterhead-divider {{ height: 2px; background: #eee; margin: 0 60px; }}
-
-  /* ── BODY ── */
-  .document-body {{
-    padding: 28px 72px;
-    flex: 1;
-    line-height: 1.6;
-  }}
-  .document-body h1 {{ font-size: 18pt; font-family: 'Inter', sans-serif; font-weight: 800; margin: 20pt 0 10pt; }}
-  .document-body h2 {{ font-size: 14pt; font-family: 'Inter', sans-serif; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin: 16pt 0 8pt; }}
-  .document-body h3 {{ font-size: 12pt; font-family: 'Inter', sans-serif; font-weight: 600; margin: 14pt 0 6pt; }}
-  .document-body p {{ margin-bottom: 8pt; text-align: justify; }}
-  .document-body ul {{ margin: 8pt 0 8pt 24pt; list-style: disc; }}
-  .document-body ol {{ margin: 8pt 0 8pt 24pt; }}
-  .document-body ol[type="a"], .document-body ol.lower-alpha {{ list-style-type: lower-alpha; }}
-  .document-body ol[type="A"], .document-body ol.upper-alpha {{ list-style-type: upper-alpha; }}
-  .document-body ol[type="i"], .document-body ol.lower-roman {{ list-style-type: lower-roman; }}
-  .document-body ol[type="I"], .document-body ol.upper-roman {{ list-style-type: upper-roman; }}
-  .document-body li {{ margin-bottom: 4pt; }}
-  .document-body table {{ width: 100%; border-collapse: collapse; margin: 12pt 0; }}
-  .document-body td, .document-body th {{ border: 1px solid #ccc; padding: 6pt 8pt; font-size: 10pt; vertical-align: top; }}
-  .document-body th {{ background: #f5f5f5; font-weight: 700; }}
-  .document-body hr {{ border: none; border-top: 1px solid #ccc; margin: 20pt 0; }}
-  /* BUG3 FIX: constrain all images including signatures */
-  .document-body img {{ max-width: 100%; height: auto; display: block; }}
-
-  /* BUG4 FIX: hide the Tiptap editor page-break widget in PDF output,
-     trigger a real CSS page break instead */
-  .document-body [data-page-break="true"],
-  .document-body .editor-page-break {{
-    display: block !important;
-    height: 0 !important;
-    overflow: hidden !important;
-    visibility: hidden !important;
-    page-break-after: always !important;
-    break-after: page !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    border: none !important;
-  }}
-
-  /* BUG5 FIX: strip editor-only styling from unresolved merge-field tokens */
-  .document-body .merge-field {{
-    background: none !important;
-    border: none !important;
-    padding: 0 !important;
-    font-family: inherit !important;
-    font-size: inherit !important;
-    color: #000 !important;
-  }}
-
-  /* ── FOOTER ── */
-  .page-footer {{ margin-top: auto; }}
-  .footer-bar-container {{ display: flex; height: 12px; }}
-  .footer-black {{ flex: 1; background: #000; }}
-  .footer-gold {{ flex: 1; background: var(--brand-gold); }}
+  .body-content img {{ max-width: 100%; height: auto; display: block; }}
+  
+  .footer {{ position: absolute; bottom: 0; left: 0; width: 100%; }}
+  .footer-bars {{ display: flex; height: 12px; }}
+  .fb {{ flex: 1; background: #000; }}
+  .fg {{ flex: 1; background: #C47D0A; }}
 </style>
 </head>
 <body>
-<div class="page">
-  <div class="letterhead">
-    <div class="header-bar-black"></div>
-    <div class="header-bar-gold"></div>
-    <div class="letterhead-inner">
-      <img class="logo-img" src="{logo_uri}" alt="Eximp &amp; Cloves">
-      <div class="lh-contact">
+  <div class="bar-black"></div>
+  <div class="bar-gold"></div>
+  
+  <div class="main-wrapper">
+    <div class="header-content">
+      <div class="logo-box">
+        <img src="{logo_uri}" style="height:70px; width:auto;">
+      </div>
+      <div class="contact-box">
         {contact_html}
       </div>
+      <div class="clear"></div>
     </div>
-    <div class="letterhead-divider"></div>
+    <div class="divider"></div>
+    <div class="body-content">{body_html}</div>
   </div>
-
-  <div class="document-body">
-    {body_html}
+  
+  <div class="footer">
+    <div class="footer-bars"><div class="fb"></div><div class="fg"></div></div>
   </div>
-
-  <div class="page-footer">
-    <div class="footer-bar-container">
-      <div class="footer-black"></div>
-      <div class="footer-gold"></div>
-    </div>
-  </div>
-</div>
-</body>
-</html>"""
+</body></html>"""
 
     try:
         from weasyprint import HTML as WeasyprintHTML
@@ -1769,3 +2137,816 @@ async def export_matter_pdf(matter_id: str, token: str = None, request: Request 
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"PDF generation failed: {str(e)}")
+
+LEGAL_VAULT_BUCKET = "legal-vault"
+MAX_FILE_SIZE_MB   = 20
+ALLOWED_MIME_TYPES = {
+    # PDF
+    "application/pdf":                                                               "pdf",
+    # DOC — different browsers/OS report different MIME types for the same .doc file
+    "application/msword":                                                            "doc",
+    "application/vnd.ms-word":                                                       "doc",
+    "application/x-msword":                                                          "doc",
+    # DOCX
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document":       "docx",
+    # Generic fallback (some OS/browsers report .doc/.docx as octet-stream)
+    "application/octet-stream":                                                      None,
+}
+# Extension fallback when MIME is generic
+EXTENSION_TO_TYPE = {"pdf": "pdf", "doc": "doc", "docx": "docx"}
+SIGNED_URL_EXPIRY_SECONDS = 3600  # 1 hour — short-lived for confidentiality
+
+
+# ════════════════════════════════════════════════════════════════════
+# HELPER: Upload a file to Supabase Storage
+# ════════════════════════════════════════════════════════════════════
+
+async def _upload_to_vault(matter_id: str, file: UploadFile, file_bytes: bytes) -> str:
+    """Uploads bytes to Supabase Storage. Returns the stored path."""
+    # Resolve extension — fall back to filename when MIME is generic
+    mime_ext = ALLOWED_MIME_TYPES.get(file.content_type)
+    if mime_ext is None:
+        filename_ext = (file.filename.rsplit(".", 1)[-1] if "." in file.filename else "").lower()
+        mime_ext = EXTENSION_TO_TYPE.get(filename_ext, "bin")
+
+    unique_id   = str(uuid_lib.uuid4())[:8]
+    safe_name   = "".join(c if c.isalnum() or c in "._-" else "_" for c in file.filename)
+    stored_path = f"matters/{matter_id}/{unique_id}_{safe_name}"
+
+    # storage3 _upload_or_update: `if file_options.get("upsert"):` skips the False branch,
+    # leaving `"upsert": False` (a Python bool) in the headers dict.
+    # httpx raises TypeError on non-string header values → 502.
+    # DEFAULT_FILE_OPTIONS already sets "x-upsert": "false", so we simply omit upsert here.
+    supabase.storage.from_(LEGAL_VAULT_BUCKET).upload(
+        path=stored_path,
+        file=file_bytes,
+        file_options={
+            "content-type": file.content_type,
+        },
+    )
+    return stored_path
+
+
+# ════════════════════════════════════════════════════════════════════
+# ENDPOINT 1 — Upload an Attachment
+# POST /api/hr-legal/matters/{matter_id}/attachments
+# ════════════════════════════════════════════════════════════════════
+
+@router.post("/matters/{matter_id}/attachments")
+async def upload_matter_attachment(
+    matter_id:     str,
+    file:          UploadFile = File(...),
+    version_label: str        = Form(None),  # e.g. "Initial Draft", "Revision 2"
+    current_admin: dict       = Depends(verify_token),
+):
+    db = get_db()
+
+    # ── 1. Access check ────────────────────────────────────────────
+    await check_matter_access(matter_id, current_admin, required_level="Edit")
+
+    # ── 2. Validate MIME type ──────────────────────────────────────
+    filename_ext = (file.filename.rsplit(".", 1)[-1] if "." in file.filename else "").lower()
+    if file.content_type not in ALLOWED_MIME_TYPES and filename_ext not in EXTENSION_TO_TYPE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type '{file.content_type}'. "
+                   f"Allowed: PDF, DOC, DOCX only."
+        )
+    # Resolve the canonical file_type string (pdf / doc / docx)
+    resolved_file_type = ALLOWED_MIME_TYPES.get(file.content_type) or EXTENSION_TO_TYPE.get(filename_ext, "bin")
+
+    # ── 3. Read & validate file size ───────────────────────────────
+    file_bytes = await file.read()
+    size_mb    = len(file_bytes) / (1024 * 1024)
+    if size_mb > MAX_FILE_SIZE_MB:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large ({size_mb:.1f} MB). Maximum allowed: {MAX_FILE_SIZE_MB} MB."
+        )
+
+    # ── 4. Determine version number for THIS SPECIFIC FILE ───────────
+    existing_res = await db_execute(
+        lambda: db.table("legal_matter_attachments")
+                  .select("version_number")
+                  .eq("matter_id", matter_id)
+                  .eq("original_filename", file.filename)
+                  .neq("status", "Deleted")
+                  .order("version_number", desc=True)
+                  .limit(1)
+                  .execute()
+    )
+    existing = existing_res.data or []
+    next_version = (existing[0]["version_number"] + 1) if existing else 1
+
+    # ── 5. Mark only prior version of THIS FILE as Superseded ───────
+    if existing:
+        await db_execute(
+            lambda: db.table("legal_matter_attachments")
+                      .update({"is_latest": False, "status": "Superseded"})
+                      .eq("matter_id", matter_id)
+                      .eq("original_filename", file.filename)
+                      .eq("is_latest", True)
+                      .execute()
+        )
+
+    # ── 6. Upload to Supabase Storage ──────────────────────────────
+    try:
+        stored_path = await _upload_to_vault(matter_id, file, file_bytes)
+    except Exception as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Storage upload failed: {str(e)}"
+        )
+
+    # ── 7. Insert DB record ────────────────────────────────────────
+    auto_label = version_label or (
+        "Initial Upload" if next_version == 1 else f"Revision {next_version - 1}"
+    )
+    record = {
+        "matter_id":         matter_id,
+        "original_filename": file.filename,
+        "stored_path":       stored_path,
+        "file_type":         resolved_file_type,
+        "file_size_bytes":   len(file_bytes),
+        "mime_type":         file.content_type,
+        "version_number":    next_version,
+        "version_label":     auto_label,
+        "is_latest":         True,
+        "uploader_id":       current_admin["sub"],
+        "uploader_name":     current_admin.get("full_name", "Unknown"),
+        "status":            "Active",
+    }
+    insert_res = await db_execute(
+        lambda: db.table("legal_matter_attachments").insert(record).execute()
+    )
+
+    # ── 8. Log to matter history ───────────────────────────────────
+    await db_execute(
+        lambda: db.table("legal_matter_history").insert({
+            "matter_id":   matter_id,
+            "performed_by":    current_admin["sub"],
+            "performed_by_name":  current_admin.get("full_name", "Unknown"),
+            "action":      "file_uploaded",
+            "description": f"Uploaded '{file.filename}' (v{next_version} — {auto_label}, {size_mb:.2f} MB)",
+        }).execute()
+    )
+
+    attachment = insert_res.data[0] if insert_res.data else record
+    return {
+        "status":     "success",
+        "message":    f"File uploaded as version {next_version}.",
+        "attachment": attachment,
+    }
+
+
+# ════════════════════════════════════════════════════════════════════
+# ENDPOINT 2 — List Attachments for a Matter
+# GET /api/hr-legal/matters/{matter_id}/attachments
+# ════════════════════════════════════════════════════════════════════
+
+@router.get("/matters/{matter_id}/attachments")
+async def list_matter_attachments(
+    matter_id:    str,
+    include_all:  bool = False,   # ?include_all=true shows superseded versions too
+    current_admin: dict = Depends(verify_token),
+):
+    db = get_db()
+    await check_matter_access(matter_id, current_admin, required_level="View")
+
+    query = db.table("legal_matter_attachments").select("*").eq("matter_id", matter_id)
+    if not include_all:
+        query = query.eq("status", "Active")   # Only Active by default
+    else:
+        query = query.neq("status", "Deleted") # Exclude only hard-deleted
+
+    res = await db_execute(
+        lambda: query.order("version_number", desc=True).execute()
+    )
+    attachments = res.data or []
+
+    # Generate 1-hour signed URLs for each file
+    for att in attachments:
+        try:
+            url_res = supabase.storage.from_(LEGAL_VAULT_BUCKET).create_signed_url(
+                path=att["stored_path"],
+                expires_in=SIGNED_URL_EXPIRY_SECONDS,
+            )
+            att["signed_url"]  = url_res.get("signedURL") or url_res.get("signed_url")
+            att["url_expires"] = SIGNED_URL_EXPIRY_SECONDS
+        except Exception:
+            att["signed_url"]  = None
+            att["url_expires"] = None
+
+    return {"attachments": attachments, "total": len(attachments)}
+
+
+# ════════════════════════════════════════════════════════════════════
+# ENDPOINT 3 — Get a Signed Download URL on Demand
+# GET /api/hr-legal/matters/{matter_id}/attachments/{attachment_id}/download
+# ════════════════════════════════════════════════════════════════════
+
+@router.get("/matters/{matter_id}/attachments/{attachment_id}/download")
+async def get_attachment_download_url(
+    matter_id:     str,
+    attachment_id: str,
+    current_admin: dict = Depends(verify_token),
+):
+    db = get_db()
+    await check_matter_access(matter_id, current_admin, required_level="View")
+
+    res = await db_execute(
+        lambda: db.table("legal_matter_attachments")
+                  .select("*")
+                  .eq("id", attachment_id)
+                  .eq("matter_id", matter_id)
+                  .neq("status", "Deleted")
+                  .single()
+                  .execute()
+    )
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Attachment not found.")
+
+    att = res.data
+    try:
+        url_res = supabase.storage.from_(LEGAL_VAULT_BUCKET).create_signed_url(
+            path=att["stored_path"],
+            expires_in=SIGNED_URL_EXPIRY_SECONDS,
+        )
+        signed_url = url_res.get("signedURL") or url_res.get("signed_url")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Could not generate download link: {str(e)}")
+
+    return {
+        "signed_url":  signed_url,
+        "filename":    att["original_filename"],
+        "file_type":   att["file_type"],
+        "expires_in":  SIGNED_URL_EXPIRY_SECONDS,
+    }
+
+
+# ════════════════════════════════════════════════════════════════════
+# ENDPOINT 4 — Soft-Delete an Attachment
+# DELETE /api/hr-legal/matters/{matter_id}/attachments/{attachment_id}
+# ════════════════════════════════════════════════════════════════════
+
+@router.delete("/matters/{matter_id}/attachments/{attachment_id}")
+async def delete_matter_attachment(
+    matter_id:     str,
+    attachment_id: str,
+    current_admin: dict = Depends(verify_token),
+):
+    db = get_db()
+    await check_matter_access(matter_id, current_admin, required_level="Edit")
+
+    # Fetch the record first
+    res = await db_execute(
+        lambda: db.table("legal_matter_attachments")
+                  .select("*")
+                  .eq("id", attachment_id)
+                  .eq("matter_id", matter_id)
+                  .neq("status", "Deleted")
+                  .single()
+                  .execute()
+    )
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Attachment not found.")
+
+    att = res.data
+
+    # Soft-delete in DB
+    await db_execute(
+        lambda: db.table("legal_matter_attachments")
+                  .update({"status": "Deleted", "is_latest": False})
+                  .eq("id", attachment_id)
+                  .execute()
+    )
+
+    # If this was the latest, promote the previous version
+    if att["is_latest"]:
+        prev_res = await db_execute(
+            lambda: db.table("legal_matter_attachments")
+                      .select("id")
+                      .eq("matter_id", matter_id)
+                      .eq("status", "Active")
+                      .order("version_number", desc=True)
+                      .limit(1)
+                      .execute()
+        )
+        if prev_res.data:
+            await db_execute(
+                lambda: db.table("legal_matter_attachments")
+                          .update({"is_latest": True})
+                          .eq("id", prev_res.data[0]["id"])
+                          .execute()
+            )
+
+    # Log to history
+    await db_execute(
+        lambda: db.table("legal_matter_history").insert({
+            "matter_id":   matter_id,
+            "performed_by":    current_admin["sub"],
+            "performed_by_name":  current_admin.get("full_name", "Unknown"),
+            "action":      "file_deleted",
+            "description": f"Removed attachment: '{att['original_filename']}' (v{att['version_number']})",
+        }).execute()
+    )
+
+    return {"status": "success", "message": "Attachment removed from the vault."}
+    
+
+# ════════════════════════════════════════════════════════════════════
+# ANALYTICS ENDPOINTS (for Legal Dashboard)
+# ════════════════════════════════════════════════════════════════════
+
+@router.get("/summary")
+async def get_legal_summary(current_admin: dict = Depends(verify_token)):
+    """Fetch high-level KPIs for the legal dashboard."""
+    db = get_db()
+    
+    # 1. Total Matters
+    total_res = await db_execute(lambda: db.table("legal_matters").select("id", count="exact").execute())
+    total_count = total_res.count or 0
+    
+    # 2. Draft Matters
+    draft_res = await db_execute(lambda: db.table("legal_matters")
+        .select("id", count="exact")
+        .eq("status", "Draft")
+        .execute())
+    draft_count = draft_res.count or 0
+
+    # 3. Active Matters (In-Progress, Legal Review, Legal Signing)
+    active_res = await db_execute(lambda: db.table("legal_matters")
+        .select("id", count="exact")
+        .in_("status", ["In-Progress", "Legal Review", "Legal Signing"])
+        .execute())
+    active_count = active_res.count or 0
+    
+    # 4. Executed Matters
+    executed_res = await db_execute(lambda: db.table("legal_matters")
+        .select("id", count="exact")
+        .eq("status", "Executed")
+        .execute())
+    executed_count = executed_res.count or 0
+    
+    # 5. Pending Review (subset of active)
+    pending_res = await db_execute(lambda: db.table("legal_matters")
+        .select("id", count="exact")
+        .eq("status", "Legal Review")
+        .execute())
+    pending_count = pending_res.count or 0
+    
+    return {
+        "total_matters": total_count,
+        "draft_matters": draft_count,
+        "active_matters": active_count,
+        "executed_matters": executed_count,
+        "pending_review": pending_count
+    }
+
+
+@router.get("/activity")
+async def get_legal_activity(limit: int = 15, current_admin: dict = Depends(verify_token)):
+    """Fetch recent activity from the legal_matter_history table."""
+    db = get_db()
+    
+    # Join with legal_matters to get the title
+    res = await db_execute(lambda: db.table("legal_matter_history")
+        .select("*, legal_matters(title, category, external_party_name)")
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute())
+    
+    history = res.data or []
+    
+    # Format for the frontend Activity widget
+    formatted = []
+    for item in history:
+        matter = item.get("legal_matters") or {}
+        title = matter.get("external_party_name") or matter.get("title") or "Unknown Matter"
+        
+        formatted.append({
+            "id": item["id"],
+            "event_type": item["action"],
+            "description": item["description"],
+            "performed_by_name": item.get("performed_by_name") or item.get("actor_name") or "Legal System",
+            "matter_title": title,
+            "created_at": item["created_at"]
+        })
+        
+    return formatted
+
+
+@router.get("/execution-trends")
+async def get_legal_execution_trends(current_admin: dict = Depends(verify_token)):
+    """Returns a 6-month trend of legal matters (Initiated, Executed, Pending)."""
+    db = get_db()
+    
+    # Fetch all matters from the last 6 months
+    res = await db_execute(lambda: db.table("legal_matters")
+        .select("id, status, created_at, updated_at")
+        .order("created_at", desc=True)
+        .execute())
+    
+    matters = res.data or []
+    
+    from collections import defaultdict
+    initiated_map = defaultdict(int)
+    executed_map = defaultdict(int)
+    pending_map = defaultdict(int)
+    
+    for m in matters:
+        try:
+            # Created = Initiated
+            created_dt = datetime.fromisoformat(m["created_at"].replace('Z', '+00:00'))
+            initiated_map[created_dt.strftime("%Y-%m")] += 1
+            
+            # Status based grouping
+            if m["status"] == "Executed":
+                updated_dt = datetime.fromisoformat(m["updated_at"].replace('Z', '+00:00'))
+                executed_map[updated_dt.strftime("%Y-%m")] += 1
+            elif m["status"] == "Legal Review":
+                pending_map[created_dt.strftime("%Y-%m")] += 1
+        except:
+            continue
+            
+    # Labels for last 6 months (Nigeria Time UTC+1)
+    labels = []
+    initiated = []
+    executed = []
+    pending = []
+    
+    now = datetime.now(timezone(timedelta(hours=1)))
+    for i in range(5, -1, -1):
+        # Using a safer way to get month starts
+        target = now - timedelta(days=i*30)
+        month_key = target.strftime("%Y-%m")
+        labels.append(target.strftime("%b"))
+        initiated.append(initiated_map.get(month_key, 0))
+        executed.append(executed_map.get(month_key, 0))
+        pending.append(pending_map.get(month_key, 0))
+        
+    return {
+        "labels": labels,
+        "initiated": initiated,
+        "executed": executed,
+        "pending": pending
+    }
+
+# ══════════════════════════════════════════════════════════════════════
+#  NOTIFICATIONS SYSTEM — endpoints below
+# ══════════════════════════════════════════════════════════════════════
+
+
+@router.get("/notifications")
+async def get_my_notifications(current_admin=Depends(verify_token)):
+    """Fetch all notifications for the currently logged-in admin/lawyer/HR."""
+    db = get_db()
+    admin_id = current_admin["sub"]
+    try:
+        res = await db_execute(
+            lambda: db.table("legal_notifications")
+            .select("*")
+            .eq("recipient_id", admin_id)
+            .order("created_at", desc=True)
+            .limit(100)
+            .execute()
+        )
+        return res.data or []
+    except Exception as e:
+        # If the table doesn't exist yet, return empty — graceful degradation
+        print(f"[Notifications] Table may not exist yet: {e}")
+        return []
+
+
+@router.patch("/notifications/{notif_id}/read")
+async def mark_notification_read(notif_id: str, current_admin=Depends(verify_token)):
+    """Mark a single notification as read."""
+    db = get_db()
+    admin_id = current_admin["sub"]
+    await db_execute(
+        lambda: db.table("legal_notifications")
+        .update({"is_read": True})
+        .eq("id", notif_id)
+        .eq("recipient_id", admin_id)
+        .execute()
+    )
+    return {"status": "read"}
+
+
+@router.patch("/notifications/read-all")
+async def mark_all_notifications_read(current_admin=Depends(verify_token)):
+    """Mark all notifications for the current admin as read."""
+    db = get_db()
+    admin_id = current_admin["sub"]
+    await db_execute(
+        lambda: db.table("legal_notifications")
+        .update({"is_read": True})
+        .eq("recipient_id", admin_id)
+        .eq("is_read", False)
+        .execute()
+    )
+    return {"status": "all_read"}
+
+
+# ── ENHANCED: add_collaborator now fires a notification to the invited lawyer ──
+
+@router.post("/matters/{matter_id}/collaborators/notify")
+async def add_collaborator_with_notification(matter_id: str, data: dict, current_admin=Depends(verify_token)):
+    """
+    Add a collaborator AND send them a notification.
+    This enhanced version replaces the silent add_collaborator for HR-initiated invites.
+    """
+    admin_id = current_admin["sub"]
+    await check_matter_access(matter_id, current_admin, required_level="Edit")
+
+    db = get_db()
+    invited_admin_id = data.get("admin_id")
+    permission_level = data.get("permission_level", "Edit")
+    invitation_note = data.get("invitation_note", "")
+
+    if not invited_admin_id:
+        raise HTTPException(status_code=400, detail="admin_id is required")
+
+    # Fetch matter title for notification message
+    matter_res = await db_execute(
+        lambda: db.table("legal_matters").select("title, category").eq("id", matter_id).execute()
+    )
+    matter_title = matter_res.data[0]["title"] if matter_res.data else "a legal matter"
+    matter_category = matter_res.data[0]["category"] if matter_res.data else "Contract"
+
+    # Insert collaborator record
+    collab_data = {
+        "matter_id": matter_id,
+        "admin_id": invited_admin_id,
+        "permission_level": permission_level
+    }
+    res = await db_execute(
+        lambda: db.table("legal_matter_collaborators").insert(collab_data).execute()
+    )
+    if not res.data:
+        raise HTTPException(status_code=500, detail="Failed to add collaborator")
+
+    # Audit log
+    await db_execute(lambda: db.table("legal_matter_history").insert({
+        "matter_id": matter_id,
+        "action": "Lawyer Invited",
+        "performed_by": admin_id,
+        "performed_by_name": current_admin.get("full_name", "HR"),
+        "description": f"Lawyer invited with {permission_level} access. Note: {invitation_note or 'None'}"
+    }).execute())
+
+    # Fire notification to invited lawyer
+    inviter_name = current_admin.get("full_name", "HR")
+    notif_message = (
+        f"{inviter_name} has invited you to collaborate on a {matter_category}: \"{matter_title}\". "
+        f"Permission: {permission_level}."
+    )
+    if invitation_note:
+        notif_message += f" Note: {invitation_note}"
+
+    await _create_notification(
+        db,
+        recipient_admin_id=invited_admin_id,
+        notif_type="invite",
+        title=f"⚖️ You've been invited to collaborate",
+        message=notif_message,
+        matter_id=matter_id,
+    )
+
+    return res.data[0]
+
+
+# ── ENHANCED: POST /matters now fires notifications ──
+
+@router.post("/matters/hr-initiate")
+async def hr_initiate_contract(data: dict, current_admin=Depends(verify_token)):
+    """
+    HR-specific contract initiation with:
+    - staff_visible control (default False)
+    - optional immediate lawyer invitation + notification
+    - internal memo storage
+    Lawyers are NEVER notified unless explicitly invited by HR.
+    """
+    db = get_db()
+    admin_id = current_admin["sub"]
+    user_roles = {r.strip() for r in (current_admin.get("role") or "").split(",") if r.strip()}
+
+    allowed = any(r in ["hr", "hr_admin", "admin", "super_admin"] for r in user_roles)
+    if not allowed:
+        raise HTTPException(status_code=403, detail="Only HR can use this endpoint")
+
+    # Build matter
+    matter_data = {
+        "title": data.get("title", "Untitled Contract"),
+        "category": data.get("category", "Employment Contract"),
+        "drafter_id": admin_id,
+        "staff_id": data.get("staff_id"),
+        "external_party_name": data.get("external_party_name"),
+        "external_party_email": data.get("external_party_email"),
+        "priority": data.get("priority", "Normal"),
+        "hr_memo": data.get("hr_memo"),
+        "status": "Draft",
+        "staff_visible": data.get("staff_visible", False),  # PRIVATE by default
+    }
+
+    res = await db_execute(lambda: db.table("legal_matters").insert(matter_data).execute())
+    if not res.data:
+        raise HTTPException(status_code=500, detail="Failed to create contract")
+
+    matter = res.data[0]
+    matter_id = matter["id"]
+
+    # Audit
+    hr_name = current_admin.get("full_name", "HR")
+    await db_execute(lambda: db.table("legal_matter_history").insert({
+        "matter_id": matter_id,
+        "action": "Contract Created by HR",
+        "performed_by": admin_id,
+        "performed_by_name": hr_name,
+        "description": f"Contract '{matter_data['title']}' created by {hr_name} via HR Contract Kitchen. Staff visibility: {matter_data['staff_visible']}"
+    }).execute())
+
+    # If lawyer invite requested
+    lawyer_id = data.get("lawyer_id")
+    lawyer_note = data.get("lawyer_note", "")
+    if lawyer_id:
+        collab_data = {
+            "matter_id": matter_id,
+            "admin_id": lawyer_id,
+            "permission_level": data.get("lawyer_permission", "Edit"),
+        }
+        await db_execute(lambda: db.table("legal_matter_collaborators").insert(collab_data).execute())
+
+        # Fetch lawyer name for audit
+        lawyer_res = await db_execute(
+            lambda: db.table("admins").select("full_name").eq("id", lawyer_id).execute()
+        )
+        lawyer_name = lawyer_res.data[0]["full_name"] if lawyer_res.data else "Lawyer"
+
+        await db_execute(lambda: db.table("legal_matter_history").insert({
+            "matter_id": matter_id,
+            "action": "Lawyer Invited at Creation",
+            "performed_by": admin_id,
+            "performed_by_name": hr_name,
+            "description": f"{lawyer_name} invited to collaborate at contract creation"
+        }).execute())
+
+        # Notify lawyer
+        notif_msg = (
+            f"{hr_name} has invited you to collaborate on a new contract: \"{matter_data['title']}\". "
+            f"Type: {matter_data['category']}."
+        )
+        if lawyer_note:
+            notif_msg += f" Note from HR: {lawyer_note}"
+
+        await _create_notification(
+            db,
+            recipient_admin_id=lawyer_id,
+            notif_type="invite",
+            title="⚖️ HR has invited you to a new contract",
+            message=notif_msg,
+            matter_id=matter_id,
+        )
+
+    return matter
+
+
+# ── ENHANCED: visibility toggle now notifies staff (when made public) ──
+
+@router.patch("/matters/{matter_id}/visibility/notify")
+async def toggle_visibility_with_notification(matter_id: str, data: dict, current_admin=Depends(verify_token)):
+    """
+    Visibility toggle that also:
+    - Notifies the staff member when made public (if staff_id is set)
+    - Fires an internal notification to lawyers on the matter
+    """
+    db = get_db()
+    admin_id = current_admin["sub"]
+    user_roles = {r.strip() for r in (current_admin.get("role") or "").split(",") if r.strip()}
+
+    allowed = any(r in ["hr", "hr_admin", "admin", "super_admin", "legal"] for r in user_roles)
+    if not allowed:
+        raise HTTPException(status_code=403, detail="Only HR and Legal can control visibility")
+
+    staff_visible = data.get("staff_visible", False)
+
+    # Fetch matter
+    matter_res = await db_execute(
+        lambda: db.table("legal_matters").select("*").eq("id", matter_id).execute()
+    )
+    if not matter_res.data:
+        raise HTTPException(status_code=404, detail="Matter not found")
+    matter = matter_res.data[0]
+
+    # Update
+    await db_execute(
+        lambda: db.table("legal_matters").update({
+            "staff_visible": staff_visible,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }).eq("id", matter_id).execute()
+    )
+
+    # Audit
+    hr_name = current_admin.get("full_name", "HR")
+    await db_execute(lambda: db.table("legal_matter_history").insert({
+        "matter_id": matter_id,
+        "action": "Visibility Updated",
+        "performed_by": admin_id,
+        "performed_by_name": hr_name,
+        "description": f"Contract marked as {'PUBLIC (visible to staff)' if staff_visible else 'PRIVATE (hidden from staff)'}"
+    }).execute())
+
+    # Notify collaborators (lawyers on this matter) about visibility change
+    collabs_res = await db_execute(
+        lambda: db.table("legal_matter_collaborators").select("admin_id").eq("matter_id", matter_id).execute()
+    )
+    if collabs_res.data:
+        for c in collabs_res.data:
+            if c["admin_id"] == admin_id:
+                continue  # don't notify self
+            await _create_notification(
+                db,
+                recipient_admin_id=c["admin_id"],
+                notif_type="visibility",
+                title=f"👁 Contract visibility changed",
+                message=f"'{matter['title']}' has been made {'public (visible to staff)' if staff_visible else 'private (hidden from staff)'} by {hr_name}.",
+                matter_id=matter_id,
+            )
+
+    return {"status": "updated", "staff_visible": staff_visible}
+
+
+# ── POST /matters/:id/dispatch-signature with HR notification ──
+
+@router.post("/matters/{matter_id}/notify-signing-dispatched")
+async def notify_signing_dispatched(matter_id: str, current_admin=Depends(verify_token)):
+    """
+    Called after dispatch-signature to fire notifications to all collaborators
+    on the matter that signing has been dispatched.
+    """
+    db = get_db()
+    admin_id = current_admin["sub"]
+
+    matter_res = await db_execute(
+        lambda: db.table("legal_matters").select("title, category").eq("id", matter_id).execute()
+    )
+    if not matter_res.data:
+        raise HTTPException(status_code=404, detail="Matter not found")
+    matter = matter_res.data[0]
+
+    collabs_res = await db_execute(
+        lambda: db.table("legal_matter_collaborators").select("admin_id").eq("matter_id", matter_id).execute()
+    )
+    sender_name = current_admin.get("full_name", "HR")
+
+    if collabs_res.data:
+        for c in collabs_res.data:
+            if c["admin_id"] == admin_id:
+                continue
+            await _create_notification(
+                db,
+                recipient_admin_id=c["admin_id"],
+                notif_type="signing",
+                title="✍️ Contract dispatched for signing",
+                message=f"'{matter['title']}' has been sent for signature by {sender_name}.",
+                matter_id=matter_id,
+            )
+
+    return {"status": "notified"}
+
+
+# ── Resend signature notification ──
+
+@router.post("/matters/{matter_id}/resend-signature")
+async def resend_signature_link(matter_id: str, current_admin=Depends(verify_token)):
+    """Resend the signing link and notify collaborators."""
+    db = get_db()
+    admin_id = current_admin["sub"]
+    await check_matter_access(matter_id, current_admin, required_level="Edit")
+
+    matter_res = await db_execute(
+        lambda: db.table("legal_matters").select("title, category, external_party_email, staff_id").eq("id", matter_id).execute()
+    )
+    if not matter_res.data:
+        raise HTTPException(status_code=404, detail="Matter not found")
+    matter = matter_res.data[0]
+
+    # Notify collaborators
+    collabs_res = await db_execute(
+        lambda: db.table("legal_matter_collaborators").select("admin_id").eq("matter_id", matter_id).execute()
+    )
+    sender_name = current_admin.get("full_name", "HR")
+    if collabs_res.data:
+        for c in collabs_res.data:
+            if c["admin_id"] == admin_id:
+                continue
+            await _create_notification(
+                db,
+                recipient_admin_id=c["admin_id"],
+                notif_type="signing",
+                title="🔄 Signing link resent",
+                message=f"The signing link for '{matter['title']}' was resent by {sender_name}.",
+                matter_id=matter_id,
+            )
+
+    return {"status": "resent", "message": "Signing link resent successfully."}

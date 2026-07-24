@@ -1,0 +1,4 @@
+ALTER TABLE email_campaigns ADD COLUMN IF NOT EXISTS is_ab_test BOOLEAN DEFAULT FALSE;
+ALTER TABLE email_campaigns ADD COLUMN IF NOT EXISTS subject_b TEXT;
+ALTER TABLE email_campaigns ADD COLUMN IF NOT EXISTS html_body_b TEXT;
+ALTER TABLE campaign_recipients ADD COLUMN IF NOT EXISTS variant TEXT DEFAULT 'A';

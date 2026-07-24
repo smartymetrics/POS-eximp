@@ -1,0 +1,3302 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Email Designer | Eximp &amp; Cloves</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap"
+    rel="stylesheet">
+  <link href="https://unpkg.com/grapesjs/dist/css/grapes.min.css" rel="stylesheet">
+  <script src="https://unpkg.com/grapesjs"></script>
+  <script src="https://unpkg.com/grapesjs-preset-newsletter"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              gold: '#C47D0A',
+              dark: '#111111',
+              card: '#1A1A1A'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      margin: 0;
+      overflow: hidden;
+      background: #111;
+      font-family: 'Inter', sans-serif;
+    }
+
+    html {
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #111;
+      font-family: 'Inter', sans-serif;
+    }
+
+    #gjs {
+      border: none;
+      flex-grow: 1;
+      height: auto !important;
+    }
+
+    .editor-top-bar {
+      background: #1A1A1A;
+      color: white;
+      border-bottom: 2px solid #C47D0A;
+      position: relative;
+      z-index: 9999;
+      flex-shrink: 0;
+    }
+
+    .brand-logo {
+      color: #C47D0A;
+      font-weight: 700;
+      font-size: 1.1rem;
+      letter-spacing: 0.05em;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-logo img {
+      height: 32px;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .save-status {
+      font-size: 0.8rem;
+      color: #888;
+      margin-right: 12px;
+    }
+
+    .btn {
+      background: #C47D0A;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.85rem;
+      transition: 0.2s;
+      white-space: nowrap;
+    }
+
+    .btn:hover {
+      background: #A66908;
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1.5px solid #C47D0A;
+      color: #C47D0A;
+    }
+
+    .btn-outline:hover {
+      background: #C47D0A;
+      color: white;
+    }
+
+    .btn-gray {
+      background: #333;
+      border: 1px solid #444;
+      color: #ccc;
+    }
+
+    .btn-gray:hover {
+      background: #444;
+      color: white;
+    }
+
+    /* ── TEMPLATE PICKER MODAL ── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 99999;
+    }
+
+    .modal-overlay.hidden {
+      display: none;
+    }
+
+    .modal-box {
+      background: #1a1a1a;
+      border-radius: 14px;
+      width: 90vw;
+      max-width: 980px;
+      max-height: 88vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid #333;
+    }
+
+    .modal-header {
+      padding: 24px 28px 16px;
+      border-bottom: 1px solid #2a2a2a;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-header h2 {
+      color: white;
+      font-family: 'Playfair Display', serif;
+      font-size: 1.5rem;
+      margin: 0;
+    }
+
+    .modal-header p {
+      color: #888;
+      font-size: 0.85rem;
+      margin: 4px 0 0 0;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      color: #666;
+      font-size: 1.5rem;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+
+    .modal-close:hover {
+      color: white;
+      background: #333;
+    }
+
+    .modal-body {
+      overflow-y: auto;
+      padding: 24px 28px;
+      flex: 1;
+    }
+
+    .template-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 16px;
+    }
+
+    .template-card {
+      background: #252525;
+      border-radius: 10px;
+      overflow: hidden;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: border-color 0.2s, transform 0.15s;
+    }
+
+    .template-card:hover {
+      border-color: #C47D0A;
+      transform: translateY(-2px);
+    }
+
+    .template-card.selected {
+      border-color: #C47D0A;
+    }
+
+    .template-preview {
+      height: 140px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      border-bottom: 1px solid #333;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .template-preview-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: #C47D0A;
+    }
+
+    .template-info {
+      padding: 12px;
+    }
+
+    .template-name {
+      color: white;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    .template-desc {
+      color: #888;
+      font-size: 0.75rem;
+      margin-top: 4px;
+    }
+
+    .modal-footer {
+      padding: 16px 28px;
+      border-top: 1px solid #2a2a2a;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    /* GrapesJS overrides */
+    .gjs-pn-panel {
+      background: #1a1a1a !important;
+    }
+
+    .gjs-block-category .gjs-title {
+      color: #C47D0A !important;
+      background: #1e1e1e !important;
+    }
+
+    .gjs-block {
+      border-color: #2a2a2a !important;
+      color: #ccc !important;
+      background: #222 !important;
+    }
+
+    .gjs-block:hover {
+      border-color: #C47D0A !important;
+    }
+
+    /* ── TAGS HELPER ── */
+    .tag-item {
+      background: #222;
+      border: 1px solid #333;
+      padding: 12px;
+      border-radius: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .tag-code {
+      color: #C47D0A;
+      font-family: monospace;
+      font-weight: 700;
+      font-size: 1rem;
+    }
+
+    .tag-label {
+      color: #888;
+      font-size: 0.8rem;
+    }
+
+    .copy-btn {
+      background: #333;
+      color: #C47D0A;
+      border: 1px solid #C47D0A;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    .copy-btn:hover {
+      background: #C47D0A;
+      color: white;
+    }
+
+    /* ── ASSET MANAGER MOBILE OPTIMIZATIONS ── */
+    .gjs-am-file-uploader {
+      padding: 15px !important;
+      background: rgba(196, 125, 10, 0.15) !important;
+      border: 2px dashed #C47D0A !important;
+      border-radius: 12px !important;
+      margin-bottom: 20px !important;
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      justify-content: center !important;
+      position: relative !important;
+    }
+
+    .gjs-am-file-uploader>form #gjs-am-title {
+      color: #C47D0A !important;
+      font-weight: 700 !important;
+      font-size: 1.1rem !important;
+    }
+
+    /* Create a subtext for mobile */
+    .gjs-am-file-uploader>form::after {
+      content: "Tap here to select an image from your gallery";
+      display: block;
+      margin-top: 6px;
+      color: #aaa;
+      font-size: 0.85rem;
+      text-align: center;
+      font-weight: 400;
+    }
+
+
+    /* Make sure the invisible input takes up the entire padded box */
+    .gjs-am-file-uploader>form input[type=file] {
+      cursor: pointer !important;
+      height: 100% !important;
+    }
+
+    /* ── PREMIUM BEEFREE/KLAVIYO RE-SKIN OVERRIDES ── */
+    
+    /* Soft light-grey canvas backdrop so the email canvas stands out like a real paper sheet */
+    /* Soft light-grey canvas backdrop so the email canvas stands out like a real paper sheet */
+    .gjs-cv-canvas {
+      background-color: #f1f5f9 !important;
+      position: absolute !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: calc(100% - 300px) !important;
+      height: 100% !important;
+      box-sizing: border-box !important;
+    }
+    
+    /* Canvas frame drop shadow */
+    .gjs-cv-canvas-frame {
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.08) !important;
+      border: 1px solid #e2e8f0 !important;
+      border-radius: 4px !important;
+    }
+
+    /* Position the active panel view contents container (the right sidebar) */
+    .gjs-pn-views-container {
+      position: absolute !important;
+      top: 40px !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      left: auto !important;
+      width: 300px !important;
+      height: calc(100% - 40px) !important;
+      background-color: #111827 !important;
+      border-left: 1px solid #374151 !important;
+      box-shadow: -4px 0 15px rgba(0,0,0,0.15) !important;
+      z-index: 99 !important;
+    }
+    
+    /* Position the tab buttons exactly above the right sidebar container */
+    .gjs-pn-views {
+      position: absolute !important;
+      top: 0 !important;
+      right: 0 !important;
+      left: auto !important;
+      width: 300px !important;
+      height: 40px !important;
+      z-index: 100 !important;
+      background: #111827 !important;
+      border-left: 1px solid #374151 !important;
+      border-bottom: 1px solid #374151 !important;
+      display: flex !important;
+      padding: 0 !important;
+    }
+
+    /* Preview Mode Overrides: Hide custom top bar, right sidebar, and stretch canvas to 100% width */
+    body.preview-active .gjs-cv-canvas,
+    .gjs-editor.preview-active .gjs-cv-canvas {
+      width: 100% !important;
+    }
+    body.preview-active .gjs-pn-views-container,
+    body.preview-active .gjs-pn-views,
+    body.preview-active .editor-top-bar,
+    .gjs-editor.preview-active .gjs-pn-views-container,
+    .gjs-editor.preview-active .gjs-pn-views {
+      display: none !important;
+    }
+
+    /* Force GrapesJS hidden panels to be display: none (overrides our custom absolute placement flex/block styles) */
+    .gjs-pn-views-container.gjs-pn-hidden,
+    .gjs-pn-views.gjs-pn-hidden {
+      display: none !important;
+    }
+
+    /* Mobile / Tablet Responsive Drawer for GrapesJS Sidebar */
+    @media (max-width: 1024px) {
+      /* Force GrapesJS canvas to take 100% width on tablet/mobile by default */
+      .gjs-cv-canvas {
+        width: 100% !important;
+      }
+      
+      /* Position sidebar panels as a slide-out overlay drawer on the right */
+      .gjs-pn-views-container,
+      .gjs-pn-views {
+        transform: translateX(100%);
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+      }
+
+      /* Slide in sidebar drawer when sidebar-open class is active */
+      body.sidebar-open .gjs-pn-views-container,
+      body.sidebar-open .gjs-pn-views {
+        transform: translateX(0) !important;
+        z-index: 99999 !important;
+      }
+
+      /* Display dark canvas backdrop overlay when sidebar is open to block text selection and close drawer on click */
+      body.sidebar-open .gjs-cv-canvas::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        pointer-events: all;
+        z-index: 9998;
+        cursor: pointer;
+      }
+    }
+
+    /* Hide standard GrapesJS default top header bar to keep workspace ultra clean */
+    .gjs-pn-commands, .gjs-pn-options, .gjs-pn-devices-c {
+      display: none !important;
+    }
+
+    /* Hide the confusing CSS Classes header and the text input tags, keeping the state selector dropdown visible */
+    .gjs-clm-header, .gjs-clm-tags-w input, .gjs-clm-new-key, #gjs-clm-new {
+      display: none !important;
+    }
+    
+    /* Center and style the State Selector dropdown at the top of the style manager */
+    .gjs-clm-sel {
+      padding: 12px 16px !important;
+      background-color: #1f2937 !important;
+      border-bottom: 1px solid #374151 !important;
+      display: block !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
+    }
+
+    /* Style GrapesJS Range Sliders to be highly visible and elegant */
+    /* Slider Track */
+    .gjs-sm-property input[type="range"],
+    .gjs-field-range,
+    .gjs-field-range-input,
+    .gjs-sm-slider {
+      background-color: #4b5563 !important; /* High contrast medium grey track */
+      height: 6px !important;
+      border-radius: 3px !important;
+      cursor: pointer !important;
+      margin-top: 6px !important;
+    }
+    
+    /* Active Track / Fill */
+    .gjs-field-range-fill {
+      background-color: #C47D0A !important; /* Gold active progress track */
+      height: 6px !important;
+      border-radius: 3px !important;
+    }
+
+    /* Slider Thumb */
+    .gjs-field-range-thumb,
+    .gjs-sm-slider-thumb {
+      background-color: #ffffff !important;
+      border: 2px solid #C47D0A !important; /* Gold border thumb */
+      width: 14px !important;
+      height: 14px !important;
+      border-radius: 50% !important;
+      cursor: pointer !important;
+      transition: transform 0.1s ease !important;
+      margin-top: -4px !important; /* Center align thumb on track */
+    }
+    .gjs-field-range-thumb:hover,
+    .gjs-sm-slider-thumb:hover {
+      transform: scale(1.2) !important;
+    }
+
+    /* Slate-900 Sidebar background */
+    .gjs-one-bg {
+      background-color: #111827 !important; 
+    }
+    
+    /* Slate-800 Panels background */
+    .gjs-two-bg {
+      background-color: #1f2937 !important;
+    }
+    
+    /* Gold highlight state */
+    .gjs-three-bg {
+      background-color: #C47D0A !important;
+      color: white !important;
+    }
+    
+    /* Gold color text and active elements */
+    .gjs-four-color, .gjs-four-color-h:hover {
+      color: #C47D0A !important;
+    }
+
+    /* Styling sidebar controls */
+    .gjs-field {
+      background-color: #111827 !important;
+      border: 1px solid #374151 !important;
+      border-radius: 6px !important;
+      color: #f3f4f6 !important;
+      padding: 6px 10px !important;
+    }
+    
+    /* Re-skinned Blocks list to custom grids of modern card buttons */
+    .gjs-block {
+      background-color: #1f2937 !important;
+      border: 1px solid #374151 !important;
+      border-radius: 12px !important;
+      color: #f3f4f6 !important;
+      padding: 16px 8px !important;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1) !important;
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 6px !important;
+      width: calc(50% - 8px) !important; /* 2-column layout */
+      margin: 4px !important;
+    }
+    
+    .gjs-block:hover {
+      border-color: #C47D0A !important;
+      color: #C47D0A !important;
+      transform: translateY(-2px) !important;
+      box-shadow: 0 10px 15px -3px rgba(196, 125, 10, 0.2) !important;
+    }
+    
+    .gjs-block-label {
+      font-size: 10px !important;
+      font-weight: 700 !important;
+      text-transform: uppercase !important;
+      letter-spacing: 0.5px !important;
+      color: #e5e7eb !important;
+    }
+
+    .gjs-blocks-container {
+      display: flex !important;
+      flex-wrap: wrap !important;
+      padding: 8px !important;
+    }
+    
+    .gjs-pn-views .gjs-pn-btn {
+      flex: 1 !important;
+      text-align: center !important;
+      padding: 0px 4px !important;
+      border-radius: 0 !important;
+      margin: 0 !important;
+      border-right: 1px solid #374151 !important;
+      font-size: 9px !important;
+      font-weight: 800 !important;
+      text-transform: uppercase !important;
+      letter-spacing: 0.5px !important;
+      color: #9ca3af !important;
+      transition: all 0.2s !important;
+      display: flex !important;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      height: 100% !important;
+      box-sizing: border-box !important;
+    }
+    
+    .gjs-pn-views .gjs-pn-btn.gjs-pn-active {
+      background: #1f2937 !important;
+      color: #C47D0A !important;
+      border-bottom: 2px solid #C47D0A !important;
+    }
+
+    /* Style sector headers */
+    .gjs-sm-sector {
+      border-bottom: 1px solid #374151 !important;
+    }
+    .gjs-sm-title {
+      font-weight: 700 !important;
+      text-transform: uppercase !important;
+      font-size: 10px !important;
+      letter-spacing: 0.5px !important;
+      color: #e5e7eb !important;
+      padding: 14px 16px !important;
+      background-color: #1a2238 !important;
+    }
+    .gjs-sm-properties {
+      padding: 16px !important;
+      background-color: #111827 !important;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- TOP BAR (TWO ROWS) -->
+  <div class="editor-top-bar flex flex-col border-b-2 border-brand-gold bg-[#1A1A1A] z-[9999] relative">
+    
+    <!-- Row 1: Campaign Configuration & Primary Actions -->
+    <div class="flex flex-col md:flex-row items-center justify-between p-3 border-b border-[#2b2b2b] gap-3">
+      <!-- Left side: Brand Logo & A/B Mode -->
+      <div class="flex items-center justify-between w-full md:w-auto gap-3 shrink-0">
+        <div class="brand-logo flex items-center gap-2">
+          <img src="https://scsdnstqtrqjsosbmxyf.supabase.co/storage/v1/object/public/marketing/logo_dark.svg" alt="Eximp & Cloves" class="h-7" onerror="this.style.display='none'">
+          <span class="text-brand-gold font-bold text-sm tracking-wider hidden sm:inline">Marketing Editor v2</span>
+        </div>
+        
+        <div class="flex items-center gap-2">
+          <!-- Toggle Settings Button (Mobile only) -->
+          <button onclick="toggleMobileSettings()" class="md:hidden px-2 py-1 bg-[#222] border border-[#333] text-[10px] font-bold text-gray-400 hover:text-white rounded flex items-center gap-1">
+            <span>⚙️</span> Setup
+          </button>
+          
+          <!-- A/B Mode Toggle & Tabs -->
+          <div class="flex items-center gap-2 bg-[#111] px-2 py-1 rounded border border-[#333]">
+            <span class="text-[9px] font-black uppercase tracking-wider text-gray-400">A/B Mode</span>
+            <label class="inline-flex items-center cursor-pointer select-none">
+              <input type="checkbox" id="ab-toggle" class="sr-only peer">
+              <div class="relative w-8 h-4 bg-gray-800 rounded-full peer peer-checked:after:translate-x-4 after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-brand-gold border border-gray-700"></div>
+            </label>
+            <div id="variant-tabs" class="hidden flex bg-[#222] rounded p-0.5 border border-[#444] ml-1">
+              <button id="tab-a" onclick="switchVariant('A')" class="px-2 py-0.5 rounded text-[9px] font-bold transition-all bg-brand-gold text-white">A</button>
+              <button id="tab-b" onclick="switchVariant('B')" class="px-2 py-0.5 rounded text-[9px] font-bold transition-all text-gray-400 hover:text-white">B</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Center: Subject & Preview Text Inputs (Wide, side-by-side, collapsible on mobile) -->
+      <div id="mobile-settings-panel" class="hidden md:flex flex-col sm:flex-row flex-1 max-w-[850px] gap-3 w-full">
+        <!-- Campaign Name Field -->
+        <div class="flex items-center gap-2 bg-[#111] px-2.5 py-1 rounded border border-[#333] flex-1">
+          <span class="text-[9px] text-gray-400 uppercase font-black tracking-wider shrink-0">Name</span>
+          <input type="text" id="campaign-name-field"
+            class="bg-transparent text-xs w-full outline-none focus:ring-0 text-white"
+            placeholder="Campaign Name (internal)...">
+        </div>
+        <!-- Subject Field -->
+        <div class="flex items-center gap-2 bg-[#111] px-2.5 py-1 rounded border border-[#333] flex-1">
+          <span class="text-[9px] text-gray-400 uppercase font-black tracking-wider shrink-0">Subject</span>
+          <input type="text" id="subject-field"
+            class="bg-transparent text-xs w-full outline-none focus:ring-0 text-white"
+            placeholder="Email Subject...">
+        </div>
+        <!-- Preview Field -->
+        <div class="flex items-center gap-2 bg-[#111] px-2.5 py-1 rounded border border-[#333] flex-1">
+          <span class="text-[9px] text-gray-400 uppercase font-black tracking-wider shrink-0">Preview</span>
+          <input type="text" id="preview-text-field"
+            class="bg-transparent text-xs w-full outline-none focus:ring-0 text-white"
+            placeholder="Teaser snippet...">
+        </div>
+      </div>
+
+      <!-- Right Side: Primary Actions -->
+      <div class="flex items-center justify-between w-full md:w-auto gap-2 shrink-0 border-t border-[#222] pt-2 md:border-t-0 md:pt-0">
+        <span class="save-status text-[10px] text-gray-500 font-medium mr-2" id="save-status"></span>
+        <div class="flex items-center gap-2">
+          <button class="bg-brand-gold hover:bg-brand-gold/90 text-white text-xs px-3.5 py-1.5 rounded font-bold transition flex items-center gap-1.5 shadow shadow-brand-gold/10" id="save-campaign">
+            <span>💾</span> Save
+          </button>
+          <button class="bg-[#2a2a2a] text-white text-xs px-3 py-1.5 rounded font-bold border border-brand-gold/30 hover:border-brand-gold hover:bg-[#333] transition flex items-center gap-1.5" id="send-test">
+            <span>✉️</span> Test
+          </button>
+          <button class="bg-green-600 hover:bg-green-500 text-white text-xs px-3.5 py-1.5 rounded font-bold transition flex items-center gap-1.5 shadow shadow-green-600/10" onclick="openSendModal()">
+            <span>🚀</span> Send
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 2: Editor Workspace Utilities -->
+    <div class="flex flex-col md:flex-row items-center justify-between px-4 py-2 bg-[#141414] border-t border-[#111] gap-3">
+      <!-- Left side: Navigation / Back buttons & Sidebar Toggle on Mobile -->
+      <div class="flex items-center justify-between w-full md:w-auto gap-2">
+        <div class="flex items-center gap-2">
+          <button class="bg-[#222] hover:bg-gray-800 text-white text-[10px] px-2 py-0.5 rounded border border-[#333] transition" onclick="window.location.href='/marketing'">
+            ← Back
+          </button>
+          <button onclick="window.location.href='/marketing/editor?id=' + campaignId" class="text-gray-400 hover:text-white text-[9px] px-2 py-0.5 transition-all rounded hover:bg-[#222] hidden md:inline">
+            ← Back to Classic Editor
+          </button>
+        </div>
+        
+        <div class="flex items-center gap-2 lg:hidden">
+          <!-- Sidebar Toggle for Mobile/Tablet overlay -->
+          <button id="btn-toggle-sidebar" onclick="toggleMobileSidebar()" class="px-2.5 py-1 bg-brand-gold hover:bg-brand-gold/90 text-white text-[9px] rounded font-bold transition flex items-center gap-1 shadow">
+            <span>⚙️</span> Sidebar
+          </button>
+          <!-- Tools Menu Toggle for Mobile/Tablet -->
+          <button onclick="toggleMobileTools()" class="px-2.5 py-1 bg-[#2a2a2a] border border-[#3a3a3a] text-white text-[9px] rounded font-bold transition flex items-center gap-1 shadow">
+            <span>🍔</span> Tools
+          </button>
+        </div>
+      </div>
+
+      <!-- Center: Workspace Device and View Toggles -->
+      <div class="flex items-center gap-2">
+        <!-- Device Selectors (Hidden on Mobile screens where viewport size is fixed) -->
+        <div class="hidden md:flex items-center gap-1 bg-[#1f1f1f] px-2 py-0.5 rounded border border-[#333]">
+          <span class="text-[8px] uppercase tracking-wider text-gray-500 font-bold mr-1">Workspace</span>
+          <button id="device-desktop" onclick="setEditorDevice('Desktop')" class="px-2 py-0.5 rounded text-[8px] font-bold transition-all bg-brand-gold text-white" title="Desktop Workspace">🖥️ Desktop</button>
+          <button id="device-tablet" onclick="setEditorDevice('Tablet')" class="px-2 py-0.5 rounded text-[8px] font-bold transition-all text-gray-400 hover:text-white" title="Tablet Workspace">📟 Tablet</button>
+          <button id="device-mobile" onclick="setEditorDevice('Mobile')" class="px-2 py-0.5 rounded text-[8px] font-bold transition-all text-gray-400 hover:text-white" title="Mobile Workspace">📱 Mobile</button>
+        </div>
+
+        <!-- View Mode Selectors -->
+        <div class="flex items-center gap-1 bg-[#1f1f1f] px-2 py-0.5 rounded border border-[#333]">
+          <span class="text-[8px] uppercase tracking-wider text-gray-500 font-bold mr-1">View</span>
+          <button id="btn-preview" onclick="toggleEditorPreview()" class="px-2 py-0.5 rounded text-[8px] font-bold transition-all text-gray-400 hover:text-white" title="Preview Mode (Hide Outlines)">👁️ Preview</button>
+          <button id="btn-fullscreen" onclick="toggleEditorFullscreen()" class="px-2 py-0.5 rounded text-[8px] font-bold transition-all text-gray-400 hover:text-white" title="Fullscreen Mode">⛶ Fullscreen</button>
+        </div>
+      </div>
+
+      <!-- Right side: Creative Utilities (Collapsible on mobile/tablet) -->
+      <div id="mobile-tools-panel" class="hidden md:flex flex-wrap items-center gap-2 justify-end w-full md:w-auto">
+        <button class="bg-[#2a2a2a] text-white text-[9px] px-2.5 py-1 rounded font-bold border border-[#3a3a3a] hover:bg-[#333] transition flex items-center gap-1" onclick="openTags()">
+          <span>🏷️</span> Tags
+        </button>
+        <button class="bg-[#2a2a2a] text-white text-[9px] px-2.5 py-1 rounded font-bold border border-[#3a3a3a] hover:bg-[#333] transition flex items-center gap-1" onclick="openTemplates()">
+          <span>📋</span> Templates
+        </button>
+        <button class="bg-[#2a2a2a] text-white text-[9px] px-2.5 py-1 rounded font-bold border border-[#3a3a3a] hover:bg-[#333] transition flex items-center gap-1" onclick="openGeneralAssetManager()" title="Upload and insert a new image element directly into the template">
+          <span>📷</span> Add Image
+        </button>
+        <button class="bg-[#2a2a2a] text-white text-[9px] px-2.5 py-1 rounded font-bold border border-amber-700/40 hover:border-brand-gold hover:bg-[#333] transition flex items-center gap-1" onclick="openGifBuilder()">
+          <span>🎞️</span> GIF Builder
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- CANVAS -->
+  <div id="gjs"></div>
+
+  <!-- GIF CAROUSEL BUILDER MODAL -->
+  <div id="gif-builder-modal" class="modal-overlay hidden">
+    <div class="modal-box" style="max-width:580px;width:100%;display:flex;flex-direction:column;max-height:90vh;padding:0;overflow:hidden;">
+
+      <!-- Sticky Header -->
+      <div class="modal-header" style="flex-shrink:0;padding:18px 24px;border-bottom:1px solid #222;">
+        <div>
+          <h3 style="font-family:'Playfair Display',serif;color:#C47D0A;font-size:1.15rem;margin:0;">🎞️ GIF Carousel Builder</h3>
+          <p style="color:#888;font-size:0.78rem;margin:4px 0 0;">Upload images → set slide duration → click <strong>Compile &amp; Insert</strong></p>
+        </div>
+        <button onclick="closeGifBuilder()" class="modal-close">✕</button>
+      </div>
+
+      <!-- Scrollable Body -->
+      <div style="flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:16px;">
+
+        <!-- Drop Zone -->
+        <div id="gif-drop-zone" onclick="document.getElementById('gif-images-input').click()"
+          style="border:2px dashed #C47D0A;border-radius:10px;background:#0d0d0d;padding:28px 20px;text-align:center;cursor:pointer;transition:background 0.2s;flex-shrink:0;"
+          ondragover="event.preventDefault();this.style.background='#1a1200';"
+          ondragleave="this.style.background='#0d0d0d';"
+          ondrop="handleGifDrop(event)">
+          <div style="font-size:32px;margin-bottom:6px;">🖼️</div>
+          <div style="color:#C47D0A;font-weight:700;font-size:13px;">Click or drag images here</div>
+          <div style="color:#555;font-size:11px;margin-top:3px;">Up to 8 images · JPG, PNG, WEBP</div>
+          <input type="file" id="gif-images-input" multiple accept="image/*" style="display:none;" onchange="handleGifFilesSelected(this.files)">
+        </div>
+
+        <!-- Image Preview Grid -->
+        <div id="gif-preview-grid" style="display:none;flex-direction:column;gap:10px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <span style="color:#aaa;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Slides</span>
+            <button onclick="document.getElementById('gif-images-input').click()" style="background:none;border:1px solid #C47D0A;color:#C47D0A;font-size:10px;font-weight:700;padding:3px 10px;border-radius:4px;cursor:pointer;">+ Add More</button>
+          </div>
+          <div id="gif-slides-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+        </div>
+
+        <!-- Duration Selector -->
+        <div style="display:flex;align-items:center;gap:12px;flex-shrink:0;">
+          <label style="color:#aaa;font-size:12px;font-weight:700;white-space:nowrap;">⏱️ Seconds per slide:</label>
+          <input type="range" id="gif-duration-slider" min="500" max="4000" step="250" value="1500"
+            style="flex:1;accent-color:#C47D0A;cursor:pointer;"
+            oninput="document.getElementById('gif-duration-display').textContent = (this.value/1000).toFixed(2) + 's';">
+          <span id="gif-duration-display" style="color:#C47D0A;font-weight:700;font-size:13px;min-width:42px;">1.50s</span>
+        </div>
+
+        <!-- Status / Progress -->
+        <div id="gif-status-bar" style="display:none;background:#111;border:1px solid #222;border-radius:6px;padding:10px 14px;color:#aaa;font-size:12px;">Compiling…</div>
+
+      </div>
+
+      <!-- Sticky Footer Buttons -->
+      <div style="flex-shrink:0;padding:14px 24px;border-top:1px solid #222;display:flex;gap:10px;background:#161616;">
+        <button onclick="closeGifBuilder()" style="flex:1;background:#1f1f1f;color:#aaa;border:1px solid #333;font-weight:700;font-size:13px;padding:11px;border-radius:6px;cursor:pointer;">Cancel</button>
+        <button id="gif-compile-btn" onclick="compileGifCarousel()" style="flex:2;background:#C47D0A;color:#fff;border:none;font-weight:700;font-size:13px;padding:11px;border-radius:6px;cursor:pointer;">
+          🎬 Compile &amp; Insert into Canvas
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- TAGS HELPER MODAL -->
+  <div id="tags-modal" class="modal-overlay hidden">
+    <div class="modal-box" style="max-width: 500px; height: auto; max-height: 80vh;">
+      <div class="modal-header">
+        <div>
+          <h2 style="font-family: 'Playfair Display', serif; color: white;">Personalisation Tags</h2>
+          <p style="color: #888; font-size: 0.85rem;">Copy and paste these into your text blocks or <b>Subject Line</b>
+            to greet recipients.</p>
+        </div>
+        <button class="modal-close" onclick="closeTags()">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 20px;">
+        {% raw %}
+        <div class="tag-item">
+          <div>
+            <div class="tag-code">{{first_name}}</div>
+            <div class="tag-label">Recipient's first name (e.g. Chidi)</div>
+          </div>
+          <button class="copy-btn" onclick="copyTag(event, '{{first_name}}')">Copy</button>
+        </div>
+        <div class="tag-item" style="margin-top: 10px;">
+          <div>
+            <div class="tag-code">{{last_name}}</div>
+            <div class="tag-label">Recipient's last name (e.g. Okeke)</div>
+          </div>
+          <button class="copy-btn" onclick="copyTag(event, '{{last_name}}')">Copy</button>
+        </div>
+        <div class="tag-item" style="margin-top: 10px;">
+          <div>
+            <div class="tag-code">{{full_name}}</div>
+            <div class="tag-label">The full name found in the database.</div>
+          </div>
+          <button class="copy-btn" onclick="copyTag(event, '{{full_name}}')">Copy</button>
+        </div>
+        <div class="tag-item" style="margin-top: 10px;">
+          <div>
+            <div class="tag-code">{{email}}</div>
+            <div class="tag-label">Recipient's email address</div>
+          </div>
+          <button class="copy-btn" onclick="copyTag(event, '{{email}}')">Copy</button>
+        </div>
+        <div class="tag-item" style="margin-top: 10px;">
+          <div>
+            <div class="tag-code">{{phone}}</div>
+            <div class="tag-label">Recipient's phone number</div>
+          </div>
+          <button class="copy-btn" onclick="copyTag(event, '{{phone}}')">Copy</button>
+        </div>
+        <div class="tag-item" style="margin-top: 10px; border-top: 1px solid #333; padding-top: 15px;">
+          <div>
+            <div class="tag-code">{{unsubscribe_url}}</div>
+            <div class="tag-label">Mandatory link for recipients to opt-out.</div>
+          </div>
+          <button class="copy-btn" onclick="copyTag(event, '{{unsubscribe_url}}')">Copy</button>
+        </div>
+
+        <div style="margin-top: 25px; margin-bottom: 15px; border-bottom: 1px solid #C47D0A; padding-bottom: 5px;">
+          <span style="color: #C47D0A; font-weight: 800; font-size: 0.75rem; text-transform: uppercase;">💰 Financial
+            Intelligence</span>
+        </div>
+
+        <div class="tag-item">
+          <div>
+            <div class="tag-code">{{outstanding}}</div>
+            <div class="tag-label">Current balance due (e.g. ₦500,000.00)</div>
+          </div>
+          <button class="copy-btn" onclick="copyTag(event, '{{outstanding}}')">Copy</button>
+        </div>
+        <div class="tag-item" style="margin-top: 10px;">
+          <div>
+            <div class="tag-code">{{property_name}}</div>
+            <div class="tag-label">Name of their estate (e.g. Coinfield Estate)</div>
+          </div>
+          <button class="copy-btn" onclick="copyTag(event, '{{property_name}}')">Copy</button>
+        </div>
+        <div class="tag-item" style="margin-top: 10px;">
+          <div>
+            <div class="tag-code">{{amount_paid}}</div>
+            <div class="tag-label">Total amount they've paid so far.</div>
+          </div>
+          <button class="copy-btn" onclick="copyTag(event, '{{amount_paid}}')">Copy</button>
+        </div>
+        <div class="tag-item" style="margin-top: 10px;">
+          <div>
+            <div class="tag-code">{{due_date}}</div>
+            <div class="tag-label">Their next payment deadline.</div>
+          </div>
+          <button class="copy-btn" onclick="copyTag(event, '{{due_date}}')">Copy</button>
+        </div>
+        {% endraw %}
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeTags()">Done</button>
+    </div>
+  </div>
+
+  <!-- PROPERTY PICKER MODAL -->
+  <div id="property-modal" class="modal-overlay hidden">
+    <div class="modal-box" style="max-width: 800px;">
+      <div class="modal-header">
+        <div>
+          <h2>Insert Property Card</h2>
+          <p>Select an active estate to insert into your email.</p>
+        </div>
+        <button class="modal-close" onclick="closePropertyPicker()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="property-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Loaded via JS -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-gray" onclick="closePropertyPicker()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TEMPLATE PICKER MODAL -->
+  <div id="template-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div>
+          <h2>Choose a Template</h2>
+          <p>Pick a starting point. You can customise everything after selecting.</p>
+        </div>
+        <button class="modal-close" onclick="closeTemplates()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="template-grid" id="template-grid"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-gray" onclick="closeTemplates()">Cancel</button>
+        <button class="btn" onclick="applyTemplate()">Use Selected Template →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TEST SEND MODAL -->
+  <div id="test-send-modal" class="modal-overlay hidden">
+    <div class="modal-box" style="max-width:500px;">
+      <div class="modal-header">
+        <div>
+          <h2 style="font-family:'Playfair Display',serif;color:white;">🧪 Send Test Email</h2>
+          <p style="color:#888;font-size:0.85rem;">Test how your email looks before sending it to the public.</p>
+        </div>
+        <button class="modal-close" onclick="closeTestSendModal()">✕</button>
+      </div>
+      <div class="modal-body" style="padding:24px;">
+        <!-- Test Type Selector -->
+        <div style="display:flex;background:#111;border:1px solid #333;border-radius:8px;padding:4px;margin-bottom:20px;">
+          <button id="test-type-email-btn" onclick="setTestType('email')" style="flex:1;text-align:center;font-size:0.8rem;font-weight:700;padding:8px;border-radius:6px;background:#C47D0A;color:white;border:none;outline:none;cursor:pointer;transition:all 0.2s;">📧 Single Email</button>
+          <button id="test-type-segment-btn" onclick="setTestType('segment')" style="flex:1;text-align:center;font-size:0.8rem;font-weight:700;padding:8px;border-radius:6px;color:#888;border:none;outline:none;cursor:pointer;transition:all 0.2s;background:transparent;">🗂️ Entire Segment</button>
+        </div>
+
+        <!-- Single Email Input -->
+        <div id="test-email-container">
+          <label style="color:#aaa;font-size:0.8rem;text-transform:uppercase;font-weight:700;letter-spacing:1px;display:block;margin-bottom:8px;">Recipient Email Address</label>
+          <input type="email" id="test-email-input" style="width:100%;background:#1a1a1a;border:1px solid #333;border-radius:6px;color:#ccc;padding:10px;font-size:0.85rem;outline:none;margin-bottom:12px;" placeholder="e.g. tester@example.com">
+          <p style="color:#555;font-size:0.75rem;margin-top:2px;">Type a specific address. If it matches an active lead/client, their custom name/financial attributes will render.</p>
+        </div>
+
+        <!-- Segment Select -->
+        <div id="test-segment-container" class="hidden" style="display:none;">
+          <label style="color:#aaa;font-size:0.8rem;text-transform:uppercase;font-weight:700;letter-spacing:1px;display:block;margin-bottom:8px;">Target Segment</label>
+          <select id="test-segment-select" style="width:100%;background:#1a1a1a;border:1px solid #333;border-radius:6px;color:#ccc;padding:10px;font-size:0.85rem;outline:none;margin-bottom:12px;cursor:pointer;">
+            <option value="">Loading segments...</option>
+          </select>
+          
+          <!-- Safety Override Checkbox -->
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;margin-top:8px;">
+            <input type="checkbox" id="test-force-checkbox" style="width:16px;height:16px;accent-color:#C47D0A;cursor:pointer;">
+            <label for="test-force-checkbox" style="color:#ccc;font-size:0.8rem;cursor:pointer;user-select:none;">Allow test send to external/customer email domains</label>
+          </div>
+          
+          <p style="color:#555;font-size:0.75rem;margin-top:2px;">Select a segment to send this test to. Helpful for reviewing bulk behavior and variables in dynamic pools.</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-gray" onclick="closeTestSendModal()">Cancel</button>
+        <button class="btn" id="test-confirm-btn" onclick="executeTestSend()" style="background:#C47D0A;">🧪 Send Test</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SEND CAMPAIGN MODAL -->
+  <div id="send-modal" class="modal-overlay hidden">
+    <div class="modal-box" style="max-width:600px;">
+      <div class="modal-header">
+        <div>
+          <h2 style="font-family:'Playfair Display',serif;color:white;">🚀 Send Campaign</h2>
+          <p style="color:#888;font-size:0.85rem;">Choose your recipients and optionally schedule the send.</p>
+        </div>
+        <button class="modal-close" onclick="closeSendModal()">✕</button>
+      </div>
+      <div class="modal-body" style="padding:24px;">
+
+        <!-- Segment multi-select -->
+        <div style="margin-bottom:20px;">
+          <label style="color:#aaa;font-size:0.8rem;text-transform:uppercase;font-weight:700;letter-spacing:1px;display:block;margin-bottom:10px;">📋 Select Segments</label>
+          <div id="send-segment-list" style="display:flex;flex-wrap:wrap;gap:8px;min-height:40px;">
+            <span style="color:#555;font-size:0.85rem;">Loading segments...</span>
+          </div>
+        </div>
+
+        <!-- OR manual emails -->
+        <div style="margin-bottom:20px;">
+          <label style="color:#aaa;font-size:0.8rem;text-transform:uppercase;font-weight:700;letter-spacing:1px;display:block;margin-bottom:8px;">✉️ Or Specific Emails <span style="color:#555;font-weight:400;">(comma-separated)</span></label>
+          <textarea id="send-manual-emails" rows="3" style="width:100%;background:#1a1a1a;border:1px solid #333;border-radius:6px;color:#ccc;padding:10px;font-size:0.85rem;resize:vertical;outline:none;" placeholder="john@example.com, jane@example.com"></textarea>
+        </div>
+
+        <!-- Schedule -->
+        <div style="margin-bottom:20px;">
+          <label style="color:#aaa;font-size:0.8rem;text-transform:uppercase;font-weight:700;letter-spacing:1px;display:block;margin-bottom:8px;">⏰ Schedule For (optional)</label>
+          <input type="datetime-local" id="send-scheduled-at" style="background:#1a1a1a;border:1px solid #333;border-radius:6px;color:#ccc;padding:8px 12px;font-size:0.85rem;width:100%;outline:none;">
+          <p style="color:#555;font-size:0.75rem;margin-top:6px;">Leave blank to send immediately after saving.</p>
+        </div>
+
+        <!-- Recipient estimate -->
+        <div id="send-estimate" style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:12px 16px;font-size:0.85rem;color:#888;display:none;">
+          📊 Estimated recipients: <strong id="send-est-count" style="color:#C47D0A;">—</strong>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-gray" onclick="closeSendModal()">Cancel</button>
+        <button class="btn" id="send-confirm-btn" onclick="executeSend()" style="background:#1a7a3c;">🚀 Send Campaign</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const campaignId = new URLSearchParams(window.location.search).get('id');
+    let selectedTemplateId = null;
+    // Using a public cloud URL to ensure it renders for every recipient
+    const LOGO_URL = 'https://scsdnstqtrqjsosbmxyf.supabase.co/storage/v1/object/public/marketing/logo_dark.svg';
+
+    // ═══════════════════════════════════════
+    // LOCKED HEADER & FOOTER HTML
+    // ═══════════════════════════════════════
+    const LOCKED_HEADER = `
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#1A1A1A; border-bottom: 3px solid #C47D0A;">
+            <tr><td style="padding: 20px 30px; text-align: center;">
+              <img src="${LOGO_URL}" alt="Eximp &amp; Cloves" style="height:50px; max-width:200px;" />
+              <div style="color:#C47D0A; font-family:'Inter',sans-serif; font-size:11px; letter-spacing:3px; text-transform:uppercase; margin-top:6px;">Infrastructure Limited</div>
+            </td></tr>
+          </table>`;
+
+    const LOCKED_FOOTER = `
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#1A1A1A; margin-top:20px;">
+            <tr><td style="padding: 30px; text-align: center; border-top: 1px solid #333;">
+              <img src="${LOGO_URL}" alt="Eximp &amp; Cloves" style="height:36px; margin-bottom:16px;" />
+              <div style="margin-bottom:16px;">
+                <a href="https://www.linkedin.com/company/eximp-cloves" style="color:#C47D0A;text-decoration:none;margin:0 10px;font-family:'Inter',sans-serif;font-size:13px;">LinkedIn</a>
+                <a href="https://x.com/eximp_cloves" style="color:#C47D0A;text-decoration:none;margin:0 10px;font-family:'Inter',sans-serif;font-size:13px;">X</a>
+                <a href="https://instagram.com/eximp.cloves" style="color:#C47D0A;text-decoration:none;margin:0 10px;font-family:'Inter',sans-serif;font-size:13px;">Instagram</a>
+                <a href="https://facebook.com/eximp.cloves" style="color:#C47D0A;text-decoration:none;margin:0 10px;font-family:'Inter',sans-serif;font-size:13px;">Facebook</a>
+                <a href="https://tiktok.com/@eximp.cloves" style="color:#C47D0A;text-decoration:none;margin:0 10px;font-family:'Inter',sans-serif;font-size:13px;">TikTok</a>
+              </div>
+              <div style="color:#666; font-family:'Inter',sans-serif; font-size:12px; line-height:1.7;">
+                Eximp &amp; Cloves Infrastructure Limited<br>
+                57B, Isaac John Street, Yaba, Lagos, Nigeria<br>
+                📞 +234 912 686 4383 &nbsp;|&nbsp; 📧 <a href="mailto:admin@eximps-cloves.com" style="color:#C47D0A;">admin@eximps-cloves.com</a><br>
+                🌐 <a href="https://eximps-cloves.com" style="color:#C47D0A;">eximps-cloves.com</a>
+              </div>
+              <div style="margin-top:16px; padding-top:16px; border-top:1px solid #2a2a2a;">
+                <a href="{{unsubscribe_url}}" style="color:#555; font-family:'Inter',sans-serif; font-size:11px; text-decoration:underline;">Unsubscribe from marketing emails</a>
+              </div>
+            </td></tr>
+          </table>`;
+
+    // ═══════════════════════════════════════
+    // EMAIL TEMPLATES
+    // ═══════════════════════════════════════
+    const TEMPLATES = [
+      {
+        id: 'coinfield-launch',
+        name: 'Coinfield Estate Launch',
+        desc: 'Promote our flagship Epe estate',
+        icon: '🏝️',
+        bg: 'linear-gradient(135deg, #1A1A1A 0%, #2a1a00 100%)',
+        html: `${LOCKED_HEADER}
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr><td style="background:#1A1A1A; padding:60px 30px; text-align:center;">
+                  <div style="color:#C47D0A;font-family:'Inter',sans-serif;font-size:12px;letter-spacing:3px;text-transform:uppercase;margin-bottom:16px;">FEATURED INVESTMENT</div>
+                  <h1 style="color:#ffffff;font-family:'Playfair Display',serif;font-size:40px;margin:0 0 20px;">Coinfield Estate, Epe</h1>
+                  <p style="color:#cccccc;font-family:'Inter',sans-serif;font-size:17px;max-width:520px;margin:0 auto 30px;line-height:1.7;">A gem in Epe, the fastest-growing investment hub in Sub-Saharan Africa. Secure your 500sqm plot today with seamless documentation.</p>
+                  <a href="https://eximps-cloves.com/properties" style="background:#C47D0A;color:#fff;font-family:'Inter',sans-serif;font-weight:700;font-size:15px;padding:15px 40px;text-decoration:none;border-radius:4px;display:inline-block;">Secure Your Plot →</a>
+                </td></tr>
+                <tr><td style="padding:0;">
+                  <img src="https://images.unsplash.com/photo-1500382017468-9049fee74a62?auto=format&fit=crop&w=1200&q=80" width="100%" style="display:block;border:none;max-width:100% !important;height:auto !important;" alt="Coinfield Estate" />
+                </td></tr>
+                <tr><td style="padding:40px 30px; background:#fff;">
+                  <table width="100%" cellpadding="0" cellspacing="16">
+                    <tr>
+                      <td width="33%" style="text-align:center;padding:20px;background:#fafafa;border-radius:8px;">
+                        <div style="color:#C47D0A;font-size:28px;font-weight:700;font-family:'Inter',sans-serif;">C of O</div>
+                        <div style="color:#666;font-size:13px;font-family:'Inter',sans-serif;margin-top:4px;">Verified Title</div>
+                      </td>
+                      <td width="33%" style="text-align:center;padding:20px;background:#fafafa;border-radius:8px;">
+                        <div style="color:#C47D0A;font-size:24px;font-weight:700;font-family:'Inter',sans-serif;">₦5.5M</div>
+                        <div style="color:#666;font-size:13px;font-family:'Inter',sans-serif;margin-top:4px;">Pre-launch Price</div>
+                      </td>
+                      <td width="33%" style="text-align:center;padding:20px;background:#fafafa;border-radius:8px;">
+                        <div style="color:#C47D0A;font-size:20px;font-weight:700;font-family:'Inter',sans-serif;">Epe, Lagos</div>
+                        <div style="color:#666;font-size:13px;font-family:'Inter',sans-serif;margin-top:4px;">Location</div>
+                      </td>
+                    </tr>
+                  </table>
+                  <div style="margin-top:30px; padding:24px; border:1.5px solid #eee; border-radius:12px; font-family:'Inter',sans-serif;">
+                    <div style="color:#C47D0A; font-weight:700; font-size:13px; margin-bottom:8px;">TRUSTED BY BUYERS</div>
+                    <p style="color:#333; font-style:italic; font-size:15px; line-height:1.6; margin:0;">"Coinfield Estate is a gem in Epe. Secured my 500sqm easily and the documentation process was surprisingly seamless. Highly reliable!"</p>
+                    <div style="color:#888; font-size:13px; margin-top:8px;">— Chidi O., Lagos Buyer</div>
+                  </div>
+                  <div style="text-align:center;margin-top:30px;">
+                    <a href="https://eximps-cloves.com/contact" style="background:#1A1A1A;color:#C47D0A;font-family:'Inter',sans-serif;font-weight:700;font-size:14px;padding:14px 35px;text-decoration:none;border-radius:4px;display:inline-block;">Book a Site Inspection</a>
+                  </div>
+                </td></tr>
+              </table>
+              ${LOCKED_FOOTER}`
+      },
+      {
+        id: 'northstar-promo',
+        name: 'Northstar Promo',
+        desc: 'Limited-time offer for Abuja investors',
+        icon: '✨',
+        bg: 'linear-gradient(135deg, #001a33 0%, #1A1A1A 100%)',
+        html: `${LOCKED_HEADER}
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr><td style="background:#1A1A1A;padding:50px 30px;text-align:center;">
+                  <div style="color:#fff;font-family:'Inter',sans-serif;font-size:12px;letter-spacing:3px;text-transform:uppercase;margin-bottom:10px;">EXCLUSIVE OFFER</div>
+                  <h1 style="color:#ffffff;font-family:'Playfair Display',serif;font-size:44px;margin:0 0 10px;">Northstar Residence</h1>
+                  <div style="color:#C47D0A;font-size:48px;font-weight:900;font-family:'Inter',sans-serif;margin:10px 0;">10% OFF</div>
+                  <p style="color:#cccccc;font-family:'Inter',sans-serif;font-size:16px;margin:0 auto 30px;max-width:480px;">The best urban planning in Gwagwalada, Abuja. Truly impressed with the infrastructure and security vision.</p>
+                  <a href="https://eximps-cloves.com/properties" style="background:#C47D0A;color:#fff;font-family:'Inter',sans-serif;font-weight:700;font-size:16px;padding:16px 42px;text-decoration:none;border-radius:4px;display:inline-block;">Claim This Offer Now</a>
+                </td></tr>
+                <tr><td style="background:#fff;padding:40px 30px;text-align:center;">
+                  <p style="color:#333;font-family:'Inter',sans-serif;font-size:15px;line-height:1.8;max-width:500px;margin:0 auto;">This limited-time offer is for our Abuja investors looking for premium plots with verified titles and integrity.</p>
+                  <div style="margin-top:24px;padding:20px;background:#f9f4e8;border-left:4px solid #C47D0A;text-align:left;border-radius:4px;max-width:480px;margin-left:auto;margin-right:auto;">
+                    <div style="color:#333; font-family:'Inter',sans-serif; font-size:14px; line-height:1.6;">
+                      "Northstar Residence has the best urban planning I've seen in Gwagwalada. Truly impressed with the vision."<br>
+                      <strong style="color:#C47D0A; font-size:12px;">— Amina K., Abuja Investor</strong>
+                    </div>
+                  </div>
+                  <div style="margin-top:30px;">
+                    <a href="https://eximps-cloves.com/contact" style="background:#1A1A1A;color:#C47D0A;font-family:'Inter',sans-serif;font-weight:700;font-size:14px;padding:14px 35px;text-decoration:none;border-radius:4px;display:inline-block;">Chat with a Rep</a>
+                  </div>
+                </td></tr>
+              </table>
+              ${LOCKED_FOOTER}`
+      },
+
+      {
+        id: 'payment-reminder',
+        name: 'Payment Reminder',
+        desc: 'Outstanding balance reminder',
+        icon: '💰',
+        bg: 'linear-gradient(135deg, #003366 0%, #1A1A1A 100%)',
+        html: `${LOCKED_HEADER}
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr><td style="background:#f9f9f9;padding:40px 30px;">
+                  <h2 style="color:#1A1A1A;font-family:'Playfair Display',serif;font-size:28px;margin:0 0 6px;">Payment Reminder</h2>
+                  <p style="color:#666;font-family:'Inter',sans-serif;font-size:14px;margin:0 0 24px;">Dear {{first_name}},</p>
+                  <p style="color:#333;font-family:'Inter',sans-serif;font-size:15px;line-height:1.7;margin:0 0 24px;">This is a friendly reminder that you have an outstanding balance on your account. Please see your account summary below.</p>
+                  <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+                    <tr><td colspan="2" style="background:#1A1A1A;padding:14px 20px;">
+                      <span style="color:#C47D0A;font-family:'Inter',sans-serif;font-weight:700;font-size:13px;letter-spacing:1px;text-transform:uppercase;">Account Summary</span>
+                    </td></tr>
+                    <tr><td style="padding:14px 20px;font-family:'Inter',sans-serif;font-size:14px;color:#666;border-bottom:1px solid #f1f5f9;">Property</td><td style="padding:14px 20px;font-family:'Inter',sans-serif;font-size:14px;color:#333;font-weight:600;border-bottom:1px solid #f1f5f9;">{{property_name}}</td></tr>
+                    <tr><td style="padding:14px 20px;font-family:'Inter',sans-serif;font-size:14px;color:#666;border-bottom:1px solid #f1f5f9;">Invoice Total</td><td style="padding:14px 20px;font-family:'Inter',sans-serif;font-size:14px;color:#333;font-weight:600;border-bottom:1px solid #f1f5f9;">{{total_invoiced}}</td></tr>
+                    <tr><td style="padding:14px 20px;font-family:'Inter',sans-serif;font-size:14px;color:#666;border-bottom:1px solid #f1f5f9;">Amount Paid</td><td style="padding:14px 20px;font-family:'Inter',sans-serif;font-size:14px;color:#2ecc71;font-weight:600;border-bottom:1px solid #f1f5f9;">{{amount_paid}}</td></tr>
+                    <tr><td style="padding:16px 20px;font-family:'Inter',sans-serif;font-size:15px;color:#e74c3c;font-weight:700;">Balance Due</td><td style="padding:16px 20px;font-family:'Inter',sans-serif;font-size:20px;color:#e74c3c;font-weight:700;">{{outstanding}}</td></tr>
+                  </table>
+                  <div style="text-align:center;margin-top:30px;">
+                    <a href="#" style="background:#C47D0A;color:#fff;font-family:'Inter',sans-serif;font-weight:700;font-size:15px;padding:15px 40px;text-decoration:none;border-radius:4px;display:inline-block;">Pay Now</a>
+                  </div>
+                  <p style="color:#888;font-family:'Inter',sans-serif;font-size:12px;text-align:center;margin-top:20px;">Questions? Call/WhatsApp: <strong>+234 912 686 4383</strong> or email <strong>admin@eximps-cloves.com</strong></p>
+                  <div style="background:#f9f4e8;border:1px solid #C47D0A;border-radius:6px;padding:14px 20px;margin-top:16px;font-family:'Inter',sans-serif;font-size:13px;color:#555;">
+                    <strong style="color:#C47D0A;">Payment Details:</strong><br>
+                    Bank: Providus Bank &nbsp;|&nbsp; Account: <strong>1308184591</strong><br>
+                    Name: <strong>Eximp &amp; Cloves Infrastructure Limited</strong>
+                  </div>
+                </td></tr>
+              </table>
+              ${LOCKED_FOOTER}`
+      },
+      {
+        id: 'investment-update',
+        name: 'Eximp & Cloves Update',
+        desc: 'Monthly investment & estate news',
+        icon: '📰',
+        bg: 'linear-gradient(135deg, #1a1a2e 0%, #1A1A1A 100%)',
+        html: `${LOCKED_HEADER}
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr><td style="background:#1A1A1A;padding:40px 30px;text-align:center;border-bottom:1px solid #2a2a2a;">
+                  <div style="color:#C47D0A;font-family:'Inter',sans-serif;font-size:11px;letter-spacing:3px;text-transform:uppercase;">REAL ESTATE INSIGHTS</div>
+                  <h1 style="color:#ffffff;font-family:'Playfair Display',serif;font-size:32px;margin:10px 0 0;">The Eximp Monthly</h1>
+                </td></tr>
+                <tr><td style="background:#fff;padding:40px 30px;">
+                  <p style="color:#333;font-family:'Inter',sans-serif;font-size:15px;line-height:1.8;">Dear {{first_name}}, here's what's happening at Eximp &amp; Cloves Infrastructure Limited this month.</p>
+                  <h3 style="color:#1A1A1A;font-family:'Playfair Display',serif;font-size:22px;margin:30px 0 10px;border-left:4px solid #C47D0A;padding-left:14px;">🏘️ Estate Progress</h3>
+                  <p style="color:#555;font-family:'Inter',sans-serif;font-size:14px;line-height:1.8;">Prime Circle Estate is now 80% sold out! We've completed the preliminary perimeter fencing and the gatehouse is nearing completion. Secure your spot before the price appreciation on the 1st of next month.</p>
+                  <hr style="border:none;border-top:1px solid #eee;margin:30px 0;">
+                  <h3 style="color:#1A1A1A;font-family:'Playfair Display',serif;font-size:22px;margin:0 0 10px;border-left:4px solid #C47D0A;padding-left:14px;">📊 Market Insight</h3>
+                  <p style="color:#555;font-family:'Inter',sans-serif;font-size:14px;line-height:1.8;">Epe continues to outperform other Lagos hubs with a 25% year-on-year appreciation. Land banking remains the safest hedge against inflation in the current Nigerian economy.</p>
+                  <div style="background:#fafafa;border-radius:8px;padding:24px;margin-top:30px;text-align:center;">
+                    <p style="color:#333;font-family:'Inter',sans-serif;font-size:14px;margin:0 0 16px;">Ready to secure your next asset?</p>
+                    <a href="https://eximps-cloves.com/properties" style="background:#C47D0A;color:#fff;font-family:'Inter',sans-serif;font-weight:700;font-size:14px;padding:12px 30px;text-decoration:none;border-radius:4px;display:inline-block;">View Available Estates</a>
+                  </div>
+                </td></tr>
+              </table>
+              ${LOCKED_FOOTER}`
+      },
+      {
+        id: 'brand-welcome',
+        name: 'Welcome to Eximp',
+        desc: 'Onboarding for new leads',
+        icon: '🤝',
+        bg: 'linear-gradient(135deg, #004d1a 0%, #1A1A1A 100%)',
+        html: `${LOCKED_HEADER}
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr><td style="background:#1A1A1A;padding:50px 30px;text-align:center;">
+                  <div style="font-size:48px;margin-bottom:16px;">🤝</div>
+                  <h1 style="color:#ffffff;font-family:'Playfair Display',serif;font-size:36px;margin:0 0 16px;">Welcome to the Family!</h1>
+                  <p style="color:#cccccc;font-family:'Inter',sans-serif;font-size:16px;max-width:480px;margin:0 auto;line-height:1.7;">At Eximp &amp; Cloves, we don't just sell land; we build legacies. Thank you for trusting us with your investment journey.</p>
+                </td></tr>
+                <tr><td style="background:#fff;padding:40px 30px;">
+                  <table width="100%" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td width="10%" style="vertical-align:top;padding-top:4px;"><div style="width:32px;height:32px;background:#C47D0A;border-radius:50%;text-align:center;line-height:32px;color:#fff;font-weight:700;font-family:'Inter',sans-serif;">1</div></td>
+                      <td style="padding-left:16px;padding-bottom:24px;"><strong style="font-family:'Inter',sans-serif;color:#1A1A1A;">Pure Integrity</strong><br><span style="font-family:'Inter',sans-serif;font-size:14px;color:#666;">We provide verified titles only. No encumbrances, no stories.</span></td>
+                    </tr>
+                    <tr>
+                      <td width="10%" style="vertical-align:top;padding-top:4px;"><div style="width:32px;height:32px;background:#C47D0A;border-radius:50%;text-align:center;line-height:32px;color:#fff;font-weight:700;font-family:'Inter',sans-serif;">2</div></td>
+                      <td style="padding-left:16px;padding-bottom:24px;"><strong style="font-family:'Inter',sans-serif;color:#1A1A1A;">Fast Documentation</strong><br><span style="font-family:'Inter',sans-serif;font-size:14px;color:#666;">Your paperwork is processed within 48-72 hours of full payment.</span></td>
+                    </tr>
+                    <tr>
+                      <td width="10%" style="vertical-align:top;padding-top:4px;"><div style="width:32px;height:32px;background:#C47D0A;border-radius:50%;text-align:center;line-height:32px;color:#fff;font-weight:700;font-family:'Inter',sans-serif;">3</div></td>
+                      <td style="padding-left:16px;"><strong style="font-family:'Inter',sans-serif;color:#1A1A1A;">Flexible Payments</strong><br><span style="font-family:'Inter',sans-serif;font-size:14px;color:#666;">Instalment plans available for up to 12 months.</span></td>
+                    </tr>
+                  </table>
+                  <div style="text-align:center;margin-top:30px;">
+                    <a href="https://eximps-cloves.com/contact" style="background:#C47D0A;color:#fff;font-family:'Inter',sans-serif;font-weight:700;font-size:15px;padding:15px 40px;text-decoration:none;border-radius:4px;display:inline-block;">Speak to an Advisor</a>
+                  </div>
+                </td></tr>
+              </table>
+              ${LOCKED_FOOTER}`
+      },
+      {
+        id: 're-engagement',
+        name: 'Reconnect',
+        desc: 'Win back dormant contacts',
+        icon: '💌',
+        bg: 'linear-gradient(135deg, #4a0033 0%, #1A1A1A 100%)',
+        html: `${LOCKED_HEADER}
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr><td style="background:#1A1A1A;padding:50px 30px;text-align:center;">
+                  <div style="font-size:48px;margin-bottom:16px;">💌</div>
+                  <h1 style="color:#ffffff;font-family:'Playfair Display',serif;font-size:34px;margin:0 0 16px;">We Miss You, {{first_name}}</h1>
+                  <p style="color:#cccccc;font-family:'Inter',sans-serif;font-size:16px;max-width:460px;margin:0 auto;line-height:1.7;">It's been a while since your last enquiry. Land prices in Epe and Ibeju-Lekki are moving fast — we don't want you to miss out.</p>
+                </td></tr>
+                <tr><td style="background:#fff;padding:40px 30px;text-align:center;">
+                  <p style="color:#333;font-family:'Inter',sans-serif;font-size:15px;line-height:1.8;max-width:480px;margin:0 auto 24px;">Since you last visited us, we've launched the **Northstar Residence** and helped 200+ new investors secure their future. We'd love to help you do the same.</p>
+                  <div style="background:#f9f4e8;border:2px solid #C47D0A;border-radius:10px;padding:24px;display:inline-block;margin-bottom:30px;">
+                    <div style="color:#C47D0A;font-family:'Inter',sans-serif;font-size:12px;letter-spacing:2px;text-transform:uppercase;">EXCLUSIVE RE-ENTRY OFFER</div>
+                    <div style="color:#1A1A1A;font-family:'Playfair Display',serif;font-size:32px;margin:8px 0;">5% Discount</div>
+                    <div style="color:#666;font-family:'Inter',sans-serif;font-size:13px;">Valid for any plot at Prime Circle or Coinfield. Use code: EXIMP-BACK</div>
+                  </div>
+                  <div>
+                    <a href="https://eximps-cloves.com/properties" style="background:#C47D0A;color:#fff;font-family:'Inter',sans-serif;font-weight:700;font-size:15px;padding:15px 40px;text-decoration:none;border-radius:4px;display:inline-block;">View Current Opportunities</a>
+                  </div>
+                </td></tr>
+              </table>
+              ${LOCKED_FOOTER}`
+      },
+      {
+        id: 'site-inspection',
+        name: 'Inspection Invite',
+        desc: 'Site inspection or open day',
+        icon: '🚌',
+        bg: 'linear-gradient(135deg, #003344 0%, #1A1A1A 100%)',
+        html: `${LOCKED_HEADER}
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr><td style="background:#1A1A1A;padding:50px 30px;text-align:center;">
+                  <div style="color:#C47D0A;font-family:'Inter',sans-serif;font-size:11px;letter-spacing:3px;text-transform:uppercase;margin-bottom:12px;">JOIN US THIS WEEKEND</div>
+                  <h1 style="color:#ffffff;font-family:'Playfair Display',serif;font-size:36px;margin:0 0 8px;">Site Inspection Day</h1>
+                  <p style="color:#cccccc;font-family:'Inter',sans-serif;font-size:15px;margin:0;">Experience the landscape of your future investment first-hand.</p>
+                </td></tr>
+                <tr><td style="background:#fff;padding:40px 30px;">
+                  <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:30px;">
+                    <tr>
+                      <td width="33%" style="text-align:center;padding:20px;border-right:1px solid #eee;">
+                        <div style="color:#C47D0A;font-size:28px;margin-bottom:6px;">📅</div>
+                        <div style="color:#1A1A1A;font-family:'Inter',sans-serif;font-weight:700;font-size:18px;">[INSERT DATE]</div>
+                        <div style="color:#888;font-family:'Inter',sans-serif;font-size:13px;">Date</div>
+                      </td>
+                      <td width="33%" style="text-align:center;padding:20px;border-right:1px solid #eee;">
+                        <div style="color:#C47D0A;font-size:28px;margin-bottom:6px;">🕙</div>
+                        <div style="color:#1A1A1A;font-family:'Inter',sans-serif;font-weight:700;font-size:18px;">10:00 AM</div>
+                        <div style="color:#888;font-family:'Inter',sans-serif;font-size:13px;">Time</div>
+                      </td>
+                      <td width="33%" style="text-align:center;padding:20px;">
+                        <div style="color:#C47D0A;font-size:28px;margin-bottom:6px;">📍</div>
+                        <div style="color:#1A1A1A;font-family:'Inter',sans-serif;font-weight:700;font-size:18px;">[INSERT LOCATION]</div>
+                        <div style="color:#888;font-family:'Inter',sans-serif;font-size:13px;">Venue</div>
+                      </td>
+                    </tr>
+                  </table>
+                  <p style="color:#555;font-family:'Inter',sans-serif;font-size:14px;line-height:1.8;margin-bottom:30px; text-align:center;">Refreshments will be served. Our expert advisors will be on-site to answer all technical and documentation questions.</p>
+                  <div style="text-align:center;">
+                    <a href="https://eximps-cloves.com/contact" style="background:#C47D0A;color:#fff;font-family:'Inter',sans-serif;font-weight:700;font-size:15px;padding:15px 40px;text-decoration:none;border-radius:4px;display:inline-block;">RSVP for Inspection</a>
+                  </div>
+                </td></tr>
+              </table>
+              ${LOCKED_FOOTER}`
+      },
+      {
+        id: 'new-month-message',
+        name: 'New Month Greeting',
+        desc: 'Inspirational start-of-month touchpoint',
+        icon: '🗓️',
+        bg: 'linear-gradient(135deg, #1A1A1A 0%, #C47D0A 100%)',
+        html: `${LOCKED_HEADER}
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr><td style="background:#1A1A1A;padding:50px 30px;text-align:center;">
+                  <h1 style="color:#ffffff;font-family:'Playfair Display',serif;font-size:42px;margin:0 0 16px;">Happy New Month! 🎉</h1>
+                  <p style="color:#cccccc;font-family:'Inter',sans-serif;font-size:16px;max-width:480px;margin:0 auto;line-height:1.7;">A new month is a fresh chance to grow your portfolio and secure your future. Let's make it count.</p>
+                </td></tr>
+                <tr><td style="background:#fff;padding:40px 30px;text-align:center;">
+                  <blockquote style="border-left:4px solid #C47D0A;margin:0 auto 30px;padding:16px 24px;background:#fafafa;text-align:left;border-radius:0 8px 8px 0; max-width:500px;">
+                    <p style="color:#333;font-family:'Playfair Display',serif;font-size:18px;font-style:italic;margin:0;">"Wealth is not about how much money you make, but how much you keep and how hard it works for you."</p>
+                  </blockquote>
+                  <p style="color:#555;font-family:'Inter',sans-serif;font-size:15px;line-height:1.8;max-width:500px;margin:0 auto 30px;">At Eximp &amp; Cloves, we are committed to providing the most reliable vehicles for your wealth accumulation. Wishing you a month of abundance!</p>
+                  <a href="https://eximps-cloves.com/properties" style="background:#C47D0A;color:#fff;font-family:'Inter',sans-serif;font-weight:700;font-size:15px;padding:15px 40px;text-decoration:none;border-radius:4px;display:inline-block;">Start Investing Today</a>
+                </td></tr>
+              </table>
+              ${LOCKED_FOOTER}`
+      },
+      {
+        id: 'monday-motivation-brand',
+        name: 'Monday Motivation',
+        desc: 'Powerful weekly quote & focus',
+        icon: '💪',
+        bg: '#1A1A1A',
+        html: `${LOCKED_HEADER}
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr><td style="background:#1A1A1A;padding:50px 30px;text-align:center;">
+                  <div style="color:#C47D0A;font-family:'Inter',sans-serif;font-size:12px;letter-spacing:3px;text-transform:uppercase;margin-bottom:10px;">MONDAY MOTIVATION</div>
+                  <h1 style="color:#ffffff;font-family:'Playfair Display',serif;font-size:36px;margin:0;">Command Your Week</h1>
+                </td></tr>
+                <tr><td style="background:#fff;padding:40px 30px;text-align:center;">
+                  <div style="font-size:40px;margin-bottom:20px;">🎖️</div>
+                  <p style="color:#333;font-family:'Playfair Display',serif;font-size:22px;font-weight:700;line-height:1.4;margin:0 0 10px;">"Don't wait for opportunity. Create it."</p>
+                  <p style="color:#555;font-family:'Inter',sans-serif;font-size:15px;line-height:1.8;max-width:480px;margin:0 auto 30px;">Landing an investment is the first step toward the life you want. Start your week by taking ownership of your tomorrow.</p>
+                  <a href="https://eximps-cloves.com/properties" style="background:#1A1A1A;color:#C47D0A;font-family:'Inter',sans-serif;font-weight:700;font-size:14px;padding:13px 35px;text-decoration:none;border-radius:4px;display:inline-block;">Secure Your Legacy</a>
+                </td></tr>
+              </table>
+              ${LOCKED_FOOTER}`
+      },
+      {
+        id: 'festive-seasonal',
+        name: 'Special Occasions',
+        desc: 'Eid, Christmas, Mothers/Fathers Day',
+        icon: '🎊',
+        bg: '#C47D0A',
+        html: `${LOCKED_HEADER}
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr><td style="background:linear-gradient(180deg,#1A1A1A 0%,#2a1a00 100%);padding:60px 30px;text-align:center;">
+                  <h1 style="color:#ffffff;font-family:'Playfair Display',serif;font-size:40px;margin:0 0 16px;">Happy {{occasion}}! 🎊</h1>
+                  <p style="color:#cccccc;font-family:'Inter',sans-serif;font-size:17px;max-width:460px;margin:0 auto;line-height:1.7;">From all of us at Eximp &amp; Cloves Infrastructure Limited, we wish you a joyful and fulfilling celebration.</p>
+                </td></tr>
+                <tr><td style="background:#fff;padding:40px 30px;text-align:center;">
+                  <p style="color:#555;font-family:'Inter',sans-serif;font-size:15px;line-height:1.8;max-width:500px;margin:0 auto 30px;">As you celebrate with loved ones, remember that the greatest gift you can give is a secure future. We are here to help you build it.</p>
+                  <div style="background:#fafafa;border-radius:10px;padding:24px;margin-bottom:30px;display:inline-block; border:1px solid #C47D0A;">
+                    <div style="color:#C47D0A;font-family:'Playfair Display',serif;font-size:22px;margin-bottom:8px;">A Festive Token</div>
+                    <p style="color:#555;font-family:'Inter',sans-serif;font-size:14px;margin:0;">Get a voucher worth ₦100,000 off your next survey fee when you initiate a purchase this festive season.</p>
+                  </div>
+                  <div>
+                    <a href="https://eximps-cloves.com/contact" style="background:#C47D0A;color:#fff;font-family:'Inter',sans-serif;font-weight:700;font-size:14px;padding:13px 35px;text-decoration:none;border-radius:4px;display:inline-block;">Claim Festive Gift</a>
+                  </div>
+                </td></tr>
+              </table>
+              ${LOCKED_FOOTER}`
+      },
+      {
+        id: 'blank',
+        name: 'Blank Canvas',
+        desc: 'Start from scratch',
+        icon: '✏️',
+        bg: '#252525',
+        html: `${LOCKED_HEADER}
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr><td style="background:#ffffff;padding:60px 30px;text-align:center;min-height:200px;">
+                  <p style="color:#ccc;font-family:'Inter',sans-serif;font-size:14px;">Your content goes here. Delete this and start designing.</p>
+                </td></tr>
+              </table>
+              ${LOCKED_FOOTER}`
+      }
+    ];
+
+    // ═══════════════════════════════════════
+    // GRADIENT BUILDER PLUGIN
+    // ═══════════════════════════════════════
+    const gradientPlugin = (editor) => {
+      editor.StyleManager.addType('gradient-builder', {
+        create({ change }) {
+          const container = document.createElement('div');
+          container.style.display = 'flex';
+          container.style.flexDirection = 'column';
+          container.style.gap = '8px';
+          container.style.padding = '8px';
+          container.style.background = '#1f2937';
+          container.style.borderRadius = '6px';
+          container.style.border = '1px solid #374151';
+          container.style.marginTop = '6px';
+
+          // 1. Enable row
+          const rowEnable = document.createElement('div');
+          rowEnable.style.display = 'flex';
+          rowEnable.style.justifyContent = 'space-between';
+          rowEnable.style.alignItems = 'center';
+          rowEnable.innerHTML = '<span style="font-size:11px; font-weight:bold; color:#d1d5db;">Enable Gradient</span>';
+          
+          const chkEnable = document.createElement('input');
+          chkEnable.type = 'checkbox';
+          chkEnable.style.cursor = 'pointer';
+          rowEnable.appendChild(chkEnable);
+          container.appendChild(rowEnable);
+
+          // 2. Colors row
+          const rowColors = document.createElement('div');
+          rowColors.style.display = 'flex';
+          rowColors.style.gap = '8px';
+          rowColors.style.alignItems = 'center';
+
+          const colStartLabel = document.createElement('span');
+          colStartLabel.style.fontSize = '10px';
+          colStartLabel.style.color = '#9ca3af';
+          colStartLabel.innerText = 'Start:';
+          rowColors.appendChild(colStartLabel);
+
+          const pickerStart = document.createElement('input');
+          pickerStart.type = 'color';
+          pickerStart.value = '#ffffff';
+          pickerStart.style.width = '36px';
+          pickerStart.style.height = '24px';
+          pickerStart.style.border = '1px solid #4b5563';
+          pickerStart.style.borderRadius = '4px';
+          pickerStart.style.cursor = 'pointer';
+          rowColors.appendChild(pickerStart);
+
+          const colEndLabel = document.createElement('span');
+          colEndLabel.style.fontSize = '10px';
+          colEndLabel.style.color = '#9ca3af';
+          colEndLabel.innerText = 'End:';
+          rowColors.appendChild(colEndLabel);
+
+          const pickerEnd = document.createElement('input');
+          pickerEnd.type = 'color';
+          pickerEnd.value = '#000000';
+          pickerEnd.style.width = '36px';
+          pickerEnd.style.height = '24px';
+          pickerEnd.style.border = '1px solid #4b5563';
+          pickerEnd.style.borderRadius = '4px';
+          pickerEnd.style.cursor = 'pointer';
+          rowColors.appendChild(pickerEnd);
+          container.appendChild(rowColors);
+
+          // 3. Direction row
+          const rowDir = document.createElement('div');
+          rowDir.style.display = 'flex';
+          rowDir.style.justifyContent = 'space-between';
+          rowDir.style.alignItems = 'center';
+          rowDir.style.gap = '8px';
+          
+          const dirLabel = document.createElement('span');
+          dirLabel.style.fontSize = '11px';
+          dirLabel.style.color = '#9ca3af';
+          dirLabel.innerText = 'Dir:';
+          rowDir.appendChild(dirLabel);
+
+          const selectDir = document.createElement('select');
+          selectDir.style.flex = '1';
+          selectDir.style.fontSize = '11px';
+          selectDir.style.backgroundColor = '#111827';
+          selectDir.style.color = '#fff';
+          selectDir.style.border = '1px solid #4b5563';
+          selectDir.style.borderRadius = '4px';
+          selectDir.style.padding = '2px';
+          
+          const options = [
+            { value: 'to bottom', name: '⬇️ Vertical (To Bottom)' },
+            { value: 'to right', name: '➡️ Horizontal (To Right)' },
+            { value: 'to top', name: '⬆️ Vertical (To Top)' },
+            { value: 'to left', name: '⬅️ Horizontal (To Left)' },
+            { value: '135deg', name: '↘️ Diagonal (Top-Left)' },
+            { value: '45deg', name: '↗️ Diagonal (Bottom-Left)' }
+          ];
+          options.forEach(opt => {
+            const o = document.createElement('option');
+            o.value = opt.value;
+            o.innerText = opt.name;
+            selectDir.appendChild(o);
+          });
+          rowDir.appendChild(selectDir);
+          container.appendChild(rowDir);
+
+          const updateValue = () => {
+            const targetModel = editor.getSelected();
+            if (!targetModel) return;
+
+            if (!chkEnable.checked) {
+              change('none');
+              targetModel.addStyle({ 'background': 'none' });
+            } else {
+              const val = `linear-gradient(${selectDir.value}, ${pickerStart.value}, ${pickerEnd.value})`;
+              change(val);
+              targetModel.addStyle({ 'background': val });
+            }
+          };
+
+          chkEnable.addEventListener('change', updateValue);
+          pickerStart.addEventListener('input', updateValue);
+          pickerEnd.addEventListener('input', updateValue);
+          selectDir.addEventListener('change', updateValue);
+
+          container.inputs = { chkEnable, pickerStart, pickerEnd, selectDir };
+          return container;
+        },
+        update({ value, el }) {
+          if (!el || !el.inputs) return;
+          const { chkEnable, pickerStart, pickerEnd, selectDir } = el.inputs;
+          const targetModel = editor.getSelected();
+          if (!targetModel) return;
+
+          const styles = targetModel.getStyle();
+          const bg = styles['background'] || 'none';
+
+          if (!bg || bg === 'none' || !bg.includes('linear-gradient')) {
+            chkEnable.checked = false;
+          } else {
+            chkEnable.checked = true;
+            const match = bg.match(/linear-gradient\(([^,]+),\s*(#[0-9a-fA-F]{6}|[a-zA-Z0-9]+),\s*(#[0-9a-fA-F]{6}|[a-zA-Z0-9]+)\)/);
+            if (match) {
+              selectDir.value = match[1].trim();
+              pickerStart.value = match[2].trim();
+              pickerEnd.value = match[3].trim();
+            }
+          }
+        }
+      });
+    };
+
+    // ═══════════════════════════════════════
+    // EDITOR INIT
+    // ═══════════════════════════════════════
+    const editor = grapesjs.init({
+      container: '#gjs',
+      fromElement: false,
+      storageManager: false,
+      assetManager: {
+        upload: '/api/marketing/media/upload',
+        uploadName: 'file',
+        headers: { 'Authorization': 'Bearer ' + localStorage.getItem('ec_token') },
+        embedAsBase64: false, // Forces cloud-hosted links for better email delivery
+      },
+      plugins: ['gjs-preset-newsletter', gradientPlugin],
+      pluginsOpts: {
+        'gjs-preset-newsletter': { modalTitleImport: 'Import HTML' }
+      },
+      styleManager: {
+        types: [
+          {
+            id: 'gradient-builder',
+            create({ change }) {
+              const container = document.createElement('div');
+              container.style.display = 'flex';
+              container.style.flexDirection = 'column';
+              container.style.gap = '8px';
+              container.style.padding = '8px';
+              container.style.background = '#1f2937';
+              container.style.borderRadius = '6px';
+              container.style.border = '1px solid #374151';
+              container.style.marginTop = '6px';
+
+              // 1. Enable row
+              const rowEnable = document.createElement('div');
+              rowEnable.style.display = 'flex';
+              rowEnable.style.justifyContent = 'space-between';
+              rowEnable.style.alignItems = 'center';
+              rowEnable.innerHTML = '<span style="font-size:11px; font-weight:bold; color:#d1d5db;">Enable Gradient</span>';
+              
+              const chkEnable = document.createElement('input');
+              chkEnable.type = 'checkbox';
+              chkEnable.style.cursor = 'pointer';
+              rowEnable.appendChild(chkEnable);
+              container.appendChild(rowEnable);
+
+              // 2. Colors row
+              const rowColors = document.createElement('div');
+              rowColors.style.display = 'flex';
+              rowColors.style.gap = '8px';
+              rowColors.style.alignItems = 'center';
+
+              const colStartLabel = document.createElement('span');
+              colStartLabel.style.fontSize = '10px';
+              colStartLabel.style.color = '#9ca3af';
+              colStartLabel.innerText = 'Start:';
+              rowColors.appendChild(colStartLabel);
+
+              const pickerStart = document.createElement('input');
+              pickerStart.type = 'color';
+              pickerStart.value = '#ffffff';
+              pickerStart.style.width = '36px';
+              pickerStart.style.height = '24px';
+              pickerStart.style.border = '1px solid #4b5563';
+              pickerStart.style.borderRadius = '4px';
+              pickerStart.style.cursor = 'pointer';
+              rowColors.appendChild(pickerStart);
+
+              const colEndLabel = document.createElement('span');
+              colEndLabel.style.fontSize = '10px';
+              colEndLabel.style.color = '#9ca3af';
+              colEndLabel.innerText = 'End:';
+              rowColors.appendChild(colEndLabel);
+
+              const pickerEnd = document.createElement('input');
+              pickerEnd.type = 'color';
+              pickerEnd.value = '#000000';
+              pickerEnd.style.width = '36px';
+              pickerEnd.style.height = '24px';
+              pickerEnd.style.border = '1px solid #4b5563';
+              pickerEnd.style.borderRadius = '4px';
+              pickerEnd.style.cursor = 'pointer';
+              rowColors.appendChild(pickerEnd);
+              container.appendChild(rowColors);
+
+              // 3. Direction row
+              const rowDir = document.createElement('div');
+              rowDir.style.display = 'flex';
+              rowDir.style.justifyContent = 'space-between';
+              rowDir.style.alignItems = 'center';
+              rowDir.style.gap = '8px';
+              
+              const dirLabel = document.createElement('span');
+              dirLabel.style.fontSize = '11px';
+              dirLabel.style.color = '#9ca3af';
+              dirLabel.innerText = 'Dir:';
+              rowDir.appendChild(dirLabel);
+
+              const selectDir = document.createElement('select');
+              selectDir.style.flex = '1';
+              selectDir.style.fontSize = '11px';
+              selectDir.style.backgroundColor = '#111827';
+              selectDir.style.color = '#fff';
+              selectDir.style.border = '1px solid #4b5563';
+              selectDir.style.borderRadius = '4px';
+              selectDir.style.padding = '2px';
+              
+              const options = [
+                { value: 'to bottom', name: '⬇️ Vertical (To Bottom)' },
+                { value: 'to right', name: '➡️ Horizontal (To Right)' },
+                { value: 'to top', name: '⬆️ Vertical (To Top)' },
+                { value: 'to left', name: '⬅️ Horizontal (To Left)' },
+                { value: '135deg', name: '↘️ Diagonal (Top-Left)' },
+                { value: '45deg', name: '↗️ Diagonal (Bottom-Left)' }
+              ];
+              options.forEach(opt => {
+                const o = document.createElement('option');
+                o.value = opt.value;
+                o.innerText = opt.name;
+                selectDir.appendChild(o);
+              });
+              rowDir.appendChild(selectDir);
+              container.appendChild(rowDir);
+
+              const updateValue = () => {
+                const targetModel = editor.getSelected();
+                if (!targetModel) return;
+
+                if (!chkEnable.checked) {
+                  change('none');
+                  targetModel.addStyle({ 'background-image': 'none' });
+                } else {
+                  const val = `linear-gradient(${selectDir.value}, ${pickerStart.value}, ${pickerEnd.value})`;
+                  change(val);
+                  targetModel.addStyle({ 'background-image': val });
+                }
+              };
+
+              chkEnable.addEventListener('change', updateValue);
+              pickerStart.addEventListener('input', updateValue);
+              pickerEnd.addEventListener('input', updateValue);
+              selectDir.addEventListener('change', updateValue);
+
+              container.inputs = { chkEnable, pickerStart, pickerEnd, selectDir };
+              return container;
+            },
+            update({ value, el }) {
+              const { chkEnable, pickerStart, pickerEnd, selectDir } = el.inputs;
+              const targetModel = editor.getSelected();
+              if (!targetModel) return;
+
+              const styles = targetModel.getStyle();
+              const bgImg = styles['background-image'] || 'none';
+
+              if (!bgImg || bgImg === 'none' || !bgImg.includes('linear-gradient')) {
+                chkEnable.checked = false;
+              } else {
+                chkEnable.checked = true;
+                const match = bgImg.match(/linear-gradient\(([^,]+),\s*(#[0-9a-fA-F]{6}|[a-zA-Z0-9]+),\s*(#[0-9a-fA-F]{6}|[a-zA-Z0-9]+)\)/);
+                if (match) {
+                  selectDir.value = match[1].trim();
+                  pickerStart.value = match[2].trim();
+                  pickerEnd.value = match[3].trim();
+                }
+              }
+            }
+          }
+        ],
+        sectors: [
+          {
+            name: 'Layout & Spacing',
+            open: true,
+            buildProps: ['padding', 'margin', 'display', 'text-align'],
+            properties: [
+              { name: 'Padding', property: 'padding' },
+              { name: 'Margin', property: 'margin' }
+            ]
+          },
+          {
+            name: 'Typography',
+            open: true,
+            buildProps: ['font-family', 'font-size', 'font-weight', 'color', 'line-height']
+          },
+          {
+            name: 'Visuals & Borders',
+            open: true,
+            buildProps: ['background-color', 'background-image', 'background-size', 'background-position', 'opacity', 'border', 'border-radius'],
+            properties: [
+              {
+                name: 'Background Image',
+                property: 'background-image',
+                type: 'file',
+                functionName: 'url'
+              },
+              {
+                name: 'Background Gradient',
+                property: 'background-gradient',
+                type: 'gradient-builder',
+                defaults: 'none'
+              }
+            ]
+          }
+        ]
+      },
+      selectorManager: {
+        componentFirst: true
+      },
+      traitManager: {
+        labels: {
+          id: 'Internal Name (Report Reference)',
+          title: 'Hover Tooltip Text (Optional)',
+          alt: 'Image Description (Alt Text)',
+          href: 'Link URL (Web Destination)',
+          target: 'Open link in a new window/tab?',
+          src: 'Image Web Address (Source URL)'
+        }
+      },
+      i18n: {
+        locale: 'en',
+        detectLocale: false,
+        messages: {
+          en: {
+            traitManager: {
+              traits: {
+                labels: {
+                  id: 'Internal Name (Report Reference)',
+                  title: 'Hover Tooltip Text (Optional)',
+                  alt: 'Image Description (Alt Text)',
+                  href: 'Link URL (Web Destination)',
+                  target: 'Open link in a new window/tab?',
+                  src: 'Image Source (Web Address URL)'
+                }
+              }
+            }
+          }
+        }
+      },
+      canvas: {
+        styles: [
+          'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;500;700&display=swap'
+        ]
+      },
+      deviceManager: {
+        devices: [
+          { id: 'Desktop', name: 'Desktop', width: '' },
+          { id: 'Tablet', name: 'Tablet', width: '768px', widthMedia: '992px' },
+          { id: 'Mobile', name: 'Mobile', width: '375px', widthMedia: '480px' }
+        ]
+      },
+      resizer: {
+        keepRatio: true
+      }
+    });
+
+    // Force text editing mode when double-clicking any component that supports editing
+    editor.on('component:dblclick', (component) => {
+      if (component && component.view && typeof component.view.enableEditing === 'function') {
+        component.view.enableEditing();
+      }
+    });
+
+    // Add a quick-edit button (✏️) to the component toolbar for all editable elements
+    editor.on('component:selected', (component) => {
+      if (component && component.view && typeof component.view.enableEditing === 'function') {
+        const toolbar = component.get('toolbar') || [];
+        const editCommand = 'custom:text-edit-trigger';
+        const hasEditBtn = toolbar.some(item => item.command === editCommand);
+
+        if (!hasEditBtn) {
+          toolbar.unshift({
+            attributes: { 
+              title: 'Edit Text',
+              style: 'cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px;'
+            },
+            command: editCommand,
+            label: '✏️'
+          });
+          component.set('toolbar', toolbar);
+        }
+      }
+    });
+
+    // Register command for the toolbar button
+    editor.Commands.add('custom:text-edit-trigger', {
+      run(editor) {
+        const selected = editor.getSelected();
+        if (selected && selected.view && typeof selected.view.enableEditing === 'function') {
+          selected.view.enableEditing();
+        }
+      }
+    });
+
+    // Add tag selector to Rich Text Editor toolbar
+    editor.RichTextEditor.add('custom-tags', {
+      icon: '<span style="font-weight:bold; font-size:11px; color:#C47D0A; cursor:pointer;">🏷️ Tags</span>',
+      attributes: { title: 'Insert Personalization Tag' },
+      result: (rte) => {
+        const options = ['first_name', 'last_name', 'email', 'property_name', 'total_invoiced', 'amount_paid', 'outstanding', 'unsubscribe_url'];
+        const choice = prompt(`Type tag to insert:\n\n${options.join('\n')}`);
+        if (choice && options.includes(choice.trim())) {
+          rte.insertHTML('{' + '{' + choice.trim() + '}' + '}');
+        }
+      }
+    });
+
+    // Custom labels and styles for premium sidebar tabs
+    editor.on('load', () => {
+      const pnm = editor.Panels;
+      
+      const openBlocks = pnm.getButton('views', 'open-blocks');
+      if (openBlocks) openBlocks.set('label', 'Elements');
+      
+      const openSm = pnm.getButton('views', 'open-sm');
+      if (openSm) openSm.set('label', 'Styles');
+      
+      const openLayers = pnm.getButton('views', 'open-layers');
+      if (openLayers) openLayers.set('label', 'Layers');
+      
+      const openTm = pnm.getButton('views', 'open-tm');
+      if (openTm) openTm.set('label', 'Settings');
+      
+      if (openBlocks) openBlocks.set('active', true);
+
+      // Inject standard classes transitions for buttons & responsive images max-width limits
+      editor.Css.addRules(`
+        .ec-btn { transition: all 0.2s ease-in-out !important; }
+        .ec-link { transition: all 0.2s ease-in-out !important; }
+      `);
+
+      // Force any text-like elements to be parsed as 'text' components so the RTE triggers on double click
+      const domc = editor.DomComponents;
+      const textType = domc.getType('text');
+      if (textType) {
+        domc.addType('text', {
+          isComponent: el => {
+            if (el && typeof el.tagName === 'string') {
+              const tag = el.tagName.toUpperCase();
+              if (['P', 'SPAN', 'A', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'B', 'I', 'STRONG', 'EM'].includes(tag)) {
+                return { type: 'text' };
+              }
+            }
+            return false;
+          }
+        });
+      }
+    });
+
+    // Listen for GrapesJS canvas head updates/loads and inject editor-only style helpers
+    editor.on('canvas:frame:load:head', ({ window }) => {
+      const doc = window.document;
+      if (doc && doc.head) {
+        const styleEl = doc.createElement('style');
+        styleEl.type = 'text/css';
+        styleEl.innerHTML = `
+          /* Prevent single-line or small text elements from collapsing and make them easy to double-click/edit */
+          p, span, a, h1, h2, h3, h4, h5, h6 {
+            min-height: 1.5em !important;
+            padding-top: 8px !important;
+            padding-bottom: 8px !important;
+            line-height: 1.5 !important;
+          }
+        `;
+        doc.head.appendChild(styleEl);
+      }
+    });
+
+    // ── PREVIEW & FULLSCREEN VIEW CONTROLS ──
+    function toggleEditorPreview() {
+      const isPreviewActive = editor.Commands.isActive('preview') || editor.Commands.isActive('core:preview');
+      if (isPreviewActive) {
+        editor.stopCommand('preview');
+        editor.stopCommand('core:preview');
+        stopPreview();
+      } else {
+        // Run only one command signature to avoid duplicate preview overlay button instantiation
+        try {
+          if (editor.Commands.get('preview')) {
+            editor.runCommand('preview');
+          } else {
+            editor.runCommand('core:preview');
+          }
+        } catch(e) {
+          try { editor.runCommand('core:preview'); } catch(err) {}
+        }
+        startPreview();
+      }
+    }
+
+    function toggleEditorFullscreen() {
+      const isFullscreenActive = editor.Commands.isActive('fullscreen') || editor.Commands.isActive('core:fullscreen');
+      if (isFullscreenActive) {
+        editor.stopCommand('fullscreen');
+        editor.stopCommand('core:fullscreen');
+      } else {
+        try {
+          if (editor.Commands.get('fullscreen')) {
+            editor.runCommand('fullscreen');
+          } else {
+            editor.runCommand('core:fullscreen');
+          }
+        } catch(e) {
+          try { editor.runCommand('core:fullscreen'); } catch(err) {}
+        }
+      }
+    }
+
+    // Sync button UI classes and container visibility when GrapesJS preview/fullscreen commands run or stop
+    const startPreview = () => {
+      document.body.classList.add('preview-active');
+      const gjsEl = document.querySelector('.gjs-editor');
+      if (gjsEl) gjsEl.classList.add('preview-active');
+      const btn = document.getElementById('btn-preview');
+      if (btn) btn.className = 'px-2 py-0.5 rounded text-[9px] font-bold transition-all bg-brand-gold text-white';
+    };
+
+    const stopPreview = () => {
+      document.body.classList.remove('preview-active');
+      const gjsEl = document.querySelector('.gjs-editor');
+      if (gjsEl) gjsEl.classList.remove('preview-active');
+      const btn = document.getElementById('btn-preview');
+      if (btn) btn.className = 'px-2 py-0.5 rounded text-[9px] font-bold transition-all text-gray-400 hover:text-white';
+    };
+
+    // Listen on editor events for maximum compatibility
+    editor.on('run:preview', startPreview);
+    editor.on('stop:preview', stopPreview);
+    editor.on('run:core:preview', startPreview);
+    editor.on('stop:core:preview', stopPreview);
+
+    // GrapesJS Command API specific listeners
+    editor.on('command:run:preview', startPreview);
+    editor.on('command:stop:preview', stopPreview);
+    editor.on('command:run:core:preview', startPreview);
+    editor.on('command:stop:core:preview', stopPreview);
+
+    // General command listeners as a fallback to capture command runs
+    editor.on('run', (commandId) => {
+      if (commandId === 'preview' || commandId === 'core:preview') startPreview();
+      if (commandId === 'fullscreen' || commandId === 'core:fullscreen') {
+        const btn = document.getElementById('btn-fullscreen');
+        if (btn) btn.className = 'px-2 py-0.5 rounded text-[9px] font-bold transition-all bg-brand-gold text-white';
+      }
+    });
+    editor.on('stop', (commandId) => {
+      if (commandId === 'preview' || commandId === 'core:preview') stopPreview();
+      if (commandId === 'fullscreen' || commandId === 'core:fullscreen') {
+        const btn = document.getElementById('btn-fullscreen');
+        if (btn) btn.className = 'px-2 py-0.5 rounded text-[9px] font-bold transition-all text-gray-400 hover:text-white';
+      }
+    });
+
+    editor.on('command:run', (cmd) => {
+      const id = cmd && typeof cmd === 'object' ? cmd.id : cmd;
+      if (id === 'preview' || id === 'core:preview') startPreview();
+      if (id === 'fullscreen' || id === 'core:fullscreen') {
+        const btn = document.getElementById('btn-fullscreen');
+        if (btn) btn.className = 'px-2 py-0.5 rounded text-[9px] font-bold transition-all bg-brand-gold text-white';
+      }
+    });
+    editor.on('command:stop', (cmd) => {
+      const id = cmd && typeof cmd === 'object' ? cmd.id : cmd;
+      if (id === 'preview' || id === 'core:preview') stopPreview();
+      if (id === 'fullscreen' || id === 'core:fullscreen') {
+        const btn = document.getElementById('btn-fullscreen');
+        if (btn) btn.className = 'px-2 py-0.5 rounded text-[9px] font-bold transition-all text-gray-400 hover:text-white';
+      }
+    });
+
+    // GIF Carousel Builder is now opened via toolbar button – no canvas events needed
+
+
+    // Dynamically inject gold 'ⓘ' info hover tooltips next to Style Manager labels (using a robust interval poll)
+    setInterval(() => {
+      const tooltips = {
+        'padding': 'Padding: Space inside the element borders.',
+        'margin': 'Margin: Space outside the element to push other items away.',
+        'font-family': 'Font: Changes text font typeface style.',
+        'font-size': 'Size: Adjusts text font size up or down.',
+        'font-weight': 'Weight: Makes text bolder or lighter.',
+        'color': 'Text Color: Changes text color.',
+        'line-height': 'Line Spacing: Adjusts spacing between text lines.',
+        'background-color': 'Background Color: Changes solid background backdrop color.',
+        'background-image': 'Background Image: Set a background photo URL or click to upload one. To set it for the whole email, select "Body" in the Layers panel first.',
+        'background-gradient': 'Background Gradient: Create custom multi-color linear transitions (Start Color, End Color, and Direction angles) similar to MS Word.',
+        'background-size': 'Background Size: Choose Auto, Cover, or Contain sizing behavior.',
+        'background-position': 'Background Position: Align the background image location (e.g. center).',
+        'opacity': 'Opacity: Control the transparency level of the element (0 for invisible, 1 for fully solid background/elements).',
+        'border': 'Border: Adds lines around the boundaries of this element.',
+        'border-radius': 'Corner Roundness: Controls corner rounding (e.g. rounded buttons).'
+      };
+      
+      Object.keys(tooltips).forEach(prop => {
+        const labelEl = document.querySelector(`.gjs-sm-property[id$="${prop}"] .gjs-sm-label`);
+        if (labelEl && !labelEl.dataset.hasTooltip) {
+          const span = document.createElement('span');
+          span.style.color = '#C47D0A';
+          span.style.fontWeight = 'bold';
+          span.style.fontSize = '10px';
+          span.style.cursor = 'help';
+          span.style.marginLeft = '4px';
+          span.innerHTML = 'ⓘ';
+          span.title = tooltips[prop];
+          labelEl.appendChild(span);
+          labelEl.dataset.hasTooltip = 'true';
+        }
+      });
+    }, 1000);
+
+    // Custom top bar device preview switch function
+    function setEditorDevice(device) {
+      editor.setDevice(device);
+      const desktopBtn = document.getElementById('device-desktop');
+      const tabletBtn = document.getElementById('device-tablet');
+      const mobileBtn = document.getElementById('device-mobile');
+      
+      if (desktopBtn) desktopBtn.className = device === 'Desktop' 
+        ? 'px-2 py-0.5 rounded text-[8px] font-bold transition-all bg-brand-gold text-white'
+        : 'px-2 py-0.5 rounded text-[8px] font-bold transition-all text-gray-400 hover:text-white';
+      if (tabletBtn) tabletBtn.className = device === 'Tablet' 
+        ? 'px-2 py-0.5 rounded text-[8px] font-bold transition-all bg-brand-gold text-white'
+        : 'px-2 py-0.5 rounded text-[8px] font-bold transition-all text-gray-400 hover:text-white';
+      if (mobileBtn) mobileBtn.className = device === 'Mobile' 
+        ? 'px-2 py-0.5 rounded text-[8px] font-bold transition-all bg-brand-gold text-white'
+        : 'px-2 py-0.5 rounded text-[8px] font-bold transition-all text-gray-400 hover:text-white';
+    }
+
+    // Toggle styling & blocks sidebar on mobile / tablet overlay
+    function toggleMobileSidebar() {
+      document.body.classList.toggle('sidebar-open');
+      const btn = document.getElementById('btn-toggle-sidebar');
+      if (btn) {
+        if (document.body.classList.contains('sidebar-open')) {
+          btn.innerHTML = '<span>✕</span> Sidebar';
+          btn.classList.add('bg-amber-600');
+        } else {
+          btn.innerHTML = '<span>⚙️</span> Sidebar';
+          btn.classList.remove('bg-amber-600');
+        }
+      }
+    }
+
+    // Toggle collapsible inputs setup panel on mobile
+    function toggleMobileSettings() {
+      const panel = document.getElementById('mobile-settings-panel');
+      if (panel) {
+        panel.classList.toggle('hidden');
+        panel.classList.toggle('flex');
+      }
+    }
+
+    // Toggle collapsible tools panel on mobile
+    function toggleMobileTools() {
+      const panel = document.getElementById('mobile-tools-panel');
+      if (panel) {
+        panel.classList.toggle('hidden');
+        panel.classList.toggle('flex');
+        panel.classList.toggle('flex-wrap');
+      }
+    }
+
+    // Register GrapesJS selected component custom commands for Mobile positioning (Move Up / Move Down)
+    editor.Commands.add('toolbar:move-up', {
+      run(editor) {
+        const selected = editor.getSelected();
+        if (selected) {
+          const parent = selected.parent();
+          if (parent) {
+            const index = selected.index ? selected.index() : parent.components().indexOf(selected);
+            if (index > 0) {
+              if (selected.move) {
+                selected.move(parent, { at: index - 1 });
+              } else {
+                parent.components().remove(selected);
+                parent.components().add(selected, { at: index - 1 });
+              }
+              editor.select(selected); // Maintain selection wrapper
+            }
+          }
+        }
+      }
+    });
+
+    editor.Commands.add('toolbar:move-down', {
+      run(editor) {
+        const selected = editor.getSelected();
+        if (selected) {
+          const parent = selected.parent();
+          if (parent) {
+            const index = selected.index ? selected.index() : parent.components().indexOf(selected);
+            const siblingsCount = parent.components().length;
+            if (index < siblingsCount - 1) {
+              if (selected.move) {
+                selected.move(parent, { at: index + 2 });
+              } else {
+                parent.components().remove(selected);
+                parent.components().add(selected, { at: index + 2 });
+              }
+              editor.select(selected); // Maintain selection wrapper
+            }
+          }
+        }
+      }
+    });
+
+    editor.Commands.add('toolbar:upload-image', {
+      run(editor) {
+        const selected = editor.getSelected();
+        if (selected) {
+          editor.AssetManager.open({
+            select(asset, complete) {
+              const url = typeof asset === 'string' ? asset : (asset.getSrc ? asset.getSrc() : asset.get('src'));
+              if (url) {
+                selected.set('src', url);
+              }
+              if (complete) {
+                editor.AssetManager.close();
+              }
+            }
+          });
+        }
+      }
+    });
+
+    // Append custom ⬆️ and ⬇️ icons and image uploader button to floating editor toolbar on component selection
+    editor.on('component:selected', (model) => {
+      const toolbar = model.get('toolbar');
+      
+      // If it is an image element, prepend the upload helper button
+      if (model.get('type') === 'image') {
+        const hasUpload = toolbar.some(item => item.id === 'upload-image');
+        if (!hasUpload) {
+          toolbar.unshift({
+            id: 'upload-image',
+            command: 'toolbar:upload-image',
+            label: '📷 Replace',
+            title: 'Change/Upload Image'
+          });
+        }
+      }
+      
+      const hasMoveUp = toolbar.some(item => item.id === 'move-up');
+      if (!hasMoveUp) {
+        toolbar.unshift(
+          {
+            id: 'move-up',
+            command: 'toolbar:move-up',
+            label: '⬆️',
+            title: 'Move Element Up'
+          },
+          {
+            id: 'move-down',
+            command: 'toolbar:move-down',
+            label: '⬇️',
+            title: 'Move Element Down'
+          }
+        );
+        model.set('toolbar', toolbar);
+      }
+    });
+
+    // Touch click-to-insert block insertion fallback for mobile/tablet screen sizes
+    document.addEventListener('click', (e) => {
+      const blockEl = e.target.closest('.gjs-block');
+      if (blockEl) {
+        // Detect if touch layout or mobile sidebar is active
+        const isMobileOrTablet = window.innerWidth <= 1024;
+        if (isMobileOrTablet) {
+          const label = blockEl.querySelector('.gjs-block-label')?.textContent;
+          const block = editor.BlockManager.getAll().find(b => b.get('label') === label || b.id === label);
+          if (block) {
+            const selected = editor.getSelected();
+            if (selected) {
+              const parent = selected.parent();
+              if (parent) {
+                const index = parent.components().indexOf(selected);
+                parent.components().add(block.getContent(), { at: index + 1 });
+              } else {
+                selected.append(block.getContent());
+              }
+            } else {
+              editor.addComponents(block.getContent());
+            }
+            // Auto close mobile sidebar after inserting block
+            if (document.body.classList.contains('sidebar-open')) {
+              toggleMobileSidebar();
+            }
+          }
+        }
+      }
+    });
+
+    // Touch-canvas close listener: Tap canvas to auto-close drawer sidebar
+    editor.on('load', () => {
+      const canvasEl = document.querySelector('.gjs-cv-canvas');
+      if (canvasEl) {
+        canvasEl.addEventListener('click', () => {
+          if (document.body.classList.contains('sidebar-open')) {
+            toggleMobileSidebar();
+          }
+        });
+      }
+    });
+
+    // ── GENERAL ASSET MANAGER ADD IMAGE UTILITY ──
+    function openGeneralAssetManager() {
+      editor.AssetManager.open({
+        select(asset, complete) {
+          const url = typeof asset === 'string' ? asset : (asset.getSrc ? asset.getSrc() : asset.get('src'));
+          if (url) {
+            const selected = editor.getSelected();
+            const newImg = {
+              type: 'image',
+              src: url,
+              style: { 
+                width: '100%', 
+                height: 'auto', 
+                'max-width': '600px',
+                display: 'block',
+                margin: '10px auto'
+              }
+            };
+            
+            if (selected) {
+              const parent = selected.parent();
+              if (parent) {
+                const index = selected.index ? selected.index() : parent.components().indexOf(selected);
+                parent.append(newImg, { at: index + 1 });
+              } else {
+                selected.append(newImg);
+              }
+            } else {
+              // Append directly to the email body wrapper
+
+              const wrapper = editor.getWrapper();
+              if (wrapper) {
+                wrapper.append(newImg);
+              } else {
+                editor.addComponents(newImg);
+              }
+            }
+          }
+          if (complete) {
+            editor.AssetManager.close();
+          }
+        }
+      });
+    }
+
+    // ── CUSTOM BLOCKS ──
+    const bm = editor.BlockManager;
+
+    bm.add('ec-header', {
+      label: '🔒 Brand Header',
+      category: 'Eximp & Cloves',
+      content: { type: 'brand-header' }, // Uses component type
+      attributes: { class: 'fa fa-header' }
+    });
+
+    bm.add('ec-hero-vml', {
+      label: '🖼️ Hero Background',
+      category: 'Eximp & Cloves',
+      content: `<div style="background-image: url('https://images.unsplash.com/photo-1582407947304-fd86f028f716?q=80&w=800'); background-size: cover; background-position: center; background-repeat: no-repeat; background-color: #1a1a1a; padding: 60px 20px; text-align: center;">
+        <!--[if gte mso 9]>
+        <v:rect xmlns:v="urn:schemas-microsoft-com:vml" fill="true" stroke="false" style="width:600px; height:300px;">
+          <v:fill type="frame" src="https://images.unsplash.com/photo-1582407947304-fd86f028f716?q=80&w=800" color="#1a1a1a" />
+          <v:textbox inset="0,0,0,0">
+        <![endif]-->
+        <div style="max-width: 480px; margin: 0 auto; padding: 20px; background: rgba(0,0,0,0.5); border-radius: 8px;">
+          <h1 style="font-family:'Playfair Display',serif; font-size:32px; color:#fff; margin:0 0 10px;">Premium Real Estate</h1>
+          <p style="font-family:'Inter',sans-serif; font-size:14px; color:#ddd; margin:0 0 20px; line-height:1.6;">Discover exceptional property consultations built around your goals.</p>
+          <a href="#" class="ec-btn" style="background:#C47D0A; color:#fff; padding:12px 30px; text-decoration:none; font-weight:700; border-radius:4px; display:inline-block; font-size:14px;">Learn More</a>
+        </div>
+        <!--[if gte mso 9]>
+          </v:textbox>
+        </v:rect>
+        <![endif]-->
+      </div>`
+    });
+
+
+    // GIF Carousel block removed — builder is now opened via toolbar button
+
+
+    bm.add('ec-hero', {
+      label: 'Hero Section (Solid)',
+      category: 'Eximp & Cloves',
+      content: `<div style="background:#1A1A1A;padding:60px 20px;text-align:center;color:#fff;">
+              <h1 style="font-family:'Playfair Display',serif;font-size:38px;margin:0 0 16px;color:#C47D0A;">Your Headline Here</h1>
+              <p style="font-family:'Inter',sans-serif;font-size:16px;color:#ccc;max-width:480px;margin:0 auto 28px;line-height:1.7;">Your supporting message goes here. Keep it punchy and focused.</p>
+              <a href="#" class="ec-btn" style="background:#C47D0A;color:#fff;padding:14px 36px;text-decoration:none;font-weight:700;font-family:'Inter',sans-serif;border-radius:4px;display:inline-block;">Call To Action</a>
+            </div>`
+    });
+
+    bm.add('ec-property-card', {
+      label: '🏠 Smart Property',
+      category: 'Eximp & Cloves',
+      content: { type: 'property-card-trigger' },
+      attributes: { class: 'fa fa-home' }
+    });
+
+    bm.add('ec-cta-button', {
+      label: 'Gold CTA Button',
+      category: 'Eximp & Cloves',
+      content: `<div style="text-align:center;padding:20px;">
+              <a href="#" class="ec-btn" style="background:#C47D0A;color:#fff;padding:15px 40px;text-decoration:none;font-weight:700;font-size:15px;font-family:'Inter',sans-serif;border-radius:4px;display:inline-block;">Book a Consultation</a>
+            </div>`
+    });
+
+    bm.add('ec-account-summary', {
+      label: 'Account Summary',
+      category: 'Eximp & Cloves',
+      content: `<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;font-family:'Inter',sans-serif;">
+              <tr><td colspan="2" style="background:#1A1A1A;padding:14px 20px;"><span style="color:#C47D0A;font-weight:700;font-size:13px;letter-spacing:1px;text-transform:uppercase;">Account Summary</span></td></tr>
+              <tr><td style="padding:14px 20px;color:#666;font-size:14px;border-bottom:1px solid #f1f5f9;">Client Name</td><td style="padding:14px 20px;color:#333;font-weight:600;font-size:14px;border-bottom:1px solid #f1f5f9;">{{first_name}} {{last_name}}</td></tr>
+              <tr><td style="padding:14px 20px;color:#666;font-size:14px;border-bottom:1px solid #f1f5f9;">Property</td><td style="padding:14px 20px;color:#333;font-weight:600;font-size:14px;border-bottom:1px solid #f1f5f9;">{{property_name}}</td></tr>
+              <tr><td style="padding:14px 20px;color:#666;font-size:14px;border-bottom:1px solid #f1f5f9;">Invoice Total</td><td style="padding:14px 20px;color:#333;font-weight:600;font-size:14px;border-bottom:1px solid #f1f5f9;">{{total_invoiced}}</td></tr>
+              <tr><td style="padding:14px 20px;color:#666;font-size:14px;border-bottom:1px solid #f1f5f9;">Amount Paid</td><td style="padding:14px 20px;color:#2ecc71;font-weight:600;font-size:14px;border-bottom:1px solid #f1f5f9;">{{amount_paid}}</td></tr>
+              <tr><td style="padding:16px 20px;color:#e74c3c;font-weight:700;font-size:15px;">Balance Due</td><td style="padding:16px 20px;color:#e74c3c;font-weight:700;font-size:20px;">{{outstanding}}</td></tr>
+            </table>`
+    });
+
+    bm.add('ec-social-links', {
+      label: 'Social Links',
+      category: 'Eximp & Cloves',
+      content: `<div style="padding:24px;text-align:center;background:#f9f9f9;font-family:'Inter',sans-serif;">
+              <p style="font-size:12px;color:#888;margin:0 0 14px;">Connect with us</p>
+              <a href="https://www.linkedin.com/company/eximp-cloves" class="ec-link" style="color:#C47D0A;text-decoration:none;font-weight:600;font-size:13px;margin:0 10px;">LinkedIn</a>
+              <a href="https://x.com/eximp_cloves" class="ec-link" style="color:#C47D0A;text-decoration:none;font-weight:600;font-size:13px;margin:0 10px;">X</a>
+              <a href="https://instagram.com/eximp.cloves" class="ec-link" style="color:#C47D0A;text-decoration:none;font-weight:600;font-size:13px;margin:0 10px;">Instagram</a>
+              <a href="https://facebook.com/eximp.cloves" class="ec-link" style="color:#C47D0A;text-decoration:none;font-weight:600;font-size:13px;margin:0 10px;">Facebook</a>
+              <a href="https://tiktok.com/@eximp.cloves" class="ec-link" style="color:#C47D0A;text-decoration:none;font-weight:600;font-size:13px;margin:0 10px;">TikTok</a>
+            </div>`
+    });
+
+    bm.add('ec-footer', {
+      label: '🔒 Brand Footer',
+      category: 'Eximp & Cloves',
+      content: { type: 'brand-footer' } // Uses component type
+    });
+
+    // ═══════════════════════════════════════
+    // TEMPLATE PICKER LOGIC
+    // ═══════════════════════════════════════
+    function openTemplates() { 
+      renderTemplates();
+      document.getElementById('template-modal').classList.remove('hidden'); 
+    }
+    function closeTemplates() { document.getElementById('template-modal').classList.add('hidden'); }
+
+    function openTags() { document.getElementById('tags-modal').classList.remove('hidden'); }
+    function closeTags() { document.getElementById('tags-modal').classList.add('hidden'); }
+
+    function copyTag(event, text) {
+      const btn = event.currentTarget || event.target;
+
+      // Modern Clipboard API (Secure Context only)
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text);
+        showSuccess(btn);
+      } else {
+        // Fallback for non-secure contexts (HTTP)
+        try {
+          const textArea = document.createElement("textarea");
+          textArea.value = text;
+          textArea.style.position = "fixed";
+          textArea.style.left = "-9999px";
+          textArea.style.top = "0";
+          document.body.appendChild(textArea);
+          textArea.focus();
+          textArea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textArea);
+          showSuccess(btn);
+        } catch (err) {
+          console.error('Fallback copy failed', err);
+        }
+      }
+
+      function showSuccess(el) {
+        const originalText = el.innerText;
+        el.innerText = 'Copied!';
+        el.style.background = '#C47D0A';
+        el.style.color = 'white';
+        setTimeout(() => {
+          el.innerText = originalText;
+          el.style.background = '#333';
+          el.style.color = '#C47D0A';
+        }, 1500);
+      }
+    }
+
+    function renderTemplates() {
+      const grid = document.getElementById('template-grid');
+      grid.innerHTML = TEMPLATES.map(t => `
+                <div class="template-card" id="tc-${t.id}" onclick="selectTemplate('${t.id}')">
+                  <div class="template-preview" style="background:${t.bg};">
+                    <div class="template-preview-bar"></div>
+                    <span style="font-size:2.5rem;">${t.icon}</span>
+                  </div>
+                  <div class="template-info">
+                    <div class="template-name">${t.name}</div>
+                    <div class="template-desc">${t.desc}</div>
+                  </div>
+                </div>
+            `).join('');
+    }
+
+    function selectTemplate(id) {
+      selectedTemplateId = id;
+      document.querySelectorAll('.template-card').forEach(c => c.classList.remove('selected'));
+      document.getElementById('tc-' + id).classList.add('selected');
+    }
+
+    function applyTemplate() {
+      if (!selectedTemplateId) { alert('Please select a template first.'); return; }
+      const tmpl = TEMPLATES.find(t => t.id === selectedTemplateId);
+      if (!tmpl) return;
+      editor.setComponents(tmpl.html);
+      closeTemplates();
+      selectedTemplateId = null;
+
+      const saveBtn = document.getElementById('save-campaign');
+      if (saveBtn) saveBtn.click();
+    }
+
+    // ═══════════════════════════════════════
+    // PROPERTY PICKER LOGIC
+    // ═══════════════════════════════════════
+    function openPropertyPicker() {
+      document.getElementById('property-modal').classList.remove('hidden');
+      loadPropertiesForPicker();
+    }
+
+    function closePropertyPicker() {
+      document.getElementById('property-modal').classList.add('hidden');
+    }
+
+    async function loadPropertiesForPicker() {
+      const grid = document.getElementById('property-grid');
+      grid.innerHTML = '<p class="text-gray-400">Loading estates...</p>';
+
+      try {
+        const token = localStorage.getItem('ec_token');
+        const res = await fetch('/api/properties', {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const props = await res.json();
+
+        grid.innerHTML = props.map(p => {
+            const priceVal = parseFloat(p.total_price || p.starting_price || 0);
+            return `
+                <div class="group p-5 bg-[#1f1f1f] border border-[#333] rounded-xl hover:border-brand-gold hover:shadow-2xl hover:shadow-brand-gold/10 transition-all duration-300 cursor-pointer flex flex-col gap-3 relative overflow-hidden" onclick="insertPropertyCard(${JSON.stringify(p).replace(/"/g, '&quot;')})">
+                    <div class="absolute top-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span class="text-[10px] bg-brand-gold text-white px-2 py-1 rounded font-bold uppercase tracking-widest">Select</span>
+                    </div>
+                    <div>
+                        <div class="text-white font-serif text-lg group-hover:text-brand-gold transition-colors">${p.name}</div>
+                        <div class="text-xs text-gray-500 flex items-center gap-1 mt-1">
+                            <span>📍</span> ${p.location}
+                        </div>
+                    </div>
+                    <div class="mt-auto pt-3 border-t border-[#2a2a2a] flex items-center justify-between">
+                        <div>
+                            <div class="text-[10px] text-gray-500 uppercase tracking-tighter">Total Asset Value</div>
+                            <div class="text-brand-gold font-bold text-lg">₦${priceVal.toLocaleString()}</div>
+                        </div>
+                        <div class="w-8 h-8 rounded-full bg-[#2a2a2a] flex items-center justify-center text-brand-gold group-hover:bg-brand-gold group-hover:text-white transition-all">
+                            →
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+      } catch (e) {
+        grid.innerHTML = '<p class="text-red-500">Error loading properties.</p>';
+      }
+    }
+
+    function insertPropertyCard(p) {
+      const selected = editor.getSelected();
+      const formatter = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' });
+      const priceValue = p.total_price || p.starting_price || 0;
+      const price = formatter.format(priceValue);
+
+      // Generate clean HTML for the card
+      const html = `
+                <table width="100%" cellpadding="0" cellspacing="0" style="border:1.5px solid #eee; border-radius:12px; overflow:hidden; font-family:'Inter', sans-serif; margin-bottom:24px;">
+                    <tr><td>
+                        <img src="https://images.unsplash.com/photo-1580587771525-78b9dba3b914?auto=format&fit=crop&w=800&q=80" width="100%" style="display:block; border:none;max-width:100% !important;height:auto !important;" alt="${p.name}" />
+                    </td></tr>
+                    <tr><td style="padding:28px; background: #ffffff;">
+                        <div style="color:#C47D0A; font-size:11px; letter-spacing:2px; text-transform:uppercase; font-weight:700; margin-bottom:8px;">Featured Estate</div>
+                        <h3 style="margin:0 0 10px; color:#111111; font-family:'Playfair Display', serif; font-size:24px;">${p.name}</h3>
+                        <p style="color:#666666; font-size:15px; margin:0 0 18px; line-height:1.7;">${p.description || `Secure your spot at ${p.name} in ${p.location}. Premium investment with high appreciation value.`}</p>
+                        
+                        <table width="100%" cellpaddig="0" cellspacing="0" style="margin-bottom:24px;">
+                            <tr>
+                                <td width="50%">
+                                    <div style="font-size:12px; color:#999; margin-bottom:4px;">Total Price</div>
+                                    <div style="color:#111; font-weight:800; font-size:20px;">${price}</div>
+                                </td>
+                                <td width="50%" style="text-align:right;">
+                                    <div style="font-size:12px; color:#999; margin-bottom:4px;">Location</div>
+                                    <div style="color:#111; font-weight:600; font-size:14px;">${p.location}</div>
+                                </td>
+                            </tr>
+                        </table>
+                        
+                        <div style="text-align:center;">
+                            <a href="https://eximps-cloves.com/properties?id=${p.id}&ec_cid={{id}}" style="background:#1A1A1A; color:#C47D0A; padding:15px 35px; text-decoration:none; font-weight:700; font-size:14px; border-radius:4px; display:inline-block; border:1px solid #C47D0A;">View Property Details →</a>
+                        </div>
+                    </td></tr>
+                </table>
+            `;
+
+      if (selected && selected.is('property-card-trigger')) {
+        selected.replaceWith(html);
+      } else {
+        editor.addComponents(html);
+      }
+      closePropertyPicker();
+    }
+
+    // Register custom component for Brand Header (Locked)
+    editor.DomComponents.addType('brand-header', {
+      model: {
+        defaults: {
+          tagName: 'div',
+          removable: false,
+          draggable: true,
+          copyable: false,
+          content: LOCKED_HEADER
+        }
+      }
+    });
+
+    // Register custom component for Brand Footer (Locked)
+    editor.DomComponents.addType('brand-footer', {
+      model: {
+        defaults: {
+          tagName: 'div',
+          removable: false, // Prevents deletion
+          draggable: true,
+          copyable: false,
+          content: LOCKED_FOOTER
+        }
+      }
+    });
+
+    // Register custom component to handle the click and drop UX
+    editor.DomComponents.addType('property-card-trigger', {
+      model: {
+        defaults: {
+          tagName: 'div',
+          attributes: { 
+            style: 'padding: 40px; border: 2px dashed #C47D0A; border-radius: 12px; background: #fdfaf3; text-align: center; cursor: pointer; transition: 0.3s;' 
+          },
+          content: `
+            <div style="pointer-events: none;">
+              <div style="font-size: 40px; margin-bottom: 12px;">🏠</div>
+              <div style="color: #C47D0A; font-weight: 800; font-family: 'Inter', sans-serif; font-size: 16px; margin-bottom: 4px;">Smart Property Placeholder</div>
+              <div style="color: #8a6d3b; font-size: 12px; font-family: 'Inter', sans-serif;">Click to select an Estate from your database</div>
+              <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 8px;">
+                <div style="height: 120px; background: #eee; border-radius: 8px;"></div>
+                <div style="height: 20px; background: #eee; border-radius: 4px; width: 60%;"></div>
+                <div style="height: 15px; background: #eee; border-radius: 4px; width: 40%;"></div>
+              </div>
+            </div>
+          `
+        },
+        init() {
+          // Automatically open picker when DRAGGED into the canvas
+          setTimeout(() => {
+             if (this.collection) openPropertyPicker();
+          }, 100);
+        }
+      },
+      view: {
+        events: {
+          click: 'onPickerClick'
+        },
+        onPickerClick() {
+          openPropertyPicker();
+        }
+      }
+    });
+
+    let activeVariant = 'A';
+    let variantData = {
+      'A': { html: '', subject: '', preview: '', json: null },
+      'B': { html: '', subject: '', preview: '', json: null }
+    };
+    let isAB = false;
+
+    async function loadCampaign() {
+      const token = localStorage.getItem('ec_token');
+
+      if (!campaignId) {
+        renderTemplates(); openTemplates();
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/marketing/campaigns/${campaignId}`, {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+
+        const data = await res.json();
+        
+        isAB = data.is_ab_test || false;
+        document.getElementById('ab-toggle').checked = isAB;
+        if(isAB) document.getElementById('variant-tabs').classList.remove('hidden');
+
+        document.getElementById('campaign-name-field').value = data.name || '';
+
+        variantData['A'].html = data.html_body_a || '';
+        variantData['A'].subject = data.subject_a || '';
+        variantData['A'].preview = data.preview_text || '';
+        variantData['B'].html = data.html_body_b || '';
+        variantData['B'].subject = data.subject_b || '';
+        variantData['B'].preview = data.preview_text_b || '';
+
+        // Set initial view
+        document.getElementById('subject-field').value = variantData[activeVariant].subject;
+        document.getElementById('preview-text-field').value = variantData[activeVariant].preview;
+
+        const content = (variantData[activeVariant].html || '').trim();
+
+        // 🟢 FIX: Be much much less aggressive. We don't want to hide user work just because it's short.
+        let isPlaceholder = false;
+        if (!content || content === '<h1>Start Designing!</h1>') {
+          isPlaceholder = true;
+        }
+
+        if (!isPlaceholder) {
+          // Instantly close the picker so the UI is immediately clean
+          closeTemplates();
+
+          // Safely load components
+          try {
+            // Note: setComponents handles both HTML strings and JSON objects
+            editor.setComponents(data.html_body_a);
+          } catch (e) {
+            console.error("GrapesJS failed to parse HTML:", e);
+          }
+        } else {
+          // Only show templates if it's truly a blank canvas
+          renderTemplates();
+          openTemplates();
+        }
+      } catch (e) {
+        console.error("Campaign API Fetch crash:", e);
+      }
+    }
+
+    document.getElementById('save-campaign').onclick = async () => {
+      const statusLabel = document.getElementById('save-status');
+      if (statusLabel) statusLabel.innerText = '💾 Saving...';
+
+      // 0. Ensure current variant is in memory
+      variantData[activeVariant].subject = document.getElementById('subject-field').value;
+      variantData[activeVariant].preview = document.getElementById('preview-text-field').value;
+      variantData[activeVariant].json = editor.getProjectData();
+      
+      try {
+        variantData[activeVariant].html = editor.runCommand('gjs-get-inlined-html');
+        if (!variantData[activeVariant].html) throw new Error("Empty inliner output");
+      } catch (e) {
+        const html = editor.getHtml();
+        const css = editor.getCss();
+        variantData[activeVariant].html = `<html><head><style>${css}</style></head><body>${html}</body></html>`;
+      }
+
+      const payload = {
+        name: document.getElementById('campaign-name-field').value || 'Untitled Campaign',
+        is_ab_test: isAB,
+        html_body_a: variantData['A'].html,
+        subject_a: variantData['A'].subject,
+        preview_text: variantData['A'].preview || '',
+        html_body_b: isAB ? variantData['B'].html : null,
+        subject_b: isAB ? variantData['B'].subject : null,
+        preview_text_b: isAB ? variantData['B'].preview : null
+      };
+
+      try {
+        const res = await fetch(`/api/marketing/campaigns/${campaignId}`, {
+          method: 'PUT',
+          headers: { 
+            'Content-Type': 'application/json', 
+            'Authorization': 'Bearer ' + localStorage.getItem('ec_token') 
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+          if (statusLabel) {
+            statusLabel.innerText = '✅ Saved Successfully';
+            setTimeout(() => { statusLabel.innerText = ''; }, 3000);
+          }
+        } else {
+          const errText = await res.text();
+          if (statusLabel) statusLabel.innerText = '❌ Error saving';
+          console.error("Save failure:", errText);
+        }
+      } catch (e) {
+        console.error("Network error on save:", e);
+        if (statusLabel) statusLabel.innerText = '❌ Network Error';
+      }
+    };
+
+    // ── A/B TESTING LOGIC ──
+    document.getElementById('ab-toggle').onchange = (e) => {
+      isAB = e.target.checked;
+      const tabs = document.getElementById('variant-tabs');
+      if (isAB) {
+        tabs.classList.remove('hidden');
+        // Initialize Variant B if empty
+        if (!variantData['B'].html && !variantData['B'].json) {
+          variantData['B'].html = variantData['A'].html;
+          variantData['B'].json = JSON.parse(JSON.stringify(editor.getProjectData())); // Deep clone
+          variantData['B'].subject = (variantData['A'].subject || "Campaign") + " (Variant B)";
+          variantData['B'].preview = variantData['A'].preview || '';
+        }
+      } else {
+        tabs.classList.add('hidden');
+        switchVariant('A');
+      }
+    };
+
+    function switchVariant(v) {
+      if (v === activeVariant) return;
+
+      // 1. Save current editor state to memory
+      variantData[activeVariant].subject = document.getElementById('subject-field').value;
+      variantData[activeVariant].preview = document.getElementById('preview-text-field').value;
+      
+      // Save full project state (JSON) for perfect restoration
+      variantData[activeVariant].json = editor.getProjectData();
+      
+      // Save combined HTML + CSS for the backend/preview
+      const html = editor.getHtml();
+      const css = editor.getCss();
+      variantData[activeVariant].html = `<html><head><style>${css}</style></head><body>${html}</body></html>`;
+
+      // 2. Update tabs UI
+      activeVariant = v;
+      document.getElementById('tab-a').className = v === 'A' ? 'px-4 py-1 rounded text-xs font-bold transition-all bg-brand-gold text-white' : 'px-4 py-1 rounded text-xs font-bold transition-all text-gray-500 hover:text-white';
+      document.getElementById('tab-b').className = v === 'B' ? 'px-4 py-1 rounded text-xs font-bold transition-all bg-brand-gold text-white' : 'px-4 py-1 rounded text-xs font-bold transition-all text-gray-500 hover:text-white';
+
+      // 3. Load new variant state into editor
+      document.getElementById('subject-field').value = variantData[v].subject || '';
+      document.getElementById('preview-text-field').value = variantData[v].preview || '';
+      
+      if (variantData[v].json) {
+        editor.loadProjectData(variantData[v].json);
+      } else {
+        editor.setComponents(variantData[v].html || '<h1>Variant ' + v + '</h1>');
+      }
+    }
+
+    // Auto-save memory on input
+    document.getElementById('subject-field').oninput = (e) => {
+      variantData[activeVariant].subject = e.target.value;
+    };
+    document.getElementById('preview-text-field').oninput = (e) => {
+      variantData[activeVariant].preview = e.target.value;
+    };
+
+    // GIF Builder Helpers
+    let gifFilesList = []; // array of File objects
+
+    function openGifBuilder() {
+      gifFilesList = [];
+      renderGifSlides();
+      document.getElementById('gif-preview-grid').style.display = 'none';
+      document.getElementById('gif-status-bar').style.display = 'none';
+      document.getElementById('gif-images-input').value = '';
+      document.getElementById('gif-builder-modal').classList.remove('hidden');
+    }
+
+    function closeGifBuilder() {
+      document.getElementById('gif-builder-modal').classList.add('hidden');
+      gifFilesList = [];
+    }
+
+    function handleGifDrop(event) {
+      event.preventDefault();
+      document.getElementById('gif-drop-zone').style.background = '#0d0d0d';
+      const files = Array.from(event.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+      addGifFiles(files);
+    }
+
+    function handleGifFilesSelected(fileList) {
+      addGifFiles(Array.from(fileList));
+    }
+
+    function addGifFiles(files) {
+      for (const f of files) {
+        if (gifFilesList.length >= 8) break;
+        gifFilesList.push(f);
+      }
+      renderGifSlides();
+      if (gifFilesList.length > 0) {
+        document.getElementById('gif-preview-grid').style.display = 'flex';
+      }
+    }
+
+    function removeGifSlide(index) {
+      gifFilesList.splice(index, 1);
+      renderGifSlides();
+      if (gifFilesList.length === 0) {
+        document.getElementById('gif-preview-grid').style.display = 'none';
+      }
+    }
+
+    function renderGifSlides() {
+      const list = document.getElementById('gif-slides-list');
+      list.innerHTML = '';
+      gifFilesList.forEach((file, i) => {
+        const url = URL.createObjectURL(file);
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:10px;background:#111;border:1px solid #2a2a2a;border-radius:6px;padding:8px 10px;';
+        row.innerHTML = `
+          <span style="color:#555;font-size:11px;font-weight:700;min-width:16px;">${i + 1}</span>
+          <img src="${url}" style="width:48px;height:36px;object-fit:cover;border-radius:4px;border:1px solid #333;">
+          <span style="flex:1;color:#ccc;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${file.name}</span>
+          <span style="color:#555;font-size:10px;">${(file.size/1024).toFixed(0)}KB</span>
+          <button onclick="removeGifSlide(${i})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px;line-height:1;padding:0;" title="Remove">×</button>
+        `;
+        list.appendChild(row);
+      });
+    }
+
+    async function compileGifCarousel() {
+      if (gifFilesList.length < 2) {
+        showToast("Please add at least 2 images to create a GIF.", "error");
+        return;
+      }
+
+      const duration = parseInt(document.getElementById('gif-duration-slider').value, 10);
+      const formData = new FormData();
+      for (const f of gifFilesList) {
+        formData.append('files', f);
+      }
+
+      const statusBar = document.getElementById('gif-status-bar');
+      const compileBtn = document.getElementById('gif-compile-btn');
+      statusBar.style.display = 'block';
+      statusBar.textContent = '⏳ Uploading images and compiling GIF on server…';
+      compileBtn.disabled = true;
+      compileBtn.textContent = 'Compiling…';
+
+      try {
+        const res = await fetch(`/api/marketing/media/generate-gif?duration=${duration}`, {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + localStorage.getItem('ec_token') },
+          body: formData
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || 'Compilation failed');
+        }
+        const data = await res.json();
+
+        // Insert into canvas as a real image block at current selection/cursor position
+        const newImg = {
+          type: 'image',
+          src: data.url,
+          style: {
+            width: '100%',
+            'max-width': '600px',
+            display: 'block',
+            margin: '10px auto',
+            'border-radius': '4px'
+          },
+          attributes: { alt: 'GIF Carousel' }
+        };
+
+        const selected = editor.getSelected();
+        if (selected) {
+          const parent = selected.parent();
+          if (parent) {
+            const index = selected.index ? selected.index() : parent.components().indexOf(selected);
+            parent.append(newImg, { at: index + 1 });
+          } else {
+            selected.append(newImg);
+          }
+        } else {
+          const wrapper = editor.getWrapper();
+          if (wrapper) {
+            wrapper.append(newImg);
+          } else {
+            editor.addComponents(newImg);
+          }
+        }
+
+        closeGifBuilder();
+        showToast("🎞️ GIF inserted into canvas! Drag or resize it as needed.");
+      } catch (e) {
+        console.error('GIF compile error:', e);
+        statusBar.textContent = '❌ Error: ' + e.message;
+        showToast('Failed to compile GIF: ' + e.message, 'error');
+      } finally {
+        compileBtn.disabled = false;
+        compileBtn.textContent = '🎬 Compile & Insert into Canvas';
+      }
+    }
+
+
+    // ═══════════════════════════════════════
+    // SEND FROM EDITOR MODAL
+    // ═══════════════════════════════════════
+    let sendSegmentIds = new Set();
+
+    async function openSendModal() {
+      // Auto-save first so content is up to date
+      document.getElementById('save-campaign').click();
+      await new Promise(r => setTimeout(r, 800));
+
+      document.getElementById('send-modal').classList.remove('hidden');
+      loadSendSegments();
+    }
+
+    function closeSendModal() {
+      document.getElementById('send-modal').classList.add('hidden');
+      sendSegmentIds.clear();
+    }
+
+    async function loadSendSegments() {
+      const token = localStorage.getItem('ec_token');
+      const container = document.getElementById('send-segment-list');
+      container.innerHTML = '<span style="color:#555;font-size:0.85rem;">Loading...</span>';
+      try {
+        const res = await fetch('/api/marketing/segments/', { headers: { 'Authorization': 'Bearer ' + token } });
+        const segs = await res.json();
+
+        // Build chip list: smart segments + custom segments
+        const smartSegs = [
+          { id: 'engaged', name: '🔥 Engaged', color: '#c47d0a' },
+          { id: 'hot', name: '⚡ Hot Leads', color: '#e74c3c' },
+          { id: 'recent', name: '🆕 Recent', color: '#27ae60' },
+          { id: 'financial_overdue', name: '💸 Overdue', color: '#e74c3c' },
+          { id: 'financial_outstanding', name: '💰 Outstanding', color: '#c47d0a' },
+          { id: 'financial_paid_fully', name: '✅ Fully Paid', color: '#27ae60' },
+        ];
+        const allSegs = [...smartSegs, ...segs.map(s => ({ id: s.id, name: s.name, color: '#555' }))];
+
+        container.innerHTML = allSegs.map(s => `
+          <button id="seg-chip-${s.id}" onclick="toggleSendSegment('${s.id}', this)"
+            style="padding:6px 14px;border-radius:20px;border:1.5px solid #333;background:#1a1a1a;color:#888;font-size:0.78rem;cursor:pointer;transition:0.2s;white-space:nowrap;">
+            ${s.name}
+          </button>
+        `).join('');
+      } catch(e) {
+        container.innerHTML = '<span style="color:#e74c3c;">Error loading segments.</span>';
+      }
+    }
+
+    function toggleSendSegment(id, btn) {
+      if (sendSegmentIds.has(id)) {
+        sendSegmentIds.delete(id);
+        btn.style.background = '#1a1a1a';
+        btn.style.color = '#888';
+        btn.style.borderColor = '#333';
+      } else {
+        sendSegmentIds.add(id);
+        btn.style.background = '#C47D0A';
+        btn.style.color = '#fff';
+        btn.style.borderColor = '#C47D0A';
+      }
+      updateSendEstimate();
+    }
+
+    async function updateSendEstimate() {
+      if (sendSegmentIds.size === 0) {
+        document.getElementById('send-estimate').style.display = 'none';
+        return;
+      }
+      const token = localStorage.getItem('ec_token');
+      let total = 0;
+      try {
+        for (const sid of sendSegmentIds) {
+          const r = await fetch(`/api/marketing/segments/${sid}/count`, { headers: { 'Authorization': 'Bearer ' + token } });
+          const d = await r.json();
+          total += d.count || 0;
+        }
+        document.getElementById('send-est-count').innerText = total.toLocaleString();
+        document.getElementById('send-estimate').style.display = 'block';
+      } catch(e) { /* silent */ }
+    }
+
+    async function executeSend() {
+      const token = localStorage.getItem('ec_token');
+      const btn = document.getElementById('send-confirm-btn');
+      const manualRaw = document.getElementById('send-manual-emails').value.trim();
+      const scheduledAt = document.getElementById('send-scheduled-at').value;
+
+      const segIds = Array.from(sendSegmentIds);
+      const manualEmails = manualRaw ? manualRaw.split(',').map(e => e.trim()).filter(Boolean) : [];
+
+      if (segIds.length === 0 && manualEmails.length === 0) {
+        alert('Please select at least one segment or enter recipient emails.');
+        return;
+      }
+
+      const payload = {
+        segment_ids: segIds.length > 0 ? segIds : null,
+        manual_emails: manualEmails.length > 0 ? manualEmails : null,
+        scheduled_at: scheduledAt ? new Date(scheduledAt).toISOString() : null
+      };
+
+      btn.disabled = true;
+      btn.innerText = '⏳ Sending...';
+
+      try {
+        const res = await fetch(`/api/marketing/campaigns/${campaignId}/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (res.ok) {
+          closeSendModal();
+          const msg = payload.scheduled_at
+            ? `✅ Campaign scheduled for ${new Date(payload.scheduled_at).toLocaleString()}!`
+            : `✅ Campaign broadcast started! Est. ${data.estimated_recipients || '?'} recipients.`;
+          alert(msg);
+          window.location.href = '/marketing';
+        } else {
+          const detail = data.detail;
+          if (typeof detail === 'object' && detail.validation_errors) {
+            alert('⚠️ Fix these issues first:\n\n' + detail.validation_errors.join('\n'));
+          } else {
+            alert('❌ Error: ' + (typeof detail === 'string' ? detail : JSON.stringify(detail)));
+          }
+          btn.disabled = false;
+          btn.innerText = '🚀 Send Campaign';
+        }
+      } catch(e) {
+        alert('❌ Network error. Please try again.');
+        btn.disabled = false;
+        btn.innerText = '🚀 Send Campaign';
+      }
+    }
+
+    editor.on('component:update', () => {
+       // This is expensive to run on every keystroke, better to do it on switch or save
+    });
+
+    let testType = 'email';
+
+    document.getElementById('send-test').onclick = () => {
+      openTestSendModal();
+    };
+
+    function openTestSendModal() {
+      document.getElementById('test-email-input').value = '';
+      setTestType('email');
+      loadTestSegments();
+      
+      const el = document.getElementById('test-send-modal');
+      el.classList.remove('hidden');
+      el.style.display = 'flex';
+    }
+
+    function closeTestSendModal() {
+      const el = document.getElementById('test-send-modal');
+      el.classList.add('hidden');
+      el.style.display = 'none';
+    }
+
+    function setTestType(type) {
+      testType = type;
+      const emailBtn = document.getElementById('test-type-email-btn');
+      const segBtn = document.getElementById('test-type-segment-btn');
+      const emailContainer = document.getElementById('test-email-container');
+      const segContainer = document.getElementById('test-segment-container');
+
+      if (type === 'email') {
+        emailBtn.style.background = '#C47D0A';
+        emailBtn.style.color = 'white';
+        segBtn.style.background = 'transparent';
+        segBtn.style.color = '#888';
+        emailContainer.style.display = 'block';
+        segContainer.style.display = 'none';
+      } else {
+        segBtn.style.background = '#C47D0A';
+        segBtn.style.color = 'white';
+        emailBtn.style.background = 'transparent';
+        emailBtn.style.color = '#888';
+        emailContainer.style.display = 'none';
+        segContainer.style.display = 'block';
+      }
+    }
+
+    async function loadTestSegments() {
+      const select = document.getElementById('test-segment-select');
+      try {
+        const res = await fetch('/api/marketing/segments/', {
+          headers: { 'Authorization': 'Bearer ' + localStorage.getItem('ec_token') }
+        });
+        const customSegments = await res.json();
+        
+        let options = `
+          <option value="">Select a segment...</option>
+          <option value="engaged">Engaged (Users who opened your mails)</option>
+          <option value="hot">Hot Leads (Engagement Score > 50)</option>
+          <option value="recent">Recent Signups (Last 30 days)</option>
+          <option value="failed_deliveries">⚠️ Undelivered (Had Campaign Errors)</option>
+          <optgroup label="Financial Activity">
+              <option value="financial_overdue">🔴 Overdue Clients (Missed Deadline)</option>
+              <option value="financial_outstanding">🟡 Outstanding Balance (Partial Paid)</option>
+              <option value="financial_paid_fully">🟢 Fully Paid (Completed)</option>
+          </optgroup>
+          <optgroup label="Custom Segments">
+        `;
+        customSegments.forEach(s => {
+          options += `<option value="${s.id}">${s.name}</option>`;
+        });
+        options += `</optgroup>`;
+        select.innerHTML = options;
+      } catch (e) {
+        console.error("Error loading test segments:", e);
+        select.innerHTML = '<option value="">Failed to load segments</option>';
+      }
+    }
+
+    async function executeTestSend() {
+      const btn = document.getElementById('test-confirm-btn');
+      const email = document.getElementById('test-email-input').value.trim();
+      const segmentId = document.getElementById('test-segment-select').value;
+
+      if (testType === 'email' && !email) {
+        alert('Please enter a recipient email.');
+        return;
+      }
+      if (testType === 'segment' && !segmentId) {
+        alert('Please select a target segment.');
+        return;
+      }
+
+      // Ensure current variant is in memory
+      variantData[activeVariant].subject = document.getElementById('subject-field').value;
+      try {
+        variantData[activeVariant].html = editor.runCommand('gjs-get-inlined-html');
+      } catch (e) {
+        variantData[activeVariant].html = editor.getHtml();
+      }
+
+      const forceCheck = document.getElementById('test-force-checkbox');
+      const payload = {
+        email: testType === 'email' ? email : null,
+        segment_id: testType === 'segment' ? segmentId : null,
+        force_external_test: forceCheck ? forceCheck.checked : false,
+        variant: activeVariant,
+        subject_a: variantData['A'].subject,
+        html_body_a: variantData['A'].html,
+        subject_b: variantData['B'].subject,
+        html_body_b: variantData['B'].html
+      };
+
+      btn.disabled = true;
+      btn.innerText = '⏳ Sending...';
+
+      try {
+        const res = await fetch(`/api/marketing/campaigns/${campaignId}/send-test`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('ec_token') },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (res.ok) {
+          alert(data.message || `✅ Test email sent!`);
+          closeTestSendModal();
+        } else {
+          alert("❌ Failed: " + (data.detail || "Error sending test email"));
+        }
+      } catch (e) {
+        console.error(e);
+        alert("❌ Error sending test email");
+      } finally {
+        btn.disabled = false;
+        btn.innerText = '🧪 Send Test';
+      }
+    }
+
+    function openEditorGuide() {
+      document.getElementById('editor-guide-modal').classList.remove('hidden');
+    }
+    
+    function closeEditorGuide() {
+      document.getElementById('editor-guide-modal').classList.add('hidden');
+    }
+
+    loadCampaign();
+  </script>
+</body>
+
+</html>

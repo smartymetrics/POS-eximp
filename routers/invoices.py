@@ -4,7 +4,7 @@ from fastapi.responses import StreamingResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from models import InvoiceCreate, SendDocumentRequest, VoidReceiptRequest
 from database import get_db, db_execute
-from routers.auth import verify_token, resolve_admin_token
+from routers.auth import verify_token, resolve_admin_token, has_any_role
 from routers.analytics import log_activity
 from email_service import send_invoice_email, send_receipt_email, send_statement_email, send_void_notification_email
 from pdf_service import generate_invoice_pdf, generate_receipt_pdf, generate_statement_pdf
@@ -99,6 +99,60 @@ async def create_invoice(
             property_location = property_location or p["location"]
             plot_size = plot_size or p["plot_size_sqm"]
 
+    # 4.5 Discount Code processing
+    discount_code = (data.discount_code or "").strip().upper()
+    discount_amount = 0.0
+    original_amount = float(data.amount)
+    
+    if discount_code:
+        code_res = await db_execute(lambda: db.table("discount_codes").select("*").eq("code", discount_code).execute())
+        if code_res.data:
+            code_rec = code_res.data[0]
+            if code_rec.get("is_active", True):
+                is_expired = False
+                expires_str = code_rec.get("expires_at")
+                if expires_str:
+                    try:
+                        t_str = expires_str.replace("Z", "+00:00")
+                        expires_at = datetime.fromisoformat(t_str)
+                        from datetime import timezone
+                        now = datetime.now(timezone.utc)
+                        if expires_at < now:
+                            is_expired = True
+                    except Exception:
+                        pass
+                
+                max_uses = code_rec.get("max_uses")
+                uses_count = code_rec.get("uses_count", 0)
+                is_exhausted = max_uses is not None and uses_count >= max_uses
+                
+                if not is_expired and not is_exhausted:
+                    d_val = float(code_rec.get("discount_value") or 0)
+                    d_type = code_rec.get("discount_type", "percentage")
+                    if d_type == "percentage":
+                        discount_amount = original_amount * d_val / 100.0
+                    else:
+                        discount_amount = min(d_val, original_amount)
+                    
+                    # Increment uses count
+                    await db_execute(lambda: db.table("discount_codes").update({
+                        "uses_count": uses_count + 1
+                    }).eq("id", code_rec["id"]).execute())
+                else:
+                    discount_code = None
+            else:
+                discount_code = None
+        else:
+            discount_code = None
+            
+    final_total = max(0.0, original_amount - discount_amount)
+    
+    # Calculate split (90 / 2.5 / 7.5 / 0)
+    land_cost = final_total * 0.90
+    allocation_fee = final_total * 0.025
+    documentation_fee = final_total * 0.075
+    vat_amount = 0.0
+
     invoice_data = {
         "invoice_number": invoice_number,
         "client_id": data.client_id,
@@ -108,14 +162,22 @@ async def create_invoice(
         "plot_size_sqm": plot_size,
         "quantity": data.quantity,
         "unit_price": data.unit_price,
-        "amount": data.amount,
+        "amount": final_total,
         "payment_terms": data.payment_terms,
         "invoice_date": data.invoice_date,
         "due_date": data.due_date,
         "notes": data.notes,
         "sales_rep_name": data.sales_rep_name,
         "sales_rep_id": data.sales_rep_id,
-        "created_by": current_admin["sub"]
+        "purchase_purpose": data.purchase_purpose,
+        "purchase_for": data.purchase_for,
+        "created_by": current_admin["sub"],
+        "land_cost": land_cost,
+        "allocation_fee": allocation_fee,
+        "documentation_fee": documentation_fee,
+        "vat_amount": vat_amount,
+        "discount_code": discount_code if discount_amount > 0 else None,
+        "discount_amount": discount_amount if discount_amount > 0 else None
     }
     
     # 3. REVENUE ATTRIBUTION (HubSpot Standard)
@@ -134,6 +196,13 @@ async def create_invoice(
     # Use jsonable_encoder to handle Decimal/date types for Supabase
     encoded_data = jsonable_encoder(invoice_data)
     result = await db_execute(lambda: db.table("invoices").insert(encoded_data).execute())
+    
+    # 4. PROMOTE TO CLIENT (Automatic Conversion)
+    # When an invoice is created, the lead officially becomes a client.
+    background_tasks.add_task(
+        db_execute,
+        lambda: db.table("clients").update({"client_type": "client"}).eq("id", data.client_id).execute()
+    )
 
     background_tasks.add_task(
         log_activity,
@@ -174,6 +243,7 @@ async def send_documents(
         raise HTTPException(status_code=404, detail="Invoice not found")
 
     invoice = inv.data[0]
+    invoice["status"] = resolve_invoice_status(invoice)
     client_raw = invoice.get("clients", {})
     # Handle both list and dict returns from Supabase-js style mapping
     client = client_raw[0] if isinstance(client_raw, list) and client_raw else client_raw
@@ -288,7 +358,7 @@ async def void_invoice_receipts(
     Only Admins can perform this.
     """
     db = get_db()
-    if current_admin.get("role") != "admin":
+    if not has_any_role(current_admin, "admin"):
         raise HTTPException(status_code=403, detail="Only administrators can void receipts")
     
     # 1. Fetch invoice to get client_id and check existence
@@ -387,13 +457,14 @@ async def edit_invoice(
     admin_only_fields = [
         "amount", "amount_paid", "quantity", "unit_price", "plot_size_sqm", "property_name", 
         "property_location", "property_id", "payment_terms", "sales_rep_name", 
-        "sales_rep_id", "invoice_date", "co_owner_name", "co_owner_email", "marketing_campaign_id"
+        "sales_rep_id", "invoice_date", "co_owner_name", "co_owner_email", 
+        "marketing_campaign_id", "purchase_purpose", "purchase_for"
     ]
     staff_allowed_fields = ["due_date", "notes"]
     
     for field, value in payload.items():
         if field in admin_only_fields:
-            if role != "admin":
+            if not has_any_role(current_admin, "admin"):
                 raise HTTPException(status_code=403, detail=f"Permission denied to edit {field}")
             update_data[field] = value
         elif field in staff_allowed_fields:
@@ -416,6 +487,52 @@ async def edit_invoice(
             "changed_by": current_admin["sub"]
         }).execute())
 
+    # Recalculate price, discount, and splits if changed by admin
+    price_changed = "unit_price" in update_data
+    qty_changed = "quantity" in update_data
+    amount_changed = "amount" in update_data
+
+    if price_changed or qty_changed or amount_changed:
+        up = float(update_data.get("unit_price") if price_changed else (invoice.get("unit_price") or 0.0))
+        qty = int(update_data.get("quantity") if qty_changed else (invoice.get("quantity") or 1))
+        subtotal = up * qty
+        
+        # Recalculate discount if code exists
+        discount_code = invoice.get("discount_code")
+        discount_amount = float(invoice.get("discount_amount") or 0.0)
+        
+        if discount_code:
+            code_res = await db_execute(lambda: db.table("discount_codes").select("*").eq("code", discount_code).execute())
+            if code_res.data:
+                code_rec = code_res.data[0]
+                d_val = float(code_rec.get("discount_value") or 0)
+                d_type = code_rec.get("discount_type", "percentage")
+                if d_type == "percentage":
+                    discount_amount = subtotal * d_val / 100.0
+                else:
+                    discount_amount = min(d_val, subtotal)
+                update_data["discount_amount"] = discount_amount
+        
+        # Compute final invoice amount
+        if not amount_changed:
+            final_amount = max(0.0, subtotal - discount_amount)
+            update_data["amount"] = final_amount
+        else:
+            final_amount = float(update_data["amount"])
+
+        # Update itemized splits based on the final amount ONLY if this is not a legacy invoice.
+        is_legacy = invoice.get("land_cost") is None
+        if is_legacy:
+            update_data["land_cost"] = None
+            update_data["allocation_fee"] = None
+            update_data["documentation_fee"] = None
+            # Leave vat_amount as-is (do not force to 0.0)
+        else:
+            update_data["land_cost"] = final_amount * 0.90
+            update_data["allocation_fee"] = final_amount * 0.025
+            update_data["documentation_fee"] = final_amount * 0.075
+            update_data["vat_amount"] = 0.0
+
     # Update database
     await db_execute(lambda: db.table("invoices").update(jsonable_encoder(update_data)).eq("id", invoice_id).execute())
     await log_activity(
@@ -433,6 +550,40 @@ async def edit_invoice(
             db=db,
             performed_by=current_admin["sub"]
         )
+
+    # Automated Pipeline Synchronization
+    # If amount or amount_paid changed, we must sync the statuses and pipeline stages.
+    if "amount" in update_data or "amount_paid" in update_data:
+        try:
+            final_amount = float(update_data.get("amount", invoice["amount"]))
+            final_paid = float(update_data.get("amount_paid", invoice["amount_paid"]))
+            
+            if final_amount > 0 and final_paid >= final_amount:
+                new_inv_status = "paid"
+                new_inv_stage = "paid"
+                new_client_stage = "closed"
+            elif final_paid > 0:
+                new_inv_status = "partial"
+                new_inv_stage = "interest"
+                new_client_stage = "paid"
+            else:
+                new_inv_status = "unpaid"
+                new_inv_stage = "interest"
+                new_client_stage = "interest"
+
+            # 1. Update Invoice status and stage
+            await db_execute(lambda: db.table("invoices").update({
+                "status": new_inv_status,
+                "pipeline_stage": new_inv_stage
+            }).eq("id", invoice_id).execute())
+
+            # 2. Update Client stage
+            await db_execute(lambda: db.table("clients").update({
+                "pipeline_stage": new_client_stage
+            }).eq("id", invoice["client_id"]).execute())
+
+        except Exception as sync_err:
+            print(f"[WARN] Pipeline sync after invoice edit failed: {sync_err}")
     
     return {"message": "Invoice updated successfully"}
 
@@ -451,6 +602,7 @@ async def view_document_html(
         raise HTTPException(status_code=404, detail="Invoice not found")
     
     invoice = inv.data[0]
+    invoice["status"] = resolve_invoice_status(invoice)
     is_receipt = type == "receipt" or ("Receipt" in type.title())
     
     return templates.TemplateResponse("invoice_view.html", {
@@ -472,6 +624,7 @@ async def download_pdf(invoice_id: str, doc_type: str, current_admin=Depends(res
         raise HTTPException(status_code=404, detail="Invoice not found")
 
     invoice = inv.data[0]
+    invoice["status"] = resolve_invoice_status(invoice)
 
     # Fallback for missing location data
     if not invoice.get("property_location") and invoice.get("property_name"):

@@ -9,7 +9,19 @@ from models import (
 )
 from utils import resolve_invoice_status
 
+from routers.auth import verify_token, require_roles, has_any_role
+from report_service import ReportService
+
 router = APIRouter()
+
+@router.get("/procurement")
+async def get_procurement_analytics_api(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_admin=Depends(require_roles(["super_admin"]))
+):
+    """JSON API for Procurement Analytics."""
+    return await ReportService.get_procurement_analytics(start_date, end_date)
 
 def get_previous_period(start: date, end: date):
     delta = end - start
@@ -24,7 +36,7 @@ async def get_kpis(
     admin: dict = Depends(verify_token)
 ):
     db = get_db()
-    is_admin = admin.get("role") in ["admin", "operations"]
+    is_admin = has_any_role(admin, "admin", "operations")
     
     # 1. Total Invoiced (Gross)
     invoiced_query = db.table("invoices").select("amount").filter("invoice_date", "gte", start.isoformat()).filter("invoice_date", "lte", end.isoformat()).neq("status", "voided")
@@ -42,8 +54,11 @@ async def get_kpis(
     # Net Revenue = Gross Invoiced - Total Refunded
     total_revenue = (gross_revenue - total_refunds) if is_admin else None
     
-    # 3. New Clients
-    clients_query = db.table("clients").select("id", count="exact").filter("created_at", "gte", start.isoformat()).filter("created_at", "lte", end.isoformat() + "T23:59:59")
+    # 3. New Clients (Paying customers only)
+    clients_query = db.table("clients").select("id", count="exact")\
+        .filter("created_at", "gte", start.isoformat())\
+        .filter("created_at", "lte", end.isoformat() + "T23:59:59")\
+        .eq("client_type", "client")
     new_clients = (await db_execute(lambda: clients_query.execute())).count
     
     # 4. Pending Verifications (Always live)
@@ -90,7 +105,12 @@ async def get_kpis(
         )
         
         # Prev Clients
-        prev_clients = (await db_execute(lambda: db.table("clients").select("id", count="exact").filter("created_at", "gte", prev_start.isoformat()).filter("created_at", "lte", prev_end.isoformat() + "T23:59:59").execute())).count
+        prev_clients = (await db_execute(lambda: db.table("clients")\
+            .select("id", count="exact")\
+            .filter("created_at", "gte", prev_start.isoformat())\
+            .filter("created_at", "lte", prev_end.isoformat() + "T23:59:59")\
+            .eq("client_type", "client")\
+            .execute())).count
         
         # Prev Refunds
         prev_refunds = sum(float(r["amount"]) for r in prev_refund_data)
@@ -124,7 +144,7 @@ async def get_revenue_trend(
     granularity: str = "daily",
     admin: dict = Depends(verify_token)
 ):
-    if admin.get("role") not in ["admin", "operations"]:
+    if not has_any_role(admin, "admin", "operations"):
         raise HTTPException(status_code=403, detail="Financial data restricted to authorized roles")
         
     db = get_db()
@@ -160,7 +180,7 @@ async def get_estates(
     end: date = Query(...),
     admin: dict = Depends(verify_token)
 ):
-    if admin.get("role") not in ["admin", "operations"]:
+    if not has_any_role(admin, "admin", "operations"):
         raise HTTPException(status_code=403, detail="Restricted")
         
     db = get_db()
@@ -200,7 +220,12 @@ async def get_referral_sources(
     admin: dict = Depends(verify_token)
 ):
     db = get_db()
-    data = (await db_execute(lambda: db.table("clients").select("referral_source").filter("created_at", "gte", start.isoformat()).filter("created_at", "lte", end.isoformat() + "T23:59:59").execute())).data
+    data = (await db_execute(lambda: db.table("clients")\
+        .select("referral_source")\
+        .filter("created_at", "gte", start.isoformat())\
+        .filter("created_at", "lte", end.isoformat() + "T23:59:59")\
+        .eq("client_type", "client")\
+        .execute())).data
     
     sources = {}
     for item in data:
@@ -224,12 +249,26 @@ async def get_activity(
     is_privileged = any(r in role.lower() for r in ["admin", "operations"])
     
     query = db.table("activity_log").select("*, admins(full_name), clients(assigned_rep_id)")
-    
+
     if not is_privileged:
         # Restricted users (Sales, Marketing, Staff) see:
         # 1. Activities they performed
         # 2. Activities related to clients assigned to them
-        query = query.or_(f"performed_by.eq.{admin_id},clients.assigned_rep_id.eq.{admin_id}")
+        #
+        # NOTE: PostgREST or_() cannot filter on embedded/related table columns
+        # (e.g. clients.assigned_rep_id). Instead, we pre-fetch the IDs of clients
+        # assigned to this rep and use client_id.in.(...) in the or_ expression.
+        assigned_res = await db_execute(
+            lambda: db.table("clients").select("id").eq("assigned_rep_id", admin_id).execute()
+        )
+        assigned_client_ids = [c["id"] for c in (assigned_res.data or [])]
+
+        if assigned_client_ids:
+            ids_csv = ",".join(assigned_client_ids)
+            query = query.or_(f"performed_by.eq.{admin_id},client_id.in.({ids_csv})")
+        else:
+            # No assigned clients — only show own activity
+            query = query.eq("performed_by", admin_id)
 
     data = (await db_execute(lambda: query\
         .order("created_at", desc=True)\
@@ -256,7 +295,7 @@ async def get_rep_leaderboard(
     limit: int = 10,
     admin: dict = Depends(verify_token)
 ):
-    if admin.get("role") not in ["admin", "operations"]:
+    if not has_any_role(admin, "admin", "operations"):
         raise HTTPException(status_code=403, detail="Restricted")
         
     db = get_db()
@@ -331,3 +370,333 @@ async def log_activity(
         await db_execute(lambda: db.table("activity_log").insert(insert_data).execute())
     except Exception as e:
         print(f"Error logging activity: {e}")
+
+
+# ── Internal Payouts Dashboard Endpoints ──
+
+from pydantic import BaseModel
+
+class SendReportRequest(BaseModel):
+    emails: List[str]
+    message: Optional[str] = None
+    format: str = "csv"
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+
+class GrantAccessRequest(BaseModel):
+    admin_id: str
+
+async def has_internal_payouts_permission(admin: dict, db) -> bool:
+    role = (admin.get("role") or "").lower()
+    roles = [r.strip() for r in role.split(",") if r.strip()]
+    if "super_admin" in roles:
+        return True
+    admin_id = admin.get("sub")
+    if not admin_id:
+        return False
+    res = await db_execute(lambda: db.table("internal_payouts_access").select("admin_id").eq("admin_id", admin_id).execute())
+    return len(res.data) > 0
+
+@router.get("/internal-payouts/check-access")
+async def check_internal_payouts_access(admin: dict = Depends(verify_token)):
+    db = get_db()
+    has_access = await has_internal_payouts_permission(admin, db)
+    return {"has_access": has_access}
+
+@router.get("/internal-payouts")
+async def get_internal_payouts_data(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    admin: dict = Depends(verify_token)
+):
+    db = get_db()
+    if not await has_internal_payouts_permission(admin, db):
+        raise HTTPException(status_code=403, detail="Access denied to Internal Payouts Ledger")
+        
+    query = db.table("invoices").select("id, invoice_number, amount, land_cost, allocation_fee, documentation_fee, vat_amount, property_name, invoice_date, clients(full_name, email)").neq("status", "voided")
+    if start_date:
+        query = query.filter("invoice_date", "gte", start_date)
+    if end_date:
+        query = query.filter("invoice_date", "lte", end_date)
+        
+    res = await db_execute(lambda: query.order("invoice_date", desc=True).execute())
+    invoices = res.data or []
+    
+    total_invoiced = 0.0
+    total_land_cost = 0.0
+    total_allocation = 0.0
+    total_documentation = 0.0
+    total_vat = 0.0
+    
+    estates = {}
+    client_invoices = []
+    
+    for inv in invoices:
+        amt = float(inv.get("amount") or 0.0)
+        lc = float(inv.get("land_cost") or 0.0) if inv.get("land_cost") is not None else 0.0
+        af = float(inv.get("allocation_fee") or 0.0) if inv.get("allocation_fee") is not None else 0.0
+        df = float(inv.get("documentation_fee") or 0.0) if inv.get("documentation_fee") is not None else 0.0
+        vat = float(inv.get("vat_amount") or 0.0) if inv.get("vat_amount") is not None else 0.0
+        
+        total_invoiced += amt
+        total_land_cost += lc
+        total_allocation += af
+        total_documentation += df
+        total_vat += vat
+        
+        est_name = inv.get("property_name") or "Unknown Estate"
+        if est_name not in estates:
+            estates[est_name] = {
+                "property_name": est_name,
+                "total_amount": 0.0,
+                "land_cost": 0.0,
+                "allocation_fee": 0.0,
+                "documentation_fee": 0.0,
+                "vat_amount": 0.0,
+                "payment_count": 0
+            }
+        estates[est_name]["total_amount"] += amt
+        estates[est_name]["land_cost"] += lc
+        estates[est_name]["allocation_fee"] += af
+        estates[est_name]["documentation_fee"] += df
+        estates[est_name]["vat_amount"] += vat
+        estates[est_name]["payment_count"] += 1
+        
+        client_info = inv.get("clients") or {}
+        client_invoices.append({
+            "id": inv["id"],
+            "invoice_number": inv["invoice_number"],
+            "client_name": client_info.get("full_name") or "—",
+            "client_email": client_info.get("email") or "—",
+            "property_name": est_name,
+            "invoice_date": inv["invoice_date"],
+            "amount": amt,
+            "land_cost": lc,
+            "allocation_fee": af,
+            "documentation_fee": df,
+            "vat_amount": vat,
+            "has_splits": inv.get("land_cost") is not None
+        })
+        
+    return {
+        "company_totals": {
+            "total_invoiced": total_invoiced,
+            "total_land_cost": total_land_cost,
+            "total_allocation": total_allocation,
+            "total_documentation": total_documentation,
+            "total_vat": total_vat
+        },
+        "estate_breakdown": list(estates.values()),
+        "client_invoices": client_invoices
+    }
+
+@router.get("/internal-payouts/export")
+async def export_internal_payouts_report(
+    format: str = "csv",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    admin: dict = Depends(verify_token)
+):
+    db = get_db()
+    if not await has_internal_payouts_permission(admin, db):
+        raise HTTPException(status_code=403, detail="Access denied")
+        
+    query = db.table("invoices").select("invoice_number, amount, land_cost, allocation_fee, documentation_fee, vat_amount, property_name, invoice_date, clients(full_name)").neq("status", "voided")
+    if start_date:
+        query = query.filter("invoice_date", "gte", start_date)
+    if end_date:
+        query = query.filter("invoice_date", "lte", end_date)
+        
+    res = await db_execute(lambda: query.order("invoice_date", desc=True).execute())
+    invoices = res.data or []
+    
+    if format == "csv":
+        import io
+        import csv
+        from fastapi.responses import StreamingResponse
+        
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["Invoice Number", "Client Name", "Property Name", "Invoice Date", "Total Paid (NGN)", "Land Cost (90%)", "Allocation Fee (2.5%)", "Documentation Fee (7.5%)", "VAT Portion"])
+        
+        for inv in invoices:
+            client_info = inv.get("clients") or {}
+            writer.writerow([
+                inv["invoice_number"],
+                client_info.get("full_name") or "—",
+                inv.get("property_name") or "—",
+                inv["invoice_date"],
+                inv["amount"],
+                inv.get("land_cost") if inv.get("land_cost") is not None else 0.0,
+                inv.get("allocation_fee") if inv.get("allocation_fee") is not None else 0.0,
+                inv.get("documentation_fee") if inv.get("documentation_fee") is not None else 0.0,
+                inv.get("vat_amount") if inv.get("vat_amount") is not None else 0.0
+            ])
+            
+        stream = io.BytesIO(output.getvalue().encode("utf-8"))
+        return StreamingResponse(
+            stream,
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename=Internal_Payouts_Report_{start_date or 'all'}_to_{end_date or 'all'}.csv"}
+        )
+    elif format == "pdf":
+        from fastapi.responses import Response
+        from pdf_service import generate_internal_payouts_pdf
+        pdf_bytes = await db_execute(lambda: generate_internal_payouts_pdf(invoices, start_date, end_date, admin.get("name") or "Super Admin"))
+        return Response(
+            pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=Internal_Payouts_Report_{start_date or 'all'}_to_{end_date or 'all'}.pdf"}
+        )
+    else:
+        raise HTTPException(status_code=400, detail="Invalid format")
+
+@router.post("/internal-payouts/send-report")
+async def send_internal_payouts_report(
+    req: SendReportRequest,
+    admin: dict = Depends(verify_token)
+):
+    db = get_db()
+    if not await has_internal_payouts_permission(admin, db):
+        raise HTTPException(status_code=403, detail="Access denied")
+        
+    query = db.table("invoices").select("invoice_number, amount, land_cost, allocation_fee, documentation_fee, vat_amount, property_name, invoice_date, clients(full_name)").neq("status", "voided")
+    if req.start_date:
+        query = query.filter("invoice_date", "gte", req.start_date)
+    if req.end_date:
+        query = query.filter("invoice_date", "lte", req.end_date)
+        
+    res = await db_execute(lambda: query.order("invoice_date", desc=True).execute())
+    invoices = res.data or []
+    
+    if req.format == "csv":
+        import io
+        import csv
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["Invoice Number", "Client Name", "Property Name", "Invoice Date", "Total Paid (NGN)", "Land Cost (90%)", "Allocation Fee (2.5%)", "Documentation Fee (7.5%)", "VAT Portion"])
+        for inv in invoices:
+            client_info = inv.get("clients") or {}
+            writer.writerow([
+                inv["invoice_number"],
+                client_info.get("full_name") or "—",
+                inv.get("property_name") or "—",
+                inv["invoice_date"],
+                inv["amount"],
+                inv.get("land_cost") if inv.get("land_cost") is not None else 0.0,
+                inv.get("allocation_fee") if inv.get("allocation_fee") is not None else 0.0,
+                inv.get("documentation_fee") if inv.get("documentation_fee") is not None else 0.0,
+                inv.get("vat_amount") if inv.get("vat_amount") is not None else 0.0
+            ])
+        file_bytes = output.getvalue().encode("utf-8")
+        filename = f"Internal_Payouts_Report_{req.start_date or 'all'}_to_{req.end_date or 'all'}.csv"
+        mime_type = "text/csv"
+    elif req.format == "pdf":
+        from pdf_service import generate_internal_payouts_pdf
+        file_bytes = await db_execute(lambda: generate_internal_payouts_pdf(invoices, req.start_date, req.end_date, admin.get("name") or "Super Admin"))
+        filename = f"Internal_Payouts_Report_{req.start_date or 'all'}_to_{req.end_date or 'all'}.pdf"
+        mime_type = "application/pdf"
+    else:
+        raise HTTPException(status_code=400, detail="Invalid format")
+        
+    from email_service import send_internal_payouts_report_email
+    await send_internal_payouts_report_email(
+        file_content=file_bytes,
+        filename=filename,
+        mime_type=mime_type,
+        emails=req.emails,
+        message_text=req.message,
+        current_admin_name=admin.get("name") or "Super Admin"
+    )
+    
+    await log_activity(
+        "report_shared",
+        f"Internal Payouts report ({req.format}) emailed to: {', '.join(req.emails)}",
+        admin["sub"]
+    )
+    return {"message": "Report sent successfully"}
+
+@router.get("/internal-payouts/access")
+async def list_internal_payouts_access(admin: dict = Depends(verify_token)):
+    db = get_db()
+    role = (admin.get("role") or "").lower()
+    roles = [r.strip() for r in role.split(",") if r.strip()]
+    if "super_admin" not in roles:
+        raise HTTPException(status_code=403, detail="Super Admin role required to view access controls")
+        
+    all_admins_res = await db_execute(lambda: db.table("admins").select("id, full_name, email, role").execute())
+    all_admins = all_admins_res.data or []
+    
+    access_res = await db_execute(lambda: db.table("internal_payouts_access").select("admin_id, granted_by, granted_at").execute())
+    access_list = access_res.data or []
+    access_map = {row["admin_id"]: row for row in access_list}
+    
+    results = []
+    for u in all_admins:
+        u_id = u["id"]
+        u_role = (u.get("role") or "").lower()
+        u_roles = [r.strip() for r in u_role.split(",") if r.strip()]
+        
+        is_super = "super_admin" in u_roles
+        has_custom = u_id in access_map
+        
+        if is_super or has_custom:
+            granted_by = "System"
+            granted_at = None
+            if has_custom:
+                g_rec = access_map[u_id]
+                g_by_id = g_rec.get("granted_by")
+                g_by_name = next((adm["full_name"] for adm in all_admins if adm["id"] == g_by_id), None)
+                granted_by = g_by_name or "System"
+                granted_at = g_rec.get("granted_at")
+                
+            results.append({
+                "admin_id": u_id,
+                "full_name": u["full_name"],
+                "email": u["email"],
+                "role": u["role"],
+                "access_type": "Role-based (Automatic)" if is_super else "Custom Granted",
+                "granted_by": granted_by,
+                "granted_at": granted_at,
+                "can_revoke": not is_super
+            })
+            
+    return results
+
+@router.post("/internal-payouts/access")
+async def grant_internal_payouts_access(req: GrantAccessRequest, admin: dict = Depends(verify_token)):
+    db = get_db()
+    role = (admin.get("role") or "").lower()
+    roles = [r.strip() for r in role.split(",") if r.strip()]
+    if "super_admin" not in roles:
+        raise HTTPException(status_code=403, detail="Super Admin role required")
+        
+    payload = {
+        "admin_id": req.admin_id,
+        "granted_by": admin["sub"]
+    }
+    await db_execute(lambda: db.table("internal_payouts_access").upsert(payload).execute())
+    
+    await log_activity(
+        "access_granted",
+        f"Custom access to Internal Payouts granted to admin ID {req.admin_id}",
+        admin["sub"]
+    )
+    return {"message": "Access granted successfully"}
+
+@router.delete("/internal-payouts/access/{admin_id}")
+async def revoke_internal_payouts_access(admin_id: str, admin: dict = Depends(verify_token)):
+    db = get_db()
+    role = (admin.get("role") or "").lower()
+    roles = [r.strip() for r in role.split(",") if r.strip()]
+    if "super_admin" not in roles:
+        raise HTTPException(status_code=403, detail="Super Admin role required")
+        
+    await db_execute(lambda: db.table("internal_payouts_access").delete().eq("admin_id", admin_id).execute())
+    
+    await log_activity(
+        "access_revoked",
+        f"Custom access to Internal Payouts revoked for admin ID {admin_id}",
+        admin["sub"]
+    )
+    return {"message": "Access revoked successfully"}

@@ -7,6 +7,7 @@ import asyncio
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 from database import get_db
+from premailer import transform as inline_css
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,25 @@ MARKETING_FROM_NAME = os.getenv("MARKETING_FROM_NAME", "Eximp & Cloves")
 MARKETING_REPLY_TO = os.getenv("MARKETING_REPLY_TO", "marketing@mail.eximps-cloves.com")
 MARKETING_BCC_EMAIL = os.getenv("MARKETING_BCC_EMAIL", "marketing@mail.eximps-cloves.com")
 
+# Email suppression list — contacts matching these domains are never mailed
+SUPPRESSED_DOMAINS = ["temp-eximps.com", "placeholder.com"]
+
+def is_suppressed(contact: dict) -> bool:
+    """Returns True if a contact should never receive marketing emails."""
+    email = (contact.get("email") or "").lower().strip()
+    if not email:
+        return True
+    if any(domain in email for domain in SUPPRESSED_DOMAINS):
+        return True
+    if contact.get("is_bounced"):
+        return True
+    if not contact.get("is_subscribed", True):
+        return True
+    return False
+
+# TODO (BUG-09): Switch to PNG once logo_dark.png is uploaded to the 'marketing' Supabase bucket.
+# Upload at: https://app.supabase.com → Storage → marketing → Upload logo_dark.png
+# Then change this to: .../public/marketing/logo_dark.png
 BRAND_LOGO_URL = "https://scsdnstqtrqjsosbmxyf.supabase.co/storage/v1/object/public/marketing/logo_dark.svg"
 BRAND_FOOTER_HTML = f"""
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#1A1A1A; margin-top:20px;">
@@ -53,7 +73,7 @@ def personalize_content(html: str, contact: Dict[str, Any]) -> str:
 
     # Basic Tags
     vars = {
-        "first_name": contact.get("first_name") or "there",
+        "first_name": contact.get("first_name") or "",
         "last_name": contact.get("last_name") or "",
         "full_name": f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip() or "Valued Client",
         "email": contact.get("email", ""),
@@ -61,7 +81,17 @@ def personalize_content(html: str, contact: Dict[str, Any]) -> str:
         "unsubscribe_url": unsub_url
     }
 
-    # Financial Tags (Conditional)
+    # Financial Tags — always pre-populate with safe fallbacks so they never render blank.
+    # If we have a real client_id, try to override with live data.
+    vars.update({
+        "outstanding": "N/A",
+        "amount_paid": "N/A",
+        "total_invoiced": "N/A",
+        "property_name": "Your Property",
+        "due_date": "N/A",
+        "invoice_number": "N/A"
+    })
+
     client_id = contact.get("client_id")
     if client_id:
         try:
@@ -90,12 +120,15 @@ def personalize_content(html: str, contact: Dict[str, Any]) -> str:
         except Exception as e:
             logger.error(f"Financial personalization error for {client_id}: {e}")
 
-    # Apply replacements
+    # Apply replacements for all known tags
     for key, val in vars.items():
         html = html.replace(f"{{{{{key}}}}}", str(val))
     
-    # Clean up any unreplaced variables or placeholders like [BALANCE]
+    # Clean up any remaining unresolved {{tags}} — render as empty string
     html = re.sub(r"\{\{.*?\}\}", "", html)
+    
+    # Clean up double spaces or spaces before punctuation caused by empty fallbacks
+    html = html.replace(" ,", ",").replace(" !", "!").replace(" .", ".").replace("  ", " ")
     return html
 
 def wrap_links(html: str, campaign_id: str, contact_id: str) -> str:
@@ -108,6 +141,11 @@ def wrap_links(html: str, campaign_id: str, contact_id: str) -> str:
         
         # Avoid double wrapping or tracking the tracking links themselves
         if "/c/" in url:
+            return match.group(0)
+
+        # NEVER route the unsubscribe link through click-tracking (CAN-SPAM / one-click
+        # compliance). It must work on its own, every time, even if analytics writes fail.
+        if "/unsubscribe/" in url:
             return match.group(0)
 
         tracking_url = f"{APP_BASE_URL}/c/{campaign_id}/{contact_id}?url={url}"
@@ -133,6 +171,150 @@ def sanitize_urls(html: str) -> str:
     pattern = r"http://(?:localhost|127\.0\.0\.1):\d+/"
     return re.sub(pattern, f"{APP_BASE_URL.rstrip('/')}/", html)
 
+def optimize_html_for_mobile(html: str) -> str:
+    """Post-processes HTML to ensure responsive mobile rendering in email clients.
+    
+    1. Finds all <img> tags that are content/fluid images and ensures they have 
+       max-width: 100% !important; height: auto !important; in their inline style. 
+       This prevents mobile Gmail from shrinking font sizes after loading images.
+    2. Ensures the viewport meta tag is present.
+    3. Injects -webkit-text-size-adjust resets and mobile media queries in a <style> block.
+    """
+    # 1. Force responsive styles on large or unspecified width images (ignoring small icons/logos)
+    img_pattern = re.compile(r'<img([^>]+)>', re.IGNORECASE)
+    
+    def img_replacer(match):
+        img_tag = match.group(0)
+        attrs = match.group(1)
+        
+        # Check for width attribute or style
+        width_attr_match = re.search(r'width\s*=\s*["\']([^"\']*)["\']', attrs, re.IGNORECASE)
+        width_style_match = re.search(r'width\s*:\s*([^;\'"]+)', attrs, re.IGNORECASE)
+        
+        is_large_or_fluid = False
+        
+        if width_attr_match:
+            width_val = width_attr_match.group(1).strip()
+            if '%' in width_val:
+                is_large_or_fluid = True
+            else:
+                try:
+                    val = int(re.sub(r'[^\d]', '', width_val))
+                    if val > 150:
+                        is_large_or_fluid = True
+                except:
+                    pass
+        elif width_style_match:
+            width_val = width_style_match.group(1).strip()
+            if '%' in width_val:
+                is_large_or_fluid = True
+            else:
+                try:
+                    val = int(re.sub(r'[^\d]', '', width_val))
+                    if val > 150:
+                        is_large_or_fluid = True
+                except:
+                    pass
+
+        # Check for height attribute or style to identify small icons/logos
+        has_small_height = False
+        height_attr_match = re.search(r'height\s*=\s*["\']([^"\']*)["\']', attrs, re.IGNORECASE)
+        height_style_match = re.search(r'height\s*:\s*([^;\'"]+)', attrs, re.IGNORECASE)
+        
+        if height_attr_match:
+            try:
+                val = int(re.sub(r'[^\d]', '', height_attr_match.group(1)))
+                if val <= 150:
+                    has_small_height = True
+            except:
+                pass
+        elif height_style_match:
+            try:
+                val = int(re.sub(r'[^\d]', '', height_style_match.group(1)))
+                if val <= 150:
+                    has_small_height = True
+            except:
+                pass
+
+        has_width = width_attr_match or width_style_match
+        
+        # Apply responsive overrides if it's explicitly large/fluid,
+        # OR if it doesn't specify a width and does not have a small height (e.g. typical custom images)
+        if is_large_or_fluid or (not has_width and not has_small_height):
+            # Check if style attribute already exists
+            style_match = re.search(r'style\s*=\s*["\']([^"\']*)["\']', attrs, re.IGNORECASE)
+            if style_match:
+                orig_style = style_match.group(1)
+                new_style = orig_style
+                if 'max-width' not in orig_style.lower():
+                    new_style += '; max-width: 100% !important'
+                if 'height' not in orig_style.lower():
+                    new_style += '; height: auto !important'
+                
+                # Normalize semicolons
+                new_style = re.sub(r';+', ';', new_style).strip(';')
+                attrs_new = attrs.replace(style_match.group(0), f'style="{new_style}"')
+            else:
+                attrs_new = attrs + ' style="max-width: 100% !important; height: auto !important;"'
+            
+            return f'<img{attrs_new}>'
+            
+        return img_tag
+
+    html = img_pattern.sub(img_replacer, html)
+    
+    # 2. Inject resets, viewport meta tag, and mobile media queries
+    reset_styles = """
+    <style type="text/css">
+      :root {
+        color-scheme: light dark;
+        supported-color-schemes: light dark;
+      }
+      body, table, td, a { -webkit-text-size-adjust: 100% !important; -ms-text-size-adjust: 100% !important; }
+      table, td { mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important; }
+      img { -ms-interpolation-mode: bicubic !important; }
+      
+      /* Mobile media query to cap layout elements */
+      @media only screen and (max-width: 600px) {
+        table, div, td { max-width: 100% !important; }
+        img { max-width: 100% !important; height: auto !important; }
+      }
+      
+      /* Dark mode contrast preservation: forces intended white/grey text to remain bright */
+      @media (prefers-color-scheme: dark) {
+        [style*="color:#ffffff"], [style*="color:#fff"], [style*="color: #ffffff"], [style*="color: #fff"] {
+          color: #ffffff !important;
+        }
+        [style*="color:#cccccc"], [style*="color:#ccc"], [style*="color: #cccccc"], [style*="color: #ccc"] {
+          color: #cccccc !important;
+        }
+        [style*="color:#ffffff"] *, [style*="color:#fff"] *, [style*="color: #ffffff"] *, [style*="color: #fff"] * {
+          color: #ffffff !important;
+        }
+        [style*="color:#cccccc"] *, [style*="color:#ccc"] *, [style*="color: #cccccc"] *, [style*="color: #ccc"] * {
+          color: #cccccc !important;
+        }
+      }
+    </style>
+    """
+    viewport_meta = """<meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
+    <meta name="supported-color-schemes" content="light dark">"""
+    
+    # Check for <head> tag
+    if '<head>' in html.lower():
+        # Inject right after <head>
+        idx = html.lower().find('<head>') + 6
+        html = html[:idx] + '\n' + viewport_meta + reset_styles + html[idx:]
+    elif '<body>' in html.lower():
+        idx = html.lower().find('<body>')
+        html = html[:idx] + f'<head>{viewport_meta}{reset_styles}</head>' + html[idx:]
+    else:
+        # Fallback: prepend
+        html = f'<head>{viewport_meta}{reset_styles}</head>' + html
+        
+    return html
+
 async def send_marketing_email(campaign: Dict[str, Any], contact: Dict[str, Any]):
     """Sends a single personalized marketing email with tracking."""
     campaign_id = campaign["id"]
@@ -147,17 +329,54 @@ async def send_marketing_email(campaign: Dict[str, Any], contact: Dict[str, Any]
         logger.warning(f"Aborting send to {email} - Placeholder email suppressed.")
         return None
 
+    # Check if this contact has been hard-bounced (set by Resend webhook on email.bounced)
+    # We check the contact record itself, NOT failed send attempts from broken campaigns
+    if contact.get("is_bounced"):
+        logger.warning(f"Aborting send to {email} - Contact is marked as hard-bounced.")
+        return None
+
     # If the contact is not subscribed, DO NOT SEND.
     if not contact.get("is_subscribed", True):
         logger.warning(f"Aborting send to {email} - Contact is UNSUBSCRIBED.")
         return None
 
 
-    # 1. Personalize & Sanitize
-    html = personalize_content(campaign["html_body_a"], contact)
+    # 1. Inline CSS — converts <style> block rules into inline style="" attributes
+    # so Outlook, Gmail, and all email clients render correctly.
+    raw_html = campaign["html_body_a"]
+    try:
+        raw_html = inline_css(raw_html, remove_classes=False, strip_important=False, keep_style_tags=True)
+    except Exception as e:
+        logger.warning(f"CSS inlining failed, sending as-is: {e}")
+
+    # 2. Personalize & Sanitize
+    html = personalize_content(raw_html, contact)
     html = sanitize_urls(html)
     
-    # 2. Tracking (only for real campaigns, not tests)
+    # Apply mobile/Gmail responsiveness optimizations
+    html = optimize_html_for_mobile(html)
+    
+    # 3. Inject preview text preheader (BUG-08 fix)
+    # This must happen BEFORE tracking so it sits right after <body>.
+    # The invisible div + padding chars ensure Gmail/Yahoo/Outlook show the
+    # correct preview snippet instead of pulling from the brand header.
+    if campaign.get("status") != "test" and campaign.get("preview_text"):
+        preview_text_val = str(campaign["preview_text"]).strip()
+        if preview_text_val:
+            # Repeat hidden whitespace chars to prevent body text bleeding into preview
+            padding = '&#847;&zwnj;&nbsp;' * 80
+            preheader = (
+                f'<div style="display:none;max-height:0;overflow:hidden;'
+                f'mso-hide:all;font-size:1px;line-height:1px;'
+                f'color:transparent;">'
+                f'{preview_text_val} {padding}</div>'
+            )
+            if '<body>' in html:
+                html = html.replace('<body>', f'<body>{preheader}', 1)
+            else:
+                html = preheader + html
+
+    # 4. Tracking (only for real campaigns, not tests)
     if campaign.get("status") != "test":
         html = wrap_links(html, campaign_id, contact_id)
         html = inject_tracking_pixel(html, campaign_id, contact_id)
@@ -189,38 +408,44 @@ async def send_marketing_email(campaign: Dict[str, Any], contact: Dict[str, Any]
             else:
                 html += unsub_footer
 
+    # One-click unsubscribe headers (RFC 8058). Gmail/Yahoo/Outlook show their own native
+    # "Unsubscribe" button driven by these headers, separate from the HTML footer link, and
+    # POST directly to the same endpoint below without loading any page.
+    unsub_token_hdr = contact.get("id") or "test-id"
+    unsub_url_hdr = f"{APP_BASE_URL}/unsubscribe/{unsub_token_hdr}"
+
     try:
-        res = resend.Emails.send({
+        res = await asyncio.to_thread(resend.Emails.send, {
             "from": f"{MARKETING_FROM_NAME} <{MARKETING_FROM_EMAIL}>",
             "to": [contact["email"]],
             "subject": personalize_content(campaign["subject_a"], contact),
             "html": html,
             "reply_to": MARKETING_REPLY_TO,
-            "bcc": [MARKETING_BCC_EMAIL] if MARKETING_BCC_EMAIL else []
+            "bcc": [MARKETING_BCC_EMAIL] if MARKETING_BCC_EMAIL else [],
+            "headers": {
+                "List-Unsubscribe": f"<mailto:{MARKETING_REPLY_TO}?subject=unsubscribe>, <{unsub_url_hdr}>",
+                "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"
+            }
         })
         
         # Log success in campaign_recipients if not test
         if campaign.get("status") != "test":
             db = get_db()
-            db.table("campaign_recipients").upsert({
-                "campaign_id": campaign_id,
-                "contact_id": contact_id,
+            db.table("campaign_recipients").update({
                 "resend_message_id": res.get("id"),
                 "status": "sent",
                 "sent_at": datetime.utcnow().isoformat()
-            }).execute()
+            }).eq("campaign_id", campaign_id).eq("contact_id", contact_id).execute()
             
         return res
     except Exception as e:
         logger.error(f"Error sending marketing email to {contact['email']}: {e}")
         if campaign.get("status") != "test":
             db = get_db()
-            db.table("campaign_recipients").upsert({
-                "campaign_id": campaign_id,
-                "contact_id": contact_id,
+            db.table("campaign_recipients").update({
                 "status": "failed",
-                "sent_at": datetime.utcnow().isoformat()
-            }).execute()
+                "failed_at": datetime.utcnow().isoformat()
+            }).eq("campaign_id", campaign_id).eq("contact_id", contact_id).execute()
         return None
 
 def apply_segment_filters(query, rules: List[Dict[str, Any]]):
@@ -266,17 +491,30 @@ def apply_segment_filters(query, rules: List[Dict[str, Any]]):
         # Behavioral Subqueries (Industrial Grade)
         if field == "has_opened":
             # Contacts who opened specific campaign (val is UUID) or ANY (val is 'any')
+            # Two-step lookup: first get matching contact IDs, then filter.
+            _db = get_db()
             if val == "any":
-                query = query.filter("id", "in", "(select contact_id from campaign_recipients where opened_at is not null)")
+                rec_res = _db.table("campaign_recipients").select("contact_id").not_.is_("opened_at", "null").execute()
             else:
-                query = query.filter("id", "in", f"(select contact_id from campaign_recipients where campaign_id = '{val}' and opened_at is not null)")
+                rec_res = _db.table("campaign_recipients").select("contact_id").eq("campaign_id", str(val)).not_.is_("opened_at", "null").execute()
+            contact_ids = list({r["contact_id"] for r in (rec_res.data or []) if r.get("contact_id")})
+            if contact_ids:
+                query = query.in_("id", contact_ids)
+            else:
+                query = query.eq("id", "no-match-placeholder")  # force empty result
             continue
         
         if field == "has_clicked":
+            _db = get_db()
             if val == "any":
-                query = query.filter("id", "in", "(select contact_id from campaign_recipients where clicked_at is not null)")
+                rec_res = _db.table("campaign_recipients").select("contact_id").not_.is_("clicked_at", "null").execute()
             else:
-                query = query.filter("id", "in", f"(select contact_id from campaign_recipients where campaign_id = '{val}' and clicked_at is not null)")
+                rec_res = _db.table("campaign_recipients").select("contact_id").eq("campaign_id", str(val)).not_.is_("clicked_at", "null").execute()
+            contact_ids = list({r["contact_id"] for r in (rec_res.data or []) if r.get("contact_id")})
+            if contact_ids:
+                query = query.in_("id", contact_ids)
+            else:
+                query = query.eq("id", "no-match-placeholder")
             continue
 
         if op == "eq":
@@ -306,6 +544,18 @@ def apply_segment_filters(query, rules: List[Dict[str, Any]]):
                 query = query.gt("total_revenue_attributed", val)
             elif op == "gte":
                 query = query.gte("total_revenue_attributed", val)
+        
+        # Financial Bridge (New)
+        elif field == "financial_status":
+            # Resolves emails from invoices and filters the marketing_contacts query
+            fin_segment_id = f"financial_{val}"
+            fin_contacts = get_financial_segment_contacts(fin_segment_id)
+            fin_emails = [c["email"] for c in fin_contacts]
+            if fin_emails:
+                query = query.in_("email", fin_emails)
+            else:
+                # If no one matches the financial status, ensure the query returns nothing
+                query = query.eq("email", "non-existent@placeholder.com")
     return query
 
 def get_financial_segment_contacts(segment_id: str) -> List[Dict[str, Any]]:
@@ -367,12 +617,25 @@ def get_financial_segment_contacts(segment_id: str) -> List[Dict[str, Any]]:
         
     # 4. Fetch the actual marketing_contacts for these emails
     contacts_res = db.table("marketing_contacts").select("*").in_("email", target_emails).eq("is_subscribed", True).execute()
-    return contacts_res.data or []
+    contacts = contacts_res.data or []
+    
+    # 5. Inject the calculated LTV into the contact objects
+    for c in contacts:
+        email = c.get("email", "").lower().strip()
+        if email in client_financials:
+            c["total_revenue_attributed"] = client_financials[email]["total_paid"]
+            
+    return contacts
 
 async def resolve_target_recipients(segment_ids: List[str] = None, manual_emails: List[str] = None) -> List[Dict[str, Any]]:
     """Resolves a list of contacts based on segments or specific emails."""
     db = get_db()
-    
+
+    # Priority 0: All Subscribed Contacts shortcut
+    if segment_ids and '__all_subscribed__' in segment_ids:
+        res = db.table("marketing_contacts").select("*").eq("is_subscribed", True).execute()
+        return [c for c in (res.data or []) if not is_suppressed(c)]
+
     # Priority 1: Manual Emails (specific manual reach-out)
     if manual_emails:
         # 1. Clean and normalize emails
@@ -409,7 +672,7 @@ async def resolve_target_recipients(segment_ids: List[str] = None, manual_emails
                 if refetch.data:
                     existing_contacts.extend(refetch.data)
 
-        return existing_contacts
+        return [c for c in existing_contacts if not is_suppressed(c)]
 
     # Priority 2: Segments
     if segment_ids:
@@ -428,6 +691,13 @@ async def resolve_target_recipients(segment_ids: List[str] = None, manual_emails
                 # High engagement score
                 res = db.table("marketing_contacts").select("*").gt("engagement_score", 50).eq("is_subscribed", True).execute()
                 all_contacts.extend(res.data)
+            elif sid == 'failed_deliveries':
+                # Contacts who have failed or pending delivery records in campaign_recipients
+                recs_res = db.table("campaign_recipients").select("contact_id").in_("status", ["failed", "pending"]).execute()
+                failed_contact_ids = list({r["contact_id"] for r in (recs_res.data or [])})
+                if failed_contact_ids:
+                    res = db.table("marketing_contacts").select("*").in_("id", failed_contact_ids).eq("is_subscribed", True).execute()
+                    all_contacts.extend(res.data or [])
             elif sid in ['financial_overdue', 'financial_outstanding', 'financial_paid_fully']:
                 # Financial data aggregation
                 fin_contacts = get_financial_segment_contacts(sid)
@@ -454,63 +724,259 @@ async def resolve_target_recipients(segment_ids: List[str] = None, manual_emails
                             # Flatten the joined structure
                             all_contacts.extend([r["marketing_contacts"] for r in res.data if r.get("marketing_contacts")])
         
-        # De-duplicate by ID
+        # De-duplicate by ID, then filter suppressed
         unique_contacts = {c['id']: c for c in all_contacts}.values()
-        return list(unique_contacts)
+        return [c for c in unique_contacts if not is_suppressed(c)]
 
     # Default: All subscribed
     res = db.table("marketing_contacts").select("*").eq("is_subscribed", True).execute()
-    return res.data
+    return [c for c in (res.data or []) if not is_suppressed(c)]
+
+async def get_daily_quota_stats():
+    """Checks the current daily send volume vs the safety quota."""
+    db = get_db()
+    try:
+        settings_res = db.table("marketing_settings").select("value").eq("key", "daily_quota").execute()
+        settings = settings_res.data[0]["value"] if settings_res.data else {"enabled": True, "limit": 80}
+    except:
+        settings = {"enabled": True, "limit": 80}
+    
+    if not settings.get("enabled"):
+        return {"enabled": False, "current": 0, "limit": 999999, "remaining": 999999}
+        
+    # Use WAT (UTC+1) for the daily boundary — Lagos timezone
+    wat_now = datetime.utcnow() + timedelta(hours=1)
+    today = wat_now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(hours=1)
+    today = today.isoformat()
+    # Count all emails sent today (WAT-adjusted), regardless of whether they later bounced or were delivered
+    count_res = db.table("campaign_recipients").select("id", count="exact").gte("sent_at", today).execute()
+    current = count_res.count or 0
+    
+    return {
+        "enabled": True,
+        "current": current,
+        "limit": settings.get("limit", 80),
+        "remaining": max(0, settings.get("limit", 80) - current)
+    }
 
 async def broadcast_campaign(campaign_id: str, segment_ids: List[str] = None, manual_emails: List[str] = None):
     """Broadcasts a campaign to targeted recipients with throttling."""
     db = get_db()
-    
-    # 1. Fetch Campaign
-    camp_res = db.table("email_campaigns").select("*").eq("id", campaign_id).execute()
-    if not camp_res.data:
-        return logger.error(f"Campaign {campaign_id} not found")
-    campaign = camp_res.data[0]
-    
-    if campaign["status"] not in ["scheduled", "sending"]:
-        return logger.info(f"Campaign {campaign_id} is in {campaign['status']} status, skipping broadcast.")
-
-    # 2. Fetch Recipients
-    recipients = await resolve_target_recipients(segment_ids, manual_emails)
-    
-    if not recipients:
-        db.table("email_campaigns").update({"status": "failed"}).eq("id", campaign_id).execute()
-        return logger.error(f"No recipients for campaign {campaign_id} with targets {segment_ids} / {manual_emails}")
-
-    # 3. Update status to sending
-    db.table("email_campaigns").update({
-        "status": "sending",
-        "total_recipients": len(recipients)
-    }).eq("id", campaign_id).execute()
-
-    # 4. Batch Send (Throttled)
-    batch_size = 50
     sent_count = 0
-    
-    for i in range(0, len(recipients), batch_size):
-        batch = recipients[i:i+batch_size]
-        tasks = [send_marketing_email(campaign, r) for r in batch]
-        results = await asyncio.gather(*tasks)
-        
-        # Only count successful sends if we want to be precise, 
-        # but usually we log 'sent' even if delivery fails later via webhooks
-        sent_count += len([r for r in results if r is not None])
-        
-        db.table("email_campaigns").update({"total_sent": sent_count}).eq("id", campaign_id).execute()
-        
-        if i + batch_size < len(recipients):
-            await asyncio.sleep(1) # Rate limit safety
 
-    # 5. Finalize
-    db.table("email_campaigns").update({
-        "status": "sent",
-        "total_sent": sent_count,
-        "sent_at": datetime.utcnow().isoformat()
-    }).eq("id", campaign_id).execute()
-    
-    logger.info(f"Campaign {campaign_id} broadcast complete. Targeted {len(recipients)}, Sent {sent_count}.")
+    try:
+        # 1. Fetch Campaign
+        camp_res = db.table("email_campaigns").select("*").eq("id", campaign_id).execute()
+        if not camp_res.data:
+            logger.error(f"Campaign {campaign_id} not found")
+            return
+        campaign = camp_res.data[0]
+
+        if campaign["status"] not in ["scheduled", "sending", "paused"]:
+            logger.info(f"Campaign {campaign_id} is in {campaign['status']} status, skipping broadcast.")
+            return
+
+        # 2. Check if recipients queue already exists (resuming from pause or safety brake)
+        existing_recipients_res = db.table("campaign_recipients").select("contact_id, status, variant").eq("campaign_id", campaign_id).execute()
+        has_existing_queue = bool(existing_recipients_res.data)
+
+        if has_existing_queue:
+            # Resuming — only process contacts still marked 'pending'. Never re-send to 'sent' ones.
+            # Preserve the original variant assignment stored in DB — do NOT re-split.
+            pending_rows = [r for r in existing_recipients_res.data if r["status"] == "pending"]
+            pending_ids = [r["contact_id"] for r in pending_rows]
+            # Build a lookup: contact_id -> variant (so we can restore the correct variant per contact)
+            pending_variant_map = {r["contact_id"]: r.get("variant", "A") for r in pending_rows}
+            already_sent_count = len([r for r in existing_recipients_res.data if r["status"] in ("sent", "delivered")])
+            if already_sent_count > 0:
+                logger.info(f"Resume: skipping {already_sent_count} already-sent contacts for campaign {campaign_id}.")
+
+            if not pending_ids:
+                logger.info(f"Campaign {campaign_id} resumed but no pending recipients. Finalising.")
+                db.table("email_campaigns").update({"status": "sent", "sent_at": datetime.utcnow().isoformat()}).eq("id", campaign_id).execute()
+                return
+
+            recipients_res = db.table("marketing_contacts").select("*").in_("id", pending_ids).execute()
+            recipients = recipients_res.data or []
+
+        else:
+            # 3. Fresh broadcast — resolve targets
+            recipients = await resolve_target_recipients(segment_ids, manual_emails)
+            
+            # Shuffle list of recipients to ensure variants are randomly distributed across sends
+            import random
+            random.shuffle(recipients)
+
+            if not recipients:
+                db.table("email_campaigns").update({"status": "failed"}).eq("id", campaign_id).execute()
+                logger.error(f"No recipients for campaign {campaign_id} with targets {segment_ids} / {manual_emails}")
+                return
+
+            # Pre-assign variants BEFORE inserting into the queue.
+            # We split here so that the variant is recorded immediately — regardless of
+            # whether the actual send later succeeds or fails. This prevents all contacts
+            # from defaulting to 'A' when B-sends fail or the campaign is paused mid-batch.
+            is_ab_pre = campaign.get("is_ab_test", False)
+            subject_b_pre = campaign.get("subject_b")
+            html_body_b_pre = campaign.get("html_body_b")
+            if is_ab_pre and subject_b_pre and html_body_b_pre:
+                midpoint_pre = len(recipients) // 2
+                pre_queue_data = [
+                    {"campaign_id": campaign_id, "contact_id": r["id"], "status": "pending", "variant": "A" if idx < midpoint_pre else "B"}
+                    for idx, r in enumerate(recipients)
+                ]
+            else:
+                pre_queue_data = [{"campaign_id": campaign_id, "contact_id": r["id"], "status": "pending", "variant": "A"} for r in recipients]
+
+            if pre_queue_data:
+                db.table("campaign_recipients").upsert(pre_queue_data).execute()
+
+        # 4. Update status to sending
+        update_data = {"status": "sending"}
+        if not has_existing_queue:
+            update_data["total_recipients"] = len(recipients)
+        db.table("email_campaigns").update(update_data).eq("id", campaign_id).execute()
+
+        # 5. A/B Split Logic
+        # Variants were already pre-assigned in the queue at insertion time (fresh send)
+        # or restored from DB (resume). We rebuild 'targets' list honoring those assignments.
+        is_ab = campaign.get("is_ab_test", False)
+        subject_b = campaign.get("subject_b")
+        html_body_b = campaign.get("html_body_b")
+        preview_text_b = campaign.get("preview_text_b")
+
+        if has_existing_queue:
+            # On resume: use the variant already recorded in the DB for each pending contact.
+            targets = []
+            for contact in recipients:
+                v = pending_variant_map.get(contact["id"], "A")
+                targets.append((contact, v))
+        elif is_ab and subject_b and html_body_b:
+            # Fresh send: split was pre-assigned in queue_data above; rebuild targets list
+            # in the same order so A/B interleaving matches the pre-assigned variants.
+            midpoint = len(recipients) // 2
+            group_a = recipients[:midpoint]
+            group_b = recipients[midpoint:]
+            targets = []
+            for i in range(max(len(group_a), len(group_b))):
+                if i < len(group_a):
+                    targets.append((group_a[i], "A"))
+                if i < len(group_b):
+                    targets.append((group_b[i], "B"))
+        else:
+            targets = [(r, "A") for r in recipients]
+
+        async def send_variant(contact, variant_label, subject_override=None, body_override=None, preview_override=None):
+            camp_copy = dict(campaign)
+            if subject_override:
+                camp_copy["subject_a"] = subject_override
+            if body_override:
+                camp_copy["html_body_a"] = body_override
+            if preview_override:
+                camp_copy["preview_text"] = preview_override
+            result = await send_marketing_email(camp_copy, contact)
+            # NOTE: No need to update variant here — it was pre-assigned at queue time.
+            return result
+
+        # 6. Batch send (throttled)
+        batch_size = 50
+        sent_count = campaign.get("total_sent") or 0
+
+        for i in range(0, len(targets), batch_size):
+            # Re-fetch status to detect pause signal
+            fresh = db.table("email_campaigns").select("status").eq("id", campaign_id).execute()
+            if fresh.data and fresh.data[0]["status"] == "paused":
+                logger.info(f"Campaign {campaign_id} paused mid-send at batch {i}. Stopping.")
+                return
+
+            # Daily quota safety check
+            quota = await get_daily_quota_stats()
+            if quota["enabled"] and quota["remaining"] <= 0:
+                logger.warning(f"Daily quota reached ({quota['current']}/{quota['limit']}). Rescheduling campaign {campaign_id}.")
+                tomorrow = (datetime.utcnow() + timedelta(days=1)).replace(hour=8, minute=0, second=0, microsecond=0).isoformat()
+                db.table("email_campaigns").update({
+                    "status": "scheduled",
+                    "scheduled_for": tomorrow,
+                    "total_sent": sent_count
+                }).eq("id", campaign_id).execute()
+                from routers.analytics import log_activity
+                await log_activity(
+                    "marketing_campaign_quota_brake",
+                    f"Daily quota reached ({quota['limit']}). Campaign paused and auto-scheduled for tomorrow at 08:00.",
+                    "system",
+                    metadata={"campaign_id": campaign_id, "sent_so_far": sent_count}
+                )
+                return
+
+            # Cap batch size to remaining quota to avoid overshoot
+            current_batch_size = min(batch_size, quota["remaining"]) if quota["enabled"] else batch_size
+            if current_batch_size <= 0 and quota["enabled"]:
+                break
+
+            batch = targets[i:i + current_batch_size]
+            tasks = []
+            batch_sent_a = 0
+            batch_sent_b = 0
+
+            for contact, variant in batch:
+                if variant == "A":
+                    tasks.append(send_marketing_email(campaign, contact))
+                    batch_sent_a += 1
+                else:
+                    tasks.append(send_variant(contact, "B", subject_b, html_body_b, preview_text_b))
+                    batch_sent_b += 1
+
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            actual_sent = len([r for r in results if r is not None and not isinstance(r, Exception)])
+            sent_count += actual_sent
+
+            # Mark any suppressed/failed contacts in this batch as "failed"
+            failed_at = datetime.utcnow().isoformat()
+            for (contact, _variant), result in zip(batch, results):
+                if result is None or isinstance(result, Exception):
+                    try:
+                        db.table("campaign_recipients").update({
+                            "status": "failed",
+                            "failed_at": failed_at
+                        }).eq("campaign_id", campaign_id).eq("contact_id", contact["id"]).execute()
+                    except Exception as skip_err:
+                        logger.warning(f"Could not mark contact {contact.get('id')} as failed: {skip_err}")
+
+            update_data = {
+                "total_sent": sent_count,
+                "variant_a_sent": (campaign.get("variant_a_sent") or 0) + batch_sent_a,
+                "variant_b_sent": (campaign.get("variant_b_sent") or 0) + batch_sent_b,
+            }
+            db.table("email_campaigns").update(update_data).eq("id", campaign_id).execute()
+            campaign["variant_a_sent"] = update_data["variant_a_sent"]
+            campaign["variant_b_sent"] = update_data["variant_b_sent"]
+
+            if i + batch_size < len(targets):
+                await asyncio.sleep(1)
+
+        # 7. Finalise — total_recipients is set to actual delivered count (not raw queued count)
+        db.table("email_campaigns").update({
+            "status": "sent",
+            "total_sent": sent_count,
+            "total_recipients": sent_count,
+            "sent_at": datetime.utcnow().isoformat()
+        }).eq("id", campaign_id).execute()
+
+        logger.info(f"Campaign {campaign_id} broadcast complete. Sent {sent_count}.")
+
+    except Exception as e:
+        logger.error(f"FATAL: broadcast_campaign crashed for {campaign_id}: {e}", exc_info=True)
+        try:
+            current_status_res = db.table("email_campaigns").select("status").eq("id", campaign_id).execute()
+            current_status = current_status_res.data[0]["status"] if current_status_res.data else None
+            if current_status == "sending":
+                # Partial success is still success — only mark failed if nothing was sent at all
+                final_status = "sent" if sent_count > 0 else "failed"
+                db.table("email_campaigns").update({
+                    "status": final_status,
+                    "total_sent": sent_count,
+                    "sent_at": datetime.utcnow().isoformat() if sent_count > 0 else None
+                }).eq("id", campaign_id).execute()
+                logger.error(f"Campaign {campaign_id} marked as '{final_status}' after crash. Sent: {sent_count}.")
+        except Exception as cleanup_err:
+            logger.error(f"Could not clean up campaign {campaign_id} status: {cleanup_err}")
