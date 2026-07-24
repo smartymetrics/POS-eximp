@@ -399,12 +399,6 @@ async def confirm_verification(
                     invoice=invoice,
                     earning=earning_res.data[0]
                 )
-                send_commission_earned_email,
-                rep=rep,
-                client=client,
-                invoice=invoice,
-                earning=earning_res.data[0]
-            )
 
     # 5. Send Documents & Log Emails (Only if send_email is True)
     if do_send_email:
