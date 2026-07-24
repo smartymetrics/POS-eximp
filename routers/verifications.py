@@ -217,7 +217,6 @@ async def confirm_verification(
 
     except Exception as stage_err:
         print(f"[WARN] Pipeline stage sync after verification failed (non-critical): {stage_err}")
->>>>>>> a91ab755069829a8fb327a5e1c7cd55680947ff6
 
     # Fetch all invoices for statement
     all_inv = await db_execute(lambda: db.table("invoices")\
@@ -246,6 +245,7 @@ async def confirm_verification(
             rep = rep_res.data[0]
             
     payment_id = None
+    deposit = float(verify_rec.get("deposit_amount") or 0)
     if deposit > 0:
         is_portal_source = verify_rec.get("source") == "portal"
 
