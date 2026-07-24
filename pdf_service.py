@@ -390,7 +390,7 @@ def generate_invoice_pdf(invoice: dict) -> bytes:
 def render_receipt_html(invoice: dict) -> str:
     template = env.get_template("receipt.html")
     client = sanitize_client_address(invoice.get("clients", {}).copy())
-    # Only include standard payments (not refunds) in the payment receipt
+    raw_payments = invoice.get("payments", [])
     payments = [
         p for p in raw_payments
         if p.get("payment_type") != "refund"

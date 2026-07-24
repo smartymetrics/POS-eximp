@@ -7,6 +7,7 @@ from routers.auth import verify_token, resolve_admin_token, has_any_role
 from email_service import send_receipt_and_statement_email, send_rejection_email, send_commission_earned_email
 from routers.analytics import log_activity
 from datetime import datetime, date
+from typing import Optional
 
 from commission_service import get_commission_config
 # Re-exported for other modules that depend on it
