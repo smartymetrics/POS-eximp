@@ -134,7 +134,13 @@ def _invoice_html(invoice: dict, client: dict) -> str:
 
 def _receipt_html(invoice: dict, client: dict) -> str:
     paid = float(invoice.get("amount_paid", 0))
-    balance = float(invoice.get("balance_due", 0))
+    raw_payments = invoice.get("payments", [])
+    valid_payments = [p for p in raw_payments if not p.get("is_voided") and p.get("payment_type") != "refund"]
+    if valid_payments and paid == 0:
+        paid = sum(float(p.get("amount", 0)) for p in valid_payments)
+    
+    inv_amount = float(invoice.get("amount", 0))
+    balance = float(invoice.get("balance_due", max(0.0, inv_amount - paid)))
     return f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: #1A1A1A; padding: 24px; text-align: center;">

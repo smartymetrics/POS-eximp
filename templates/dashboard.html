@@ -3039,17 +3039,18 @@
       </div>
       <div class="modal-body">
         <p style="color:var(--gray); font-size:14px; margin-bottom:20px;">
-          Confirming this payment will auto-generate the Receipt and Statement, and email them to the client.
+          Confirming this payment will auto-generate the Receipt and Statement, and update account balances.
         </p>
-        <ul style="color:var(--dark); font-size:13px; margin-bottom:24px; padding-left:20px;">
-          <li style="margin-bottom:8px;">Generate Professional Receipt</li>
-          <li style="margin-bottom:8px;">Update Statement of Account</li>
-          <li>Notify client via email</li>
-        </ul>
+        <div class="form-group" style="margin-bottom:20px;">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; color:var(--dark);">
+            <input type="checkbox" id="verify-confirm-send-email" checked style="width:16px; height:16px;">
+            <span>Send Receipt & Statement email to client</span>
+          </label>
+        </div>
         <input type="hidden" id="verify-confirm-id">
         <div class="form-actions">
           <button class="btn btn-ghost" onclick="closeModal('verifyConfirmModal')">Cancel</button>
-          <button class="btn btn-primary" onclick="processConfirmVerification()">Confirm & Send</button>
+          <button class="btn btn-primary" onclick="processConfirmVerification()">Confirm Payment</button>
         </div>
       </div>
     </div>
@@ -3064,17 +3065,22 @@
       </div>
       <div class="modal-body">
         <p style="color:var(--gray); font-size:14px; margin-bottom:16px;">
-          Provide a reason for rejection (this will be emailed to the client):
+          Provide a reason for rejection:
         </p>
-        <div class="form-group">
+        <div class="form-group" style="margin-bottom:16px;">
           <textarea id="verify-reject-reason" class="form-control" rows="3"
-            placeholder="e.g. Blurred payment proof, transaction not found..."></textarea>
+            placeholder="e.g. Duplicate submission, blurred proof..."></textarea>
+        </div>
+        <div class="form-group" style="margin-bottom:20px;">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; color:var(--dark);">
+            <input type="checkbox" id="verify-reject-send-email" checked style="width:16px; height:16px;">
+            <span>Send rejection email to client</span>
+          </label>
         </div>
         <input type="hidden" id="verify-reject-id">
         <div class="form-actions">
           <button class="btn btn-ghost" onclick="closeModal('verifyRejectModal')">Cancel</button>
-          <button class="btn btn-primary" style="background:var(--red);" onclick="processRejectVerification()">Reject &
-            Notify</button>
+          <button class="btn btn-primary" style="background:var(--red);" onclick="processRejectVerification()">Reject Submission</button>
         </div>
       </div>
     </div>
@@ -6286,13 +6292,17 @@
 
     async function processConfirmVerification() {
       const id = document.getElementById('verify-confirm-id').value;
+      const sendEmail = document.getElementById('verify-confirm-send-email')?.checked ?? true;
       const btn = document.querySelector('#verifyConfirmModal button.btn-primary');
       const ogText = setLoading(btn, true, 'Processing...');
       try {
-        const res = await apiFetch(`/api/verifications/${id}/confirm`, { method: 'PATCH' });
+        const res = await apiFetch(`/api/verifications/${id}/confirm`, {
+          method: 'PATCH',
+          body: JSON.stringify({ send_email: sendEmail })
+        });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Failed');
-        toast('Payment confirmed and documents sent!', 'success');
+        toast(sendEmail ? 'Payment confirmed and receipt emailed!' : 'Payment confirmed (email skipped)', 'success');
         closeModal('verifyConfirmModal');
         loadVerifications();
         if (document.getElementById('section-dashboard').style.display === '') loadDashboard();
@@ -6308,6 +6318,7 @@
     async function processRejectVerification() {
       const id = document.getElementById('verify-reject-id').value;
       const reason = document.getElementById('verify-reject-reason').value.trim();
+      const sendEmail = document.getElementById('verify-reject-send-email')?.checked ?? true;
       if (!reason) return toast('Please provide a reason', 'error');
 
       const btn = document.querySelector('#verifyRejectModal button.btn-primary');
@@ -6315,11 +6326,11 @@
       try {
         const res = await apiFetch(`/api/verifications/${id}/reject`, {
           method: 'PATCH',
-          body: JSON.stringify({ reason })
+          body: JSON.stringify({ reason, send_email: sendEmail })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Failed');
-        toast('Submission rejected and client notified', 'info');
+        toast(sendEmail ? 'Submission rejected and client notified' : 'Submission rejected (email skipped)', 'info');
         closeModal('verifyRejectModal');
         loadVerifications();
       } catch (e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }

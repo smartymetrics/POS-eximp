@@ -183,8 +183,19 @@ class SubscriptionService:
         sub_res = await db_execute(lambda: db.table("property_subscriptions").insert(jsonable_encoder(subscription_record)).execute())
         subscription_id = sub_res.data[0]["id"] if sub_res.data else None
 
-        # 7. Create Pending Verification for Admin
+        # 7. Create Payment Record & Pending Verification for Admin
         if deposit_amount > 0:
+            payment_record = {
+                "invoice_id": invoice_id,
+                "client_id": client_id,
+                "reference": f"{data.get('payment_date') or str(date.today())}_form_deposit",
+                "amount": deposit_amount,
+                "payment_method": "Bank Transfer",
+                "payment_date": data.get("payment_date") or str(date.today()),
+                "notes": "Initial deposit via subscription portal"
+            }
+            await db_execute(lambda: db.table("payments").insert(jsonable_encoder(payment_record)).execute())
+
             verify_data = {
                 "invoice_id": invoice_id,
                 "client_id": client_id,

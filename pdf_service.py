@@ -314,7 +314,24 @@ def render_receipt_html(invoice: dict) -> str:
     client = sanitize_client_address(invoice.get("clients", {}).copy())
     # Only include standard payments (not refunds) in the payment receipt
     raw_payments = invoice.get("payments", [])
-    payments = [p for p in raw_payments if p.get("payment_type") != "refund"]
+    payments = [p for p in raw_payments if p.get("payment_type") != "refund" and not p.get("is_voided")]
+    
+    amount_val = float(invoice.get("amount") or 0)
+    paid_val = float(invoice.get("amount_paid") or 0)
+    if payments and paid_val == 0:
+        paid_val = sum(float(p.get("amount", 0)) for p in payments)
+        invoice["amount_paid"] = paid_val
+    
+    # Fallback payment entry if invoice has amount_paid but payments list is empty
+    if not payments and paid_val > 0:
+        payments = [{
+            "payment_date": invoice.get("invoice_date") or datetime.now().strftime("%Y-%m-%d"),
+            "reference": f"PAYMENT_{invoice.get('invoice_number', 'CONFIRMED')}",
+            "payment_method": "Bank Transfer",
+            "amount": paid_val
+        }]
+    
+    invoice["balance_due"] = max(0.0, amount_val - paid_val)
     
     # 1. Prepare all URLs for parallel fetching
     supabase_url = os.getenv("SUPABASE_URL")

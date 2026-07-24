@@ -240,11 +240,12 @@ class WebhookFormPayload(BaseModel):
 
 
 class VerificationConfirm(BaseModel):
-    pass  # No body needed — invoice_id is in the URL
+    send_email: bool = True
 
 
 class VerificationReject(BaseModel):
     reason: str
+    send_email: bool = True
 
 class VerificationUpdate(BaseModel):
     payment_proof_url: Optional[str] = None

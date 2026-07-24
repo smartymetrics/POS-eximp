@@ -1,10 +1,5 @@
-.env
-.venv
-__pycache__
-pos-eximp/
-.aider*
 node_modules/
-*/node_modules/
+pos-eximp/
 dist/
 App_old*.jsx
 App_v*.jsx
@@ -13,3 +8,7 @@ old*.html
 tmp_*.html
 test_js.js
 po
+.git/
+*.log
+__pycache__/
+.aider*

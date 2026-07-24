@@ -53,9 +53,11 @@ async def get_pending_count(current_admin=Depends(verify_token)):
 async def confirm_verification(
     id: str, 
     background_tasks: BackgroundTasks,
+    payload: Optional[VerificationConfirm] = None,
     current_admin=Depends(verify_token)
 ):
     db = get_db()
+    do_send_email = payload.send_email if payload else True
     
     # 1. Fetch verification record
     if not has_any_role(current_admin, "admin", "super_admin", "operations"):
@@ -77,10 +79,62 @@ async def confirm_verification(
     })
     await db_execute(lambda: db.table("pending_verifications").update(update_data).eq("id", id).execute())
 
-    # 3. Fetch invoice and client for email
-    inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", verify_rec["invoice_id"]).execute())
+    # 3. Ensure payment is created in payments table if missing
+    deposit = float(verify_rec.get("deposit_amount") or 0)
+    payment_id = None
+    if deposit > 0:
+        pay_res = await db_execute(lambda: db.table("payments")\
+            .select("id")\
+            .eq("invoice_id", verify_rec["invoice_id"])\
+            .eq("is_voided", False)\
+            .ilike("reference", f"%{verify_rec['id'][:8]}%")\
+            .execute())
+        if not pay_res.data:
+            pay_res = await db_execute(lambda: db.table("payments")\
+                .select("id")\
+                .eq("invoice_id", verify_rec["invoice_id"])\
+                .eq("is_voided", False)\
+                .eq("amount", deposit)\
+                .eq("payment_date", verify_rec.get("payment_date"))\
+                .execute())
+
+        if pay_res.data:
+            payment_id = pay_res.data[0]["id"]
+        else:
+            ref = f"{verify_rec.get('payment_date') or str(date.today())}_verified_{verify_rec['id'][:8]}"
+            pmt_insert = {
+                "invoice_id": verify_rec["invoice_id"],
+                "client_id": verify_rec["client_id"],
+                "reference": ref,
+                "amount": deposit,
+                "payment_method": "Bank Transfer",
+                "payment_date": verify_rec.get("payment_date") or str(date.today()),
+                "notes": f"Verified payment submission (Ref {verify_rec['id'][:8]})"
+            }
+            pmt_res = await db_execute(lambda: db.table("payments").insert(jsonable_encoder(pmt_insert)).execute())
+            if pmt_res.data:
+                payment_id = pmt_res.data[0]["id"]
+
+    # 4. Fetch invoice with clients AND payments for complete receipt rendering
+    inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*), payments(*)").eq("id", verify_rec["invoice_id"]).execute())
     invoice = inv_res.data[0]
     client = invoice["clients"]
+
+    # Calculate actual totals and update invoice status/amount_paid
+    valid_payments = [p for p in (invoice.get("payments") or []) if not p.get("is_voided")]
+    total_paid = sum(float(p["amount"]) for p in valid_payments if p.get("payment_type") != "refund")
+    invoice_amount = float(invoice.get("amount") or 0)
+    new_status = "paid" if total_paid >= invoice_amount else ("partial" if total_paid > 0 else "unpaid")
+
+    await db_execute(lambda: db.table("invoices").update({
+        "amount_paid": total_paid,
+        "status": new_status,
+        "updated_at": datetime.now().isoformat()
+    }).eq("id", invoice["id"]).execute())
+
+    invoice["amount_paid"] = total_paid
+    invoice["balance_due"] = max(0.0, invoice_amount - total_paid)
+    invoice["status"] = new_status
 
     # Fetch all invoices for statement
     all_inv = await db_execute(lambda: db.table("invoices")\
@@ -92,14 +146,12 @@ async def confirm_verification(
     rep_id = invoice.get("sales_rep_id")
     rep = None
     if not rep_id and invoice.get("sales_rep_name"):
-        # Fallback for old invoices without sales_rep_id
         rep_name = invoice["sales_rep_name"].strip()
         rep_res = await db_execute(lambda: db.table("sales_reps")\
             .select("*")\
             .ilike("name", f"%{rep_name}%")\
             .eq("is_active", True)\
             .execute())
-        
         if rep_res.data:
             rep = rep_res.data[0]
             rep_id = rep["id"]
@@ -109,73 +161,54 @@ async def confirm_verification(
         if rep_res.data:
             rep = rep_res.data[0]
             
-    if rep_id:
-            # Use the rate logic with configurations
-            config = get_commission_config(
-                sales_rep_id=rep_id,
-                estate_name=invoice["property_name"],
-                verification_date=date.today(),
-                db=db
-            )
-            deposit = float(verify_rec["deposit_amount"])
-            gross_comm = round(deposit * config["gross_rate"] / 100, 2)
-            wht_amt = round(gross_comm * config["wht_rate"] / 100, 2)
-            net_comm = gross_comm - wht_amt
-            
-            # Robust payment lookup: try reference first, then any payment on this invoice with 'deposit'
-            ref = f"{verify_rec['payment_date']}_form_deposit"
-            pay_res = await db_execute(lambda: db.table("payments").select("id").eq("invoice_id", invoice["id"]).eq("reference", ref).execute())
-            if not pay_res.data:
-                # Fallback: find any payment on this invoice with webhook-style reference
-                pay_res = await db_execute(lambda: db.table("payments")\
-                    .select("id")\
-                    .eq("invoice_id", invoice["id"])\
-                    .ilike("reference", "%form_deposit")\
-                    .execute())
-                    
-            payment_id = pay_res.data[0]["id"] if pay_res.data else None
-            
-            if payment_id:
-                # Insert professional earnings record
-                earning_res = await db_execute(lambda: db.table("commission_earnings").insert({
-                    "sales_rep_id": rep_id,
-                    "invoice_id": invoice["id"],
-                    "payment_id": payment_id,
-                    "client_id": client["id"],
-                    "estate_name": invoice["property_name"],
-                    "payment_amount": deposit,
-                    "commission_rate": config["gross_rate"],
-                    "commission_amount": net_comm, # Compatibility field
-                    "gross_commission": gross_comm,
-                    "wht_amount": wht_amt,
-                    "net_commission": net_comm
-                }).execute())
-                earning = earning_res.data[0]
-                
-                if rep:
-                    background_tasks.add_task(
-                        send_commission_earned_email,
-                        rep=rep,
-                        client=client,
-                        invoice=invoice,
-                        earning=earning
-                    )
-
-    # 4. Send Documents
-    background_tasks.add_task(send_receipt_and_statement_email, invoice, client, all_inv.data)
-
-    # 5. Log emails
-    for doc_type in ["receipt", "statement"]:
-        log_data = jsonable_encoder({
-            "client_id": client["id"],
+    if rep_id and payment_id:
+        config = get_commission_config(
+            sales_rep_id=rep_id,
+            estate_name=invoice.get("property_name", ""),
+            verification_date=date.today(),
+            db=db
+        )
+        gross_comm = round(deposit * config["gross_rate"] / 100, 2)
+        wht_amt = round(gross_comm * config["wht_rate"] / 100, 2)
+        net_comm = gross_comm - wht_amt
+        
+        earning_res = await db_execute(lambda: db.table("commission_earnings").insert({
+            "sales_rep_id": rep_id,
             "invoice_id": invoice["id"],
-            "email_type": doc_type,
-            "recipient_email": client["email"],
-            "subject": f"Payment Confirmed — {invoice['invoice_number']}",
-            "status": "sent",
-            "sent_by": current_admin["sub"]
-        })
-        await db_execute(lambda: db.table("email_logs").insert(log_data).execute())
+            "payment_id": payment_id,
+            "client_id": client["id"],
+            "estate_name": invoice.get("property_name", ""),
+            "payment_amount": deposit,
+            "commission_rate": config["gross_rate"],
+            "commission_amount": net_comm,
+            "gross_commission": gross_comm,
+            "wht_amount": wht_amt,
+            "net_commission": net_comm
+        }).execute())
+        
+        if earning_res.data and rep:
+            background_tasks.add_task(
+                send_commission_earned_email,
+                rep=rep,
+                client=client,
+                invoice=invoice,
+                earning=earning_res.data[0]
+            )
+
+    # 5. Send Documents & Log Emails (Only if send_email is True)
+    if do_send_email:
+        background_tasks.add_task(send_receipt_and_statement_email, invoice, client, all_inv.data)
+        for doc_type in ["receipt", "statement"]:
+            log_data = jsonable_encoder({
+                "client_id": client["id"],
+                "invoice_id": invoice["id"],
+                "email_type": doc_type,
+                "recipient_email": client["email"],
+                "subject": f"Payment Confirmed — {invoice['invoice_number']}",
+                "status": "sent",
+                "sent_by": current_admin["sub"]
+            })
+            await db_execute(lambda: db.table("email_logs").insert(log_data).execute())
 
     background_tasks.add_task(
         log_activity,
@@ -186,7 +219,7 @@ async def confirm_verification(
         invoice_id=invoice["id"]
     )
 
-    return {"message": "Payment confirmed and documents sent"}
+    return {"message": "Payment confirmed successfully"}
 
 @router.patch("/{id}/reject")
 async def reject_verification(
@@ -258,8 +291,9 @@ async def reject_verification(
     invoice = inv_res.data[0]
     client = invoice["clients"]
 
-    # 5. Send Rejection Email
-    background_tasks.add_task(send_rejection_email, invoice, client, data.reason)
+    # 5. Send Rejection Email (Only if send_email is True)
+    if data.send_email:
+        background_tasks.add_task(send_rejection_email, invoice, client, data.reason)
 
     # 6. Final Sync of Commissions (Catch-all)
     from commission_service import sync_invoice_commissions
