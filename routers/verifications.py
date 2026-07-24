@@ -322,7 +322,6 @@ async def confirm_verification(
                 p["id"] for p in placeholder_res.data
                 if (
                     "_portal_reported" in str(p.get("reference", "")) or
-                    "_form_deposit" in str(p.get("reference", "")) or
                     str(p.get("reference", "")).startswith("CLAIM-") or
                     p.get("payment_method") == "portal_reported"
                 )
