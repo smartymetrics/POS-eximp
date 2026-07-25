@@ -313,18 +313,29 @@ async def confirm_verification(
 
         # Void superseded placeholder payments for this invoice
         placeholder_res = await db_execute(lambda: db.table("payments")
-            .select("id, reference, payment_method")
+            .select("id, reference, payment_method, amount, payment_date")
             .eq("invoice_id", invoice["id"])
             .eq("is_voided", False)
             .execute())
+
+        this_deposit_amount = deposit
+        this_payment_date = str(verify_rec.get("payment_date") or "")
 
         if placeholder_res.data:
             placeholder_ids = [
                 p["id"] for p in placeholder_res.data
                 if (
-                    "_portal_reported" in str(p.get("reference", "")) or
-                    str(p.get("reference", "")).startswith("CLAIM-") or
-                    p.get("payment_method") == "portal_reported"
+                    (
+                        "_portal_reported" in str(p.get("reference", "")) or
+                        "_form_deposit" in str(p.get("reference", "")) or
+                        str(p.get("reference", "")).startswith("CLAIM-") or
+                        p.get("payment_method") == "portal_reported"
+                    )
+                    # Only the placeholder that actually matches THIS deposit — not any
+                    # other placeholder-shaped payment on the invoice (e.g. a later
+                    # installment reported before this one was confirmed).
+                    and abs(float(p.get("amount") or 0) - this_deposit_amount) < 1
+                    and (not this_payment_date or str(p.get("payment_date") or "") == this_payment_date)
                 )
             ]
             if placeholder_ids:
@@ -400,9 +411,30 @@ async def confirm_verification(
                     earning=earning_res.data[0]
                 )
 
+    # Sync invoice amount_paid / pipeline_stage now that the payment row exists.
+    # (This call had been dropped from the confirm flow entirely — must be awaited,
+    # not fire-and-forget, so the receipt below reflects correct, up-to-date totals.)
+    from commission_service import sync_invoice_commissions
+    await sync_invoice_commissions(invoice_id=verify_rec["invoice_id"], db=db, performed_by=current_admin["sub"])
+
     # 5. Send Documents & Log Emails (Only if send_email is True)
     if do_send_email:
-        background_tasks.add_task(send_receipt_and_statement_email, invoice, client, all_inv.data)
+        # Refetch invoice (with payments + clients) and the client's invoice list fresh,
+        # now that the payment above has actually been written and synced. `invoice` and
+        # `all_inv` above were captured before this payment existed, so using them here
+        # would produce a receipt missing the very payment just confirmed.
+        fresh_inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*), payments(*)").eq("id", verify_rec["invoice_id"]).execute())
+        fresh_invoice = fresh_inv_res.data[0] if fresh_inv_res.data else invoice
+        fresh_client = fresh_invoice.get("clients") or client
+
+        fresh_all_inv = await db_execute(lambda: db.table("invoices")
+            .select("*, payments(*)")
+            .eq("client_id", client["id"])
+            .neq("status", "voided")
+            .order("invoice_date")
+            .execute())
+
+        background_tasks.add_task(send_receipt_and_statement_email, fresh_invoice, fresh_client, fresh_all_inv.data)
         for doc_type in ["receipt", "statement"]:
             log_data = jsonable_encoder({
                 "client_id": client["id"],
@@ -568,12 +600,18 @@ async def edit_verification(
     # 2. Update verification
     await db_execute(lambda: db.table("pending_verifications").update(update_data).eq("id", id).execute())
     
-    # If deposit amount changed, update the linked payment record if it exists
-    if "deposit_amount" in update_data:
-        ref = f"{verify_rec['payment_date']}_form_deposit"
-        db.table("payments").update({"amount": update_data["deposit_amount"]})\
-            .eq("invoice_id", verify_rec["invoice_id"])\
-            .eq("reference", ref)\
-            .execute()
+    # If deposit amount or payment date changed, keep the linked placeholder payment in sync
+    if "deposit_amount" in update_data or "payment_date" in update_data:
+        old_ref = f"{verify_rec['payment_date']}_form_deposit"
+        payment_sync = {}
+        if "deposit_amount" in update_data:
+            payment_sync["amount"] = update_data["deposit_amount"]
+        if "payment_date" in update_data:
+            payment_sync["payment_date"] = update_data["payment_date"]
+            payment_sync["reference"] = f"{update_data['payment_date']}_form_deposit"
+        await db_execute(lambda: db.table("payments").update(payment_sync)
+            .eq("invoice_id", verify_rec["invoice_id"])
+            .eq("reference", old_ref)
+            .execute())
 
     return {"message": "Verification updated successfully"}
