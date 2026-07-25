@@ -45,8 +45,21 @@ class _HybridBucket:
             logger.warning(f"⚠️  Hybrid storage: upload skipped — empty file for {self.bucket}/{path}")
             return {"path": path}
 
-        cc.upload_bytes(self.bucket, path, file, content_type)
-        return {"path": path}
+        try:
+            cc.upload_bytes(self.bucket, path, file, content_type)
+            return {"path": path}
+        except Exception as e:
+            logger.warning(
+                f"⚠️  Cloudinary upload failed for {self.bucket}/{path} ({e}) — "
+                f"falling back to Supabase"
+            )
+            try:
+                self._legacy.upload(path=path, file=file, file_options=file_options)
+                logger.info(f"↩️  Uploaded {self.bucket}/{path} to Supabase (Cloudinary fallback)")
+                return {"path": path}
+            except Exception as legacy_e:
+                logger.error(f"❌ Upload failed on both Cloudinary and Supabase for {self.bucket}/{path}: {legacy_e}")
+                raise
 
     def remove(self, paths: list):
         for path in paths:

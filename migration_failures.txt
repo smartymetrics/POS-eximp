@@ -1,0 +1,4 @@
+signatures/client_documents/UP_0362ca_id_document.png	File size too large. Got 12221441. Maximum is 10485760.
+signatures/contracts/0e3b84c5-a725-4b7c-b2ca-73512fb0ba9d/client.png	File size too large. Got 10494102. Maximum is 10485760.
+signatures/witnesses/.emptyFolderPlaceholder	Missing required parameter - file
+legal-vault/matters/b98b2d87-3744-46f8-9cad-d15d033419d8/32ff4caa_contract-draft-13fc3542-ded3-4068-b558-64fa104eefc0.pdf	File size too large. Got 10761646. Maximum is 10485760.

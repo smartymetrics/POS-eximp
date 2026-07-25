@@ -3065,7 +3065,7 @@ async def upload_hr_file(request: Request, current_admin=Depends(verify_token)):
         
         # Upload to hr-documents bucket
         db.storage.from_("hr-documents").upload(path=filename, file=file_bytes, file_options={"content-type": file.content_type})
-        file_url = f"{SUPABASE_URL}/storage/v1/object/public/hr-documents/{filename}"
+        file_url = db.storage.from_("hr-documents").get_public_url(filename)
         
         return {"url": file_url}
     except Exception as e:
@@ -5133,7 +5133,7 @@ async def upload_policy_document(file: UploadFile = File(...), current_admin: di
         # Uploading to the 'hr-documents' bucket specified by the user
         db.storage.from_("hr-documents").upload(file_name, file_bytes, {"content-type": file.content_type})
         from config import SUPABASE_URL
-        public_url = f"{SUPABASE_URL}/storage/v1/object/public/hr-documents/{file_name}"
+        public_url = db.storage.from_("hr-documents").get_public_url(file_name)
         return {"url": public_url}
     except Exception as e:
         logger.error(f"Policy upload failed: {e}")

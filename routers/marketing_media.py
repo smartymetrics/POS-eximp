@@ -71,7 +71,7 @@ async def generate_gif(
             file_options={"content-type": "image/gif"}
         )
 
-        public_url = f"{SUPABASE_URL}/storage/v1/object/public/marketing/{storage_path}"
+        public_url = db.storage.from_("marketing").get_public_url(storage_path)
 
         # Save to media_library
         await db_execute(lambda: db.table("media_library").insert({
@@ -133,7 +133,7 @@ async def upload_media(request: Request, current_admin=Depends(verify_token)):
         )
         
         # 2. Get Public URL
-        file_url = f"{SUPABASE_URL}/storage/v1/object/public/marketing/{full_storage_path}"
+        file_url = db.storage.from_("marketing").get_public_url(full_storage_path)
         
         # 3. Save metadata to 'media_library' table
         # NOTE: Removed 'storage_path' to align with the actual database schema

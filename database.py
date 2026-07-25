@@ -44,7 +44,11 @@ except Exception as e:
 STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "hybrid")  # "hybrid" | "supabase"
 if STORAGE_BACKEND == "hybrid":
     from hybrid_storage import HybridStorage
-    supabase.storage = HybridStorage(real_storage=supabase.storage)
+    # `supabase.storage` is a read-only @property backed by `_storage` — it
+    # has no setter, so we populate the private backing field directly
+    # instead of assigning to `.storage` itself.
+    _real_storage_client = supabase.storage  # triggers the SDK's lazy init
+    supabase._storage = HybridStorage(real_storage=_real_storage_client)
     print("[OK] Storage backend: Cloudinary (hybrid, falling back to Supabase for legacy files)")
 else:
     print("[OK] Storage backend: Supabase only")

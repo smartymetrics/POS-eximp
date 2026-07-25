@@ -81,7 +81,7 @@ async def process_webhook_post_submission_tasks(
                     file_options={"content-type": mime}
                 ))
                 
-                signature_url_to_save = f"{SUPABASE_URL}/storage/v1/object/public/signatures/{file_path}"
+                signature_url_to_save = db.storage.from_("signatures").get_public_url(file_path)
                 # Update invoice with the real signature URL
                 await db_execute(lambda: db.table("invoices").update({"signature_url": signature_url_to_save}).eq("id", invoice_id).execute())
             except Exception as sig_e:

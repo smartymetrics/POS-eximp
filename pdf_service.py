@@ -9,6 +9,7 @@ import requests
 import base64
 from urllib.parse import urlparse, parse_qs
 from utils import sanitize_client_address
+from database import get_db
 
 env = Environment(loader=FileSystemLoader("pdf_templates"))
 
@@ -96,7 +97,7 @@ def get_authorized_stamp_base64():
     if not supabase_url:
         return ""
     # Constructed public URL for the stamp
-    stamp_url = f"{supabase_url}/storage/v1/object/public/signatures/authority/stamp.png"
+    stamp_url = get_db().storage.from_("signatures").get_public_url("authority/stamp.png")
     b64, _ = _get_image_as_base64(stamp_url)
     if b64:
         return f"data:image/png;base64,{b64}"
@@ -107,7 +108,7 @@ def get_authorized_seal_base64():
     supabase_url = os.getenv("SUPABASE_URL")
     if not supabase_url:
         return ""
-    url = f"{supabase_url}/storage/v1/object/public/signatures/authority/seal.png"
+    url = get_db().storage.from_("signatures").get_public_url("authority/seal.png")
     b64, _ = _get_image_as_base64(url)
     if b64:
         return f"data:image/png;base64,{b64}"
@@ -135,8 +136,8 @@ def get_company_context():
     supabase_url = os.getenv("SUPABASE_URL")
     urls = {}
     if supabase_url:
-        urls["stamp"] = f"{supabase_url}/storage/v1/object/public/signatures/authority/stamp.png"
-        urls["seal"] = f"{supabase_url}/storage/v1/object/public/signatures/authority/seal.png"
+        urls["stamp"] = get_db().storage.from_("signatures").get_public_url("authority/stamp.png")
+        urls["seal"] = get_db().storage.from_("signatures").get_public_url("authority/seal.png")
     
     fetched = _get_parallel_images(urls)
     
@@ -325,12 +326,12 @@ def render_invoice_html(invoice: dict) -> str:
     urls_to_fetch = {}
     
     if supabase_url:
-        urls_to_fetch["stamp"] = f"{supabase_url}/storage/v1/object/public/signatures/authority/stamp.png"
-        urls_to_fetch["seal"] = f"{supabase_url}/storage/v1/object/public/signatures/authority/seal.png"
+        urls_to_fetch["stamp"] = get_db().storage.from_("signatures").get_public_url("authority/stamp.png")
+        urls_to_fetch["seal"] = get_db().storage.from_("signatures").get_public_url("authority/seal.png")
         
         invoice_no = invoice.get("invoice_number", "unknown")
         if invoice_no != "unknown":
-            urls_to_fetch["signature"] = f"{supabase_url}/storage/v1/object/public/signatures/customer_signatures/sig_{invoice_no}.png"
+            urls_to_fetch["signature"] = get_db().storage.from_("signatures").get_public_url(f"customer_signatures/sig_{invoice_no}.png")
             
     # Also include the signature_url from DB if it's a remote URL and not a data URI
     db_sig_url = invoice.get("signature_url")
@@ -421,12 +422,12 @@ def render_receipt_html(invoice: dict) -> str:
     urls_to_fetch = {}
     
     if supabase_url:
-        urls_to_fetch["stamp"] = f"{supabase_url}/storage/v1/object/public/signatures/authority/stamp.png"
-        urls_to_fetch["seal"] = f"{supabase_url}/storage/v1/object/public/signatures/authority/seal.png"
+        urls_to_fetch["stamp"] = get_db().storage.from_("signatures").get_public_url("authority/stamp.png")
+        urls_to_fetch["seal"] = get_db().storage.from_("signatures").get_public_url("authority/seal.png")
         
         invoice_no = invoice.get("invoice_number", "unknown")
         if invoice_no != "unknown":
-            urls_to_fetch["signature"] = f"{supabase_url}/storage/v1/object/public/signatures/customer_signatures/sig_{invoice_no}.png"
+            urls_to_fetch["signature"] = get_db().storage.from_("signatures").get_public_url(f"customer_signatures/sig_{invoice_no}.png")
             
     db_sig_url = invoice.get("signature_url")
     if db_sig_url and db_sig_url.startswith("http"):
@@ -539,8 +540,8 @@ def render_statement_html(invoices: list, client: dict) -> str:
     supabase_url = os.getenv("SUPABASE_URL")
     urls_to_fetch = {}
     if supabase_url:
-        urls_to_fetch["stamp"] = f"{supabase_url}/storage/v1/object/public/signatures/authority/stamp.png"
-        urls_to_fetch["seal"] = f"{supabase_url}/storage/v1/object/public/signatures/authority/seal.png"
+        urls_to_fetch["stamp"] = get_db().storage.from_("signatures").get_public_url("authority/stamp.png")
+        urls_to_fetch["seal"] = get_db().storage.from_("signatures").get_public_url("authority/seal.png")
     
     fetched = _get_parallel_images(urls_to_fetch)
     stamp_b64, _ = fetched.get("stamp", (None, None))
@@ -582,12 +583,12 @@ def generate_refund_receipt_pdf(payment: dict, invoice: dict, client: dict = Non
     urls_to_fetch = {}
     
     if supabase_url:
-        urls_to_fetch["stamp"] = f"{supabase_url}/storage/v1/object/public/signatures/authority/stamp.png"
-        urls_to_fetch["seal"] = f"{supabase_url}/storage/v1/object/public/signatures/authority/seal.png"
+        urls_to_fetch["stamp"] = get_db().storage.from_("signatures").get_public_url("authority/stamp.png")
+        urls_to_fetch["seal"] = get_db().storage.from_("signatures").get_public_url("authority/seal.png")
         
         invoice_no = invoice.get("invoice_number", "unknown")
         if invoice_no != "unknown":
-            urls_to_fetch["signature"] = f"{supabase_url}/storage/v1/object/public/signatures/customer_signatures/sig_{invoice_no}.png"
+            urls_to_fetch["signature"] = get_db().storage.from_("signatures").get_public_url(f"customer_signatures/sig_{invoice_no}.png")
             
     db_sig_url = invoice.get("signature_url")
     if db_sig_url and db_sig_url.startswith("http"):
@@ -782,7 +783,7 @@ def render_contract_html(invoice: dict, client: dict, witnesses: list = None, is
         # Use URL for faster preview
         supabase_url = os.getenv("SUPABASE_URL")
         if supabase_url:
-            company["stamp_b64"] = f"{supabase_url}/storage/v1/object/public/signatures/authority/stamp.png"
+            company["stamp_b64"] = get_db().storage.from_("signatures").get_public_url("authority/stamp.png")
 
     invoice_data = invoice.copy()
     if "amount_in_words" not in invoice_data:
