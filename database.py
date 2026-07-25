@@ -36,6 +36,19 @@ except Exception as e:
     print(f"[ERROR] Could not connect to Supabase: {e}")
     sys.exit(1)
 
+# ── Cloudinary migration: swap the storage client for a hybrid shim ──
+# Every `db.storage.from_(...)` / `supabase.storage.from_(...)` call site
+# in the codebase keeps working unchanged. New uploads go to Cloudinary;
+# reads fall back to this same Supabase client for anything not yet
+# migrated. See hybrid_storage.py and migrate_to_cloudinary.py.
+STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "hybrid")  # "hybrid" | "supabase"
+if STORAGE_BACKEND == "hybrid":
+    from hybrid_storage import HybridStorage
+    supabase.storage = HybridStorage(real_storage=supabase.storage)
+    print("[OK] Storage backend: Cloudinary (hybrid, falling back to Supabase for legacy files)")
+else:
+    print("[OK] Storage backend: Supabase only")
+
 
 async def init_db():
     """

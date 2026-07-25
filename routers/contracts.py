@@ -50,7 +50,7 @@ def _upload_signature_to_storage(db, invoice_id: str, witness_number: int, signa
             file=img_data,
             file_options={"content-type": "image/png"}
         )
-        return f"{SUPABASE_URL}/storage/v1/object/public/signatures/{file_path}"
+        return db.storage.from_("signatures").get_public_url(file_path)
     except Exception as e:
         print(f"WARNING: Witness signature upload failed: {e}")
         return signature_base64
@@ -87,7 +87,7 @@ def _upload_client_signature(db, invoice_id: str, signature_base64: str) -> str:
             file=img_data,
             file_options={"content-type": "image/png"}
         )
-        return f"{SUPABASE_URL}/storage/v1/object/public/signatures/{file_path}"
+        return db.storage.from_("signatures").get_public_url(file_path)
     except Exception as e:
         print(f"WARNING: Client signature upload failed: {e}")
         return signature_base64
@@ -1087,7 +1087,7 @@ async def upload_company_signature(data: CompanySignatureUpload, current_admin=D
         )
         
         # Get public URL
-        public_url = f"{SUPABASE_URL}/storage/v1/object/public/signatures/{file_path}"
+        public_url = db.storage.from_("signatures").get_public_url(file_path)
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process and upload signature: {str(e)}")
@@ -1725,7 +1725,7 @@ async def upload_custom_lawyer_seal(
             file=img_data,
             file_options={"content-type": "image/png"}
         )
-        seal_url = f"{SUPABASE_URL}/storage/v1/object/public/signatures/{file_path}"
+        seal_url = db.storage.from_("signatures").get_public_url(file_path)
         
         # Update invoice
         await db_execute(lambda: db.table("invoices").update({"custom_lawyer_seal_url": seal_url}).eq("id", invoice_id).execute())
@@ -1820,7 +1820,7 @@ async def upload_authority_signature(payload: CompanySignatureUpload, current_ad
             file=img_data,
             file_options={"content-type": "image/png"}
         )
-        sig_url = f"{SUPABASE_URL}/storage/v1/object/public/signatures/{filename}"
+        sig_url = db.storage.from_("signatures").get_public_url(filename)
         
         # Save to DB
         new_sig = {

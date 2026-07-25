@@ -391,7 +391,7 @@ class SubscriptionService:
                 file=img_data,
                 file_options={"content-type": "image/png", "upsert": "true"}
             ))
-            return f"{SUPABASE_URL}/storage/v1/object/public/signatures/{file_path}"
+            return db.storage.from_("signatures").get_public_url(file_path)
         except Exception as e:
             print(f"Signature upload failed: {e}")
             return None
@@ -423,7 +423,7 @@ class SubscriptionService:
                     file=raw_bytes,
                     file_options={"content-type": "application/pdf", "upsert": "true"}
                 ))
-                return f"{SUPABASE_URL}/storage/v1/object/public/signatures/{file_path}"
+                return db.storage.from_("signatures").get_public_url(file_path)
             else:
                 # It's an image — normalize to PNG via PIL
                 with Image.open(io.BytesIO(raw_bytes)) as img:
@@ -439,7 +439,7 @@ class SubscriptionService:
                     file=img_data,
                     file_options={"content-type": "image/png", "upsert": "true"}
                 ))
-                return f"{SUPABASE_URL}/storage/v1/object/public/signatures/{file_path}"
+                return db.storage.from_("signatures").get_public_url(file_path)
 
         except Exception as e:
             print(f"Document upload failed for {file_type}: {e}")
