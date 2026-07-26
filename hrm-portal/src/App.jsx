@@ -9317,6 +9317,260 @@ function RemoteWork() {
 }
 
 // ─── HUB: POLICY LIBRARY ─────────────────────────────────────────────────────
+// ─── MY ROLE & SOP ────────────────────────────────────────────────────────────
+// Shows the logged-in staff member's department SOP brief: purpose, core
+// responsibilities, SLAs, workflow steps, and reporting rhythm — sourced from
+// the Eximp & Cloves SOP Manual (role_sop table). HR/Admins additionally get
+// an inline editor to keep every department's brief current.
+function RoleSopSection({ title, icon, items, C }) {
+  if (!items || items.length === 0) return null;
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+        <span>{icon}</span> {title}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {items.map((it, i) => (
+          <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 13, color: C.sub, lineHeight: 1.6 }}>
+            <span style={{ color: T.gold, marginTop: 2 }}>•</span>
+            <span>{it}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Small add/remove list editor — used for duties, SLAs, workflow steps, aliases.
+function EditableList({ items, onChange, placeholder }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [draft, setDraft] = useState("");
+
+  const add = () => {
+    const v = draft.trim();
+    if (!v) return;
+    onChange([...(items || []), v]);
+    setDraft("");
+  };
+  const remove = (i) => onChange(items.filter((_, idx) => idx !== i));
+
+  return (
+    <div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}>
+        {(items || []).map((it, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, background: C.hover || `${C.border}22`, borderRadius: 8, padding: "6px 10px" }}>
+            <span style={{ flex: 1, fontSize: 13, color: C.text }}>{it}</span>
+            <button type="button" onClick={() => remove(i)} style={{ background: "none", border: "none", color: "#F87171", cursor: "pointer", fontSize: 14, fontWeight: 800, padding: "0 4px" }}>✕</button>
+          </div>
+        ))}
+        {(!items || items.length === 0) && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>None yet.</div>}
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <input
+          className="inp" style={{ flex: 1 }} placeholder={placeholder || "Add an item…"}
+          value={draft} onChange={e => setDraft(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
+        />
+        <button type="button" className="bg" onClick={add}>+ Add</button>
+      </div>
+    </div>
+  );
+}
+
+const BLANK_SOP_FORM = { id: null, department: "", aliases: [], purpose: "", responsibilities: [], slas: [], workflow_steps: [], reporting_rhythm: "", doc_reference: "" };
+
+function RoleSopAdmin({ allSops, onRefresh, onClose, C }) {
+  const [selectedId, setSelectedId] = useState(allSops[0]?.id || null);
+  const [form, setForm] = useState(allSops[0] ? { ...BLANK_SOP_FORM, ...allSops[0] } : BLANK_SOP_FORM);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const selectBrief = (sop) => { setSelectedId(sop.id); setForm({ ...BLANK_SOP_FORM, ...sop }); };
+  const startNew = () => { setSelectedId(null); setForm(BLANK_SOP_FORM); };
+
+  const save = async () => {
+    if (!form.department.trim()) return alert("Department name is required.");
+    setSaving(true);
+    try {
+      const saved = await apiFetch(`${API_BASE}/hr/role-sop`, {
+        method: "PUT",
+        body: JSON.stringify({
+          id: form.id || undefined,
+          department: form.department.trim(),
+          aliases: form.aliases || [],
+          purpose: form.purpose || "",
+          responsibilities: form.responsibilities || [],
+          slas: form.slas || [],
+          workflow_steps: form.workflow_steps || [],
+          reporting_rhythm: form.reporting_rhythm || "",
+          doc_reference: form.doc_reference || "",
+        })
+      });
+      await onRefresh();
+      if (saved?.id) { setSelectedId(saved.id); setForm({ ...BLANK_SOP_FORM, ...saved }); }
+    } catch (e) { alert("Error: " + e.message); } finally { setSaving(false); }
+  };
+
+  const del = async () => {
+    if (!form.id) return;
+    if (!window.confirm(`Delete the "${form.department}" brief? Staff in that department will see "no brief on file" until a new one is added.`)) return;
+    setDeleting(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/role-sop/${form.id}`, { method: "DELETE" });
+      await onRefresh();
+      startNew();
+    } catch (e) { alert("Error: " + e.message); } finally { setDeleting(false); }
+  };
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 22, flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <div className="ho" style={{ fontSize: 22 }}>Role & SOP Briefs</div>
+          <div style={{ fontSize: 13, color: C.sub }}>What each department sees under "My Role & SOP". Renaming a department here keeps its history — staff whose profile department matches the name or an alias below will see it.</div>
+        </div>
+        <button className="bg" onClick={onClose}>← Back to My Brief</button>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "240px 1fr", gap: 20, alignItems: "flex-start" }}>
+        {/* Department list */}
+        <div className="gc" style={{ padding: 14 }}>
+          <button className="bp" style={{ width: "100%", marginBottom: 10 }} onClick={startNew}>+ New Brief</button>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 480, overflowY: "auto" }}>
+            {allSops.map(s => (
+              <button key={s.id} onClick={() => selectBrief(s)}
+                style={{
+                  textAlign: "left", padding: "8px 10px", borderRadius: 8, border: "none", cursor: "pointer",
+                  background: selectedId === s.id ? `${T.gold}22` : "transparent",
+                  color: selectedId === s.id ? T.gold : C.text, fontSize: 12, fontWeight: selectedId === s.id ? 800 : 600,
+                }}>
+                {s.department}
+              </button>
+            ))}
+            {allSops.length === 0 && <div style={{ fontSize: 12, color: C.muted, padding: 8 }}>No briefs yet.</div>}
+          </div>
+        </div>
+
+        {/* Edit form */}
+        <div className="gc" style={{ padding: 24 }}>
+          <label style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase" }}>Department Name</label>
+          <input className="inp" style={{ width: "100%", marginTop: 6, marginBottom: 14 }} value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))} />
+
+          <label style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase" }}>Also Matches These Staff Department Names</label>
+          <div style={{ fontSize: 11, color: C.muted, margin: "4px 0 8px" }}>Add every free-text spelling used in staff profiles (e.g. "Sales", "Biz Dev") so those staff see this brief automatically.</div>
+          <div style={{ marginBottom: 14 }}>
+            <EditableList items={form.aliases} onChange={v => setForm(f => ({ ...f, aliases: v }))} placeholder="e.g. Sales & Acquisitions" />
+          </div>
+
+          <label style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase" }}>Purpose</label>
+          <textarea className="inp" style={{ width: "100%", marginTop: 6, marginBottom: 14, minHeight: 50 }} value={form.purpose} onChange={e => setForm(f => ({ ...f, purpose: e.target.value }))} />
+
+          <label style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase" }}>Core Responsibilities</label>
+          <div style={{ margin: "6px 0 14px" }}>
+            <EditableList items={form.responsibilities} onChange={v => setForm(f => ({ ...f, responsibilities: v }))} placeholder="Add a duty…" />
+          </div>
+
+          <label style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase" }}>SLA Commitments</label>
+          <div style={{ margin: "6px 0 14px" }}>
+            <EditableList items={form.slas} onChange={v => setForm(f => ({ ...f, slas: v }))} placeholder="Add an SLA…" />
+          </div>
+
+          <label style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase" }}>Workflow Steps</label>
+          <div style={{ margin: "6px 0 14px" }}>
+            <EditableList items={form.workflow_steps} onChange={v => setForm(f => ({ ...f, workflow_steps: v }))} placeholder="Add a step…" />
+          </div>
+
+          <label style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase" }}>Reporting Rhythm</label>
+          <textarea className="inp" style={{ width: "100%", marginTop: 6, marginBottom: 14, minHeight: 50 }} value={form.reporting_rhythm} onChange={e => setForm(f => ({ ...f, reporting_rhythm: e.target.value }))} />
+
+          <label style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase" }}>Doc Reference (optional)</label>
+          <input className="inp" style={{ width: "100%", marginTop: 6, marginBottom: 20 }} placeholder="e.g. SOP Section 6.0" value={form.doc_reference} onChange={e => setForm(f => ({ ...f, doc_reference: e.target.value }))} />
+
+          <div style={{ display: "flex", gap: 10, justifyContent: "space-between" }}>
+            {form.id ? <button className="bg" onClick={del} disabled={deleting} style={{ color: "#F87171" }}>{deleting ? "Deleting…" : "🗑 Delete Brief"}</button> : <span />}
+            <button className="bp" onClick={save} disabled={saving}>{saving ? "Saving…" : form.id ? "Save Changes" : "Create Brief"}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RoleSOP({ user, isHR }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [mySop, setMySop] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [allSops, setAllSops] = useState([]);
+  const [showEditor, setShowEditor] = useState(false);
+
+  const load = () => {
+    setLoading(true);
+    apiFetch(`${API_BASE}/hr/role-sop/mine`)
+      .then(d => { setMySop(d); setNotFound(!d); })
+      .catch(() => setNotFound(true))
+      .finally(() => setLoading(false));
+  };
+
+  const loadAll = () => apiFetch(`${API_BASE}/hr/role-sop`).then(d => setAllSops(Array.isArray(d) ? d : [])).catch(() => setAllSops([]));
+
+  useEffect(() => { load(); }, []);
+  useEffect(() => { if (isHR) loadAll(); }, [isHR]);
+
+  const dept = user?.department;
+
+  if (isHR && showEditor) {
+    return (
+      <RoleSopAdmin
+        allSops={allSops}
+        C={C}
+        onRefresh={async () => { await loadAll(); load(); }}
+        onClose={() => setShowEditor(false)}
+      />
+    );
+  }
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 22, flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <div className="ho" style={{ fontSize: 22 }}>My Role &amp; SOP</div>
+          <div style={{ fontSize: 13, color: C.sub }}>The minimum requirement for your role, straight from the Eximp &amp; Cloves SOP Manual.</div>
+        </div>
+        {isHR && <button className="bp" onClick={() => setShowEditor(true)}>✎ Manage Briefs</button>}
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading your role brief…</div>
+      ) : notFound ? (
+        <div className="gc" style={{ padding: 24 }}>
+          <div style={{ fontWeight: 800, color: C.text, marginBottom: 6 }}>No SOP brief on file yet{dept ? ` for "${dept}"` : ""}.</div>
+          <div style={{ fontSize: 13, color: C.sub }}>{isHR ? "Click \"Manage Briefs\" above to publish one." : "Ask HR to publish a brief for your department."}</div>
+        </div>
+      ) : (
+        <div className="gc" style={{ padding: 24 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+            <span className="tg" style={{ background: `${T.gold}22`, color: T.gold }}>{mySop.department}</span>
+            {mySop.doc_reference && <span style={{ fontSize: 11, color: C.muted }}>{mySop.doc_reference}</span>}
+          </div>
+          {mySop.purpose && <div style={{ fontSize: 14, color: C.text, lineHeight: 1.7, margin: "10px 0 22px" }}>{mySop.purpose}</div>}
+
+          <RoleSopSection title="Core Responsibilities" icon="🎯" items={mySop.responsibilities} C={C} />
+          <RoleSopSection title="SLA Commitments" icon="⏱️" items={mySop.slas} C={C} />
+          <RoleSopSection title="Workflow Steps" icon="🔄" items={mySop.workflow_steps} C={C} />
+
+          {mySop.reporting_rhythm && (
+            <div style={{ marginTop: 4, paddingTop: 18, borderTop: `1px solid ${C.border}` }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 8 }}>📋 Reporting Rhythm</div>
+              <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.6 }}>{mySop.reporting_rhythm}</div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PolicyLibrary({ isHR }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const [policies, setPolicies] = useState([]); const [loading, setLoading] = useState(true);
@@ -10782,9 +11036,10 @@ function DiversityInclusion() {
 }
 
 // ─── HUB: ORG CHART (ENHANCED) ────────────────────────────────────────────────
-function OrgChartEnhanced() {
+function OrgChartEnhanced({ currentUserId, showMyChain, isHR }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const [staff, setStaff] = useState([]); const [loading, setLoading] = useState(true);
+  const [viewFull, setViewFull] = useState(!showMyChain);
 
   useEffect(() => {
     apiFetch(`${API_BASE}/hr/staff`).then(d => setStaff(d || [])).catch(() => { }).finally(() => setLoading(false));
@@ -10792,15 +11047,51 @@ function OrgChartEnhanced() {
 
   const noMgr = staff.filter(s => !s.line_manager_id && s.is_active);
   const getReports = (id) => staff.filter(s => s.line_manager_id === id && s.is_active);
+  const byId = (id) => staff.find(s => s.id === id);
+
+  // Build the current user's reporting chain, root first: [CEO, ..., manager, me]
+  const myChain = [];
+  if (currentUserId) {
+    let node = byId(currentUserId);
+    while (node) { myChain.unshift(node); node = node.line_manager_id ? byId(node.line_manager_id) : null; }
+  }
+  const me = currentUserId ? byId(currentUserId) : null;
+  const myManager = me?.line_manager_id ? byId(me.line_manager_id) : null;
+  const myReports = me ? getReports(me.id) : [];
+
+  const MiniCard = ({ person, big, mine }) => (
+    <div className="gc" style={{
+      padding: big ? "16px 20px" : "10px 14px", textAlign: "center", minWidth: big ? 170 : 130, maxWidth: 220,
+      borderTop: `3px solid ${mine ? T.gold : "#60A5FA"}`,
+      boxShadow: mine ? `0 0 0 2px ${T.gold}` : "none",
+    }}>
+      <Av av={person.full_name?.split(" ").map(n => n[0]).join("") || "??"} sz={big ? 44 : 32} gold={mine} />
+      <div style={{ fontWeight: 800, fontSize: big ? 14 : 12, color: C.text, marginTop: 8, lineHeight: 1.3 }}>
+        {person.full_name}{mine && <span style={{ color: T.gold }}> (You)</span>}
+      </div>
+      <div style={{ fontSize: big ? 11 : 10, color: C.muted, marginTop: 2 }}>{person.staff_profiles?.[0]?.job_title || person.role}</div>
+      {person.department && <div style={{ fontSize: 9, color: C.muted, marginTop: 2, opacity: 0.8 }}>{person.department}</div>}
+    </div>
+  );
 
   const OrgNode = ({ person, depth = 0 }) => {
     const reports = getReports(person.id);
+    const isMe = currentUserId && person.id === currentUserId;
+    const isMyManager = currentUserId && myManager && person.id === myManager.id;
+    const ringColor = isMe ? T.gold : isMyManager ? "#60A5FA" : "transparent";
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-        <div className="gc" style={{ padding: "12px 16px", textAlign: "center", minWidth: 140, maxWidth: 200, borderTop: `3px solid ${depth === 0 ? T.gold : depth === 1 ? "#60A5FA" : "#4ADE80"}` }}>
-          <Av av={person.full_name?.split(" ").map(n => n[0]).join("") || "??"} sz={36} gold={depth === 0} />
-          <div style={{ fontWeight: 800, fontSize: 12, color: C.text, marginTop: 8, lineHeight: 1.3 }}>{person.full_name}</div>
+        <div className="gc" style={{
+          padding: "12px 16px", textAlign: "center", minWidth: 140, maxWidth: 200,
+          borderTop: `3px solid ${depth === 0 ? T.gold : depth === 1 ? "#60A5FA" : "#4ADE80"}`,
+          boxShadow: isMe ? `0 0 0 2px ${ringColor}` : isMyManager ? `0 0 0 2px ${ringColor}` : "none",
+        }}>
+          <Av av={person.full_name?.split(" ").map(n => n[0]).join("") || "??"} sz={36} gold={depth === 0 || isMe} />
+          <div style={{ fontWeight: 800, fontSize: 12, color: C.text, marginTop: 8, lineHeight: 1.3 }}>
+            {person.full_name}{isMe && <span style={{ color: T.gold }}> (You)</span>}
+          </div>
           <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{person.staff_profiles?.[0]?.job_title || person.role}</div>
+          {person.department && <div style={{ fontSize: 9, color: C.muted, marginTop: 2, opacity: 0.8 }}>{person.department}</div>}
         </div>
         {reports.length > 0 && (
           <div style={{ display: "flex", gap: 16, position: "relative" }}>
@@ -10814,15 +11105,87 @@ function OrgChartEnhanced() {
     );
   };
 
+  const Connector = () => <div style={{ width: 1, height: 22, background: C.border }} />;
+
   return (
     <div className="fade">
-      <div style={{ marginBottom: 22 }}><div className="ho" style={{ fontSize: 22 }}>Org Chart</div><div style={{ fontSize: 13, color: C.sub }}>Organisational hierarchy auto-generated from reporting lines.</div></div>
-      {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading org chart…</div> : (
-        <div style={{ overflowX: "auto", padding: "20px 0" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
+        <div>
+          <div className="ho" style={{ fontSize: 22 }}>{showMyChain ? "Organogram" : "Org Chart"}</div>
+          <div style={{ fontSize: 13, color: C.sub }}>{viewFull ? "Full company hierarchy, top to bottom." : "Your place in the hierarchy — who you report to, and who reports to you."}</div>
+        </div>
+        {showMyChain && me && (
+          <button className="bg" onClick={() => setViewFull(v => !v)}>{viewFull ? "← Back to My View" : "🏢 View Full Company Chart"}</button>
+        )}
+      </div>
+
+      {!loading && isHR && noMgr.length > 1 && viewFull && (
+        <div className="gc" style={{ padding: "12px 18px", marginBottom: 16, borderLeft: `3px solid ${T.orange}`, fontSize: 13, color: C.sub }}>
+          <div style={{ marginBottom: 8 }}>
+            ⚠️ <b style={{ color: C.text }}>{noMgr.length} staff have no Line Manager set</b>, so they're all showing at the top level. Go to Staff Management → edit each one below → set their "Line Manager" to build out the real hierarchy.
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {noMgr.map(p => (
+              <span key={p.id} className="tg" style={{ background: `${T.orange}1A`, color: T.orange, fontSize: 11 }}>
+                {p.full_name}{p.department ? ` · ${p.department}` : ""}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading org chart…</div>
+      ) : showMyChain && !viewFull ? (
+        // ── MY VIEW: just me, my manager chain, and my direct reports ──
+        !me ? (
+          <div className="gc" style={{ padding: 24, fontSize: 13, color: C.sub }}>We couldn't find your staff record.</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "12px 0 32px" }}>
+            {myChain.length > 1 && (
+              <>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0, marginBottom: 4 }}>
+                  {myChain.slice(0, -1).map((p, i) => (
+                    <React.Fragment key={p.id}>
+                      <MiniCard person={p} mine={false} />
+                      <Connector />
+                    </React.Fragment>
+                  ))}
+                </div>
+              </>
+            )}
+            {myChain.length <= 1 && (
+              <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>No line manager set — you're currently shown at the top of the chart.</div>
+            )}
+
+            <MiniCard person={me} big mine />
+
+            {myReports.length > 0 ? (
+              <>
+                <Connector />
+                <div style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase", marginBottom: 12 }}>Reports to you ({myReports.length})</div>
+                <div style={{ display: "flex", gap: 16, flexWrap: "wrap", justifyContent: "center", maxWidth: 900 }}>
+                  {myReports.map(r => <MiniCard key={r.id} person={r} mine={false} />)}
+                </div>
+              </>
+            ) : (
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 18 }}>Nobody reports to you yet.</div>
+            )}
+          </div>
+        )
+      ) : (
+        // ── FULL COMPANY CHART ──
+        // NOTE: centering a flex row with justifyContent:"center" inside an
+        // overflow:auto container clips the LEFT overflow and makes it
+        // unreachable by scrolling — a well-known CSS quirk. Using
+        // textAlign:"center" on the scroll container + inline-flex content
+        // instead keeps it visually centered when it fits, but scrolls
+        // symmetrically in both directions when it doesn't.
+        <div style={{ overflowX: "auto", padding: "20px 0", textAlign: "center" }}>
           {noMgr.length === 0 ? (
             <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Configure reporting lines in Staff Profiles to generate the org chart.</div>
           ) : (
-            <div style={{ display: "flex", gap: 32, justifyContent: "center", flexWrap: "wrap" }}>
+            <div style={{ display: "inline-flex", gap: 32, flexWrap: "wrap", justifyContent: "center" }}>
               {noMgr.map(p => <OrgNode key={p.id} person={p} depth={0} />)}
             </div>
           )}
@@ -14857,6 +15220,7 @@ function HRAdminPortal({ user, onLogout }) {
     // ── Overview (auto-loads first) ──
     { isHeader: true, label: "Overview" },
     { id: "dashboard", icon: "dashboard", label: "HR Overview" },
+    { id: "role_sop", icon: "book", label: "My Role & SOP" },
     { id: "tasks_hr", icon: "tasks", label: "Task Manager" },
     // HUB 1: RECRUITMENT
     { isHeader: true, label: "Recruitment" },
@@ -14941,6 +15305,7 @@ function HRAdminPortal({ user, onLogout }) {
   return (
     <Portal user={user} onLogout={onLogout} navItems={nav} roleLabel="Supreme Super Admin" initialPage="dashboard" renderPage={p => {
       if (p === "dashboard") return <HRDashboard />;
+      if (p === "role_sop") return <RoleSOP user={user} isHR={true} />;
       if (p === "tasks_hr") return <Tasks currentUser={user} />;
       // Hub 1: Recruitment
       if (p === "jobs") return <JobsBoard />;
@@ -14954,7 +15319,7 @@ function HRAdminPortal({ user, onLogout }) {
       // Hub 2: People
       if (p === "staff") return <StaffDirectory authRole="hr" />;
       if (p === "biodata") return <BiodataManager />;
-      if (p === "org_chart") return <OrgChartEnhanced />;
+      if (p === "org_chart") return <OrgChartEnhanced currentUserId={user.id} showMyChain isHR />;
       if (p === "departments") return <DepartmentsView />;
       if (p === "diversity") return <DiversityInclusion />;
       // Hub 3: Time & Attendance
@@ -15020,6 +15385,7 @@ function ManagerPortal({ user, onLogout }) {
   const nav = [
     { isHeader: true, label: "People & Org" },
     { id: "dashboard", icon: "dashboard", label: "Team Dashboard" },
+    { id: "role_sop", icon: "book", label: "My Role & SOP" },
     { id: "team", icon: "users", label: "My Team" },
     { id: "org_chart", icon: "org", label: "Org Chart" },
     { isHeader: true, label: "Time & Attendance" },
@@ -15068,8 +15434,9 @@ function ManagerPortal({ user, onLogout }) {
 
   return (
     <Portal user={user} onLogout={onLogout} navItems={nav} roleLabel="Management Hub" renderPage={p => {
+      if (p === "role_sop") return <RoleSOP user={user} isHR={false} />;
       if (p === "team") return <StaffDirectory authRole="manager" />;
-      if (p === "org_chart") return <OrgChartEnhanced />;
+      if (p === "org_chart") return <OrgChartEnhanced currentUserId={user.id} showMyChain />;
       if (p === "leave" || p === "leave_requests") return <LeaveManagement user={user} />;
       if (p === "leave_balances") return <LeaveBalancesOverview />;
       if (p === "leave_accrual") return <LeaveAccrualConfig />;
@@ -15243,6 +15610,8 @@ function StaffPortal({ user, onLogout, meLoaded = false }) {
   const nav = [
     { isHeader: true, label: "People & Org" },
     { id: "dashboard", icon: "dashboard", label: "My Dashboard" },
+    { id: "role_sop", icon: "book", label: "My Role & SOP" },
+    { id: "org_chart", icon: "org", label: "Organogram" },
     { id: "profile", icon: "profile", label: "My Profile" },
     { id: "my_biodata", icon: "file", label: "My Bio Data" },
     { isHeader: true, label: "Time & Attendance" },
@@ -15319,6 +15688,8 @@ function StaffPortal({ user, onLogout, meLoaded = false }) {
 
   return (
     <Portal user={user} onLogout={onLogout} navItems={nav} roleLabel="Team Member Portal" initialPage={startPage} renderPage={pg => {
+      if (pg === "role_sop") return <RoleSOP user={user} isHR={false} />;
+      if (pg === "org_chart") return <OrgChartEnhanced currentUserId={user.id} showMyChain />;
       if (pg === "profile") return <MyProfile user={user} />;
       if (pg === "my_biodata") return <MyBiodata user={user} />;
       if (pg === "leave") return <LeaveManagement user={user} />;
@@ -18414,7 +18785,7 @@ export default function App() {
               setUser(merged);
             }
           })
-          .catch(() => {/* silent - user already set from localStorage */})
+          .catch(() => {/* silent - user already set from localStorage */ })
           .finally(() => setMeLoaded(true));
       } catch (e) {
         localStorage.removeItem("ec_token");

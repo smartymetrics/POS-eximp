@@ -9,6 +9,38 @@ from pydantic import BaseModel
 from datetime import date, datetime, timedelta, timezone
 from database import get_db, db_execute
 from routers.auth import verify_token, resolve_admin_token
+# Maps free-text staff `department` values to the canonical department
+# names used in the SOP manual / role_sop table. Mirrors the frontend's
+# departmentAlias map (hrm-portal/src/App.jsx) — keep both in sync.
+ROLE_SOP_DEPT_ALIAS = {
+    "Sales": "Business Development and Sales",
+    "Sales & Acquisitions": "Business Development and Sales",
+    "Acquisitions": "Business Development and Sales",
+    "Sales and Acquisitions": "Business Development and Sales",
+    "Business Development": "Business Development and Sales",
+    "Marketing": "Marketing and Communications",
+    "Ops": "Operations",
+    "HR": "Human Resources and Administration",
+    "H.R.": "Human Resources and Administration",
+    "Human Resources": "Human Resources and Administration",
+    "Finance": "Finance and Accounts",
+    "Finance & Accounts": "Finance and Accounts",
+    "Accounts": "Finance and Accounts",
+    "Legal": "Legal and Compliance",
+    "Compliance": "Legal and Compliance",
+    "CX": "Customer Experience (CX)",
+    "Customer Experience": "Customer Experience (CX)",
+    "Customer Service": "Customer Experience (CX)",
+    "IT": "Technology",
+    "Information Technology": "Technology",
+    "Tech": "Technology",
+    "Executive": "Executive Office",
+    "Exec": "Executive Office",
+    "Management": "Executive Office",
+    "REBC": "REBC",
+    "Real Estate Bankers Club": "REBC",
+}
+
 from models import (
     KPITemplateCreate, KPITemplateUpdate, PerformanceReviewCreate,
     LeaveRequestCreate, LeaveRequestUpdate, StaffDocumentCreate, 
@@ -451,6 +483,18 @@ class PolicyUpdate(BaseModel):
     summary: Optional[str] = None
     document_url: Optional[str] = None
     effective_date: Optional[str] = None
+
+class RoleSopUpsert(BaseModel):
+    id: Optional[str] = None  # when present, updates this row by id (allows renaming `department` safely)
+    department: str
+    aliases: Optional[List[str]] = None
+    purpose: Optional[str] = None
+    responsibilities: Optional[List[str]] = None
+    slas: Optional[List[str]] = None
+    workflow_steps: Optional[List[str]] = None
+    reporting_rhythm: Optional[str] = None
+    doc_reference: Optional[str] = None
+
 
 class GoalBase(BaseModel):
     kpi_name: str
@@ -1084,7 +1128,7 @@ async def update_goal(goal_id: str, update: GoalUpdate, current_admin: dict = De
 async def trigger_goal_sync(month: Optional[str] = None, current_admin: dict = Depends(verify_token)):
     """Manually trigger the background sync for goal achievement actuals."""
     user_roles = current_admin.get("role", "").split(",")
-    if "admin" not in user_roles and "hr_admin" not in user_roles:
+    if "admin" not in user_roles and "super_admin" not in user_roles and "hr_admin" not in user_roles:
          raise HTTPException(status_code=403, detail="HR Admin only")
          
     import asyncio
@@ -1096,7 +1140,7 @@ async def trigger_goal_sync(month: Optional[str] = None, current_admin: dict = D
 async def upload_staff_document(doc: StaffDocumentCreate, current_admin: dict = Depends(verify_token)):
     """Log an uploaded document. HR Admin only."""
     user_roles = current_admin.get("role", "").split(",")
-    if "admin" not in user_roles and "hr_admin" not in user_roles:
+    if "admin" not in user_roles and "super_admin" not in user_roles and "hr_admin" not in user_roles:
          raise HTTPException(status_code=403, detail="HR only")
          
     db = get_db()
@@ -1114,7 +1158,7 @@ async def upload_staff_document(doc: StaffDocumentCreate, current_admin: dict = 
 async def get_company_assets(current_admin: dict = Depends(verify_token)):
     """Fetch all company assets, including assignee details and financial links. HR only."""
     user_roles = current_admin.get("role", "").split(",")
-    if "admin" not in user_roles and "hr_admin" not in user_roles:
+    if "admin" not in user_roles and "super_admin" not in user_roles and "hr_admin" not in user_roles:
          raise HTTPException(status_code=403, detail="HR only")
          
     db = get_db()
@@ -1125,7 +1169,7 @@ async def get_company_assets(current_admin: dict = Depends(verify_token)):
 async def create_company_asset(asset: CompanyAssetCreate, current_admin: dict = Depends(verify_token)):
     """Register a new company asset into the HR inventory."""
     user_roles = current_admin.get("role", "").split(",")
-    if "admin" not in user_roles and "hr_admin" not in user_roles:
+    if "admin" not in user_roles and "super_admin" not in user_roles and "hr_admin" not in user_roles:
          raise HTTPException(status_code=403, detail="HR only")
          
     db = get_db()
@@ -1136,7 +1180,7 @@ async def create_company_asset(asset: CompanyAssetCreate, current_admin: dict = 
 async def assign_company_asset(asset_id: str, assign_data: AssetAssign, current_admin: dict = Depends(verify_token)):
     """Assign or reassign an asset to a staff member."""
     user_roles = current_admin.get("role", "").split(",")
-    if "admin" not in user_roles and "hr_admin" not in user_roles:
+    if "admin" not in user_roles and "super_admin" not in user_roles and "hr_admin" not in user_roles:
          raise HTTPException(status_code=403, detail="HR only")
          
     db = get_db()
@@ -3130,7 +3174,7 @@ async def get_jobs(is_internal: Optional[bool] = None):
 @router.post("/recruitment/jobs", status_code=status.HTTP_201_CREATED)
 async def create_job(job: JobRequisitionCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if "admin" not in user_roles and "hr_admin" not in user_roles:
+    if "admin" not in user_roles and "super_admin" not in user_roles and "hr_admin" not in user_roles:
          raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
     res = await db_execute(lambda: db.table("job_requisitions").insert(job.dict(exclude_unset=True)).execute())
@@ -3139,7 +3183,7 @@ async def create_job(job: JobRequisitionCreate, current_admin: dict = Depends(ve
 @router.patch("/recruitment/jobs/{job_id}")
 async def update_job(job_id: str, status_update: dict, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if "admin" not in user_roles and "hr_admin" not in user_roles:
+    if "admin" not in user_roles and "super_admin" not in user_roles and "hr_admin" not in user_roles:
          raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
     res = await db_execute(lambda: db.table("job_requisitions").update({"status": status_update.get("status"), "updated_at": "now()"}).eq("id", job_id).execute())
@@ -3165,7 +3209,7 @@ async def create_application(app: JobApplicationCreate):
 @router.patch("/recruitment/applications/{app_id}")
 async def update_application_status(app_id: str, update_data: dict, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if "admin" not in user_roles and "hr_admin" not in user_roles:
+    if "admin" not in user_roles and "super_admin" not in user_roles and "hr_admin" not in user_roles:
          raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
     
@@ -3217,7 +3261,7 @@ async def update_application_status(app_id: str, update_data: dict, current_admi
 async def hire_applicant(app_id: str, current_admin: dict = Depends(verify_token)):
     """Convert a successful applicant into a staff member."""
     user_roles = current_admin.get("role", "").split(",")
-    if "admin" not in user_roles and "hr_admin" not in user_roles:
+    if "admin" not in user_roles and "super_admin" not in user_roles and "hr_admin" not in user_roles:
          raise HTTPException(status_code=403, detail="HR only")
     
     db = get_db()
@@ -3318,7 +3362,7 @@ async def get_interviews(
 @router.post("/recruitment/interviews", status_code=status.HTTP_201_CREATED)
 async def schedule_interview(interview: InterviewCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if "admin" not in user_roles and "hr_admin" not in user_roles:
+    if "admin" not in user_roles and "super_admin" not in user_roles and "hr_admin" not in user_roles:
          raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
 
@@ -3375,7 +3419,7 @@ async def schedule_interview(interview: InterviewCreate, current_admin: dict = D
 @router.patch("/recruitment/interviews/{iv_id}")
 async def update_interview(iv_id: str, update: InterviewUpdate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if "admin" not in user_roles and "hr_admin" not in user_roles:
+    if "admin" not in user_roles and "super_admin" not in user_roles and "hr_admin" not in user_roles:
          raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
     
@@ -3543,7 +3587,7 @@ async def get_surveys(current_admin: dict = Depends(verify_token)):
 @router.post("/culture/surveys", status_code=status.HTTP_201_CREATED)
 async def create_survey(survey: SurveyCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if "admin" not in user_roles and "hr_admin" not in user_roles:
+    if "admin" not in user_roles and "super_admin" not in user_roles and "hr_admin" not in user_roles:
          raise HTTPException(status_code=403, detail="HR only")
          
     db = get_db()
@@ -4273,7 +4317,7 @@ class DepartmentCreate(BaseModel):
 @router.post("/departments", status_code=status.HTTP_201_CREATED)
 async def create_department(dept: DepartmentCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if "admin" not in user_roles and "hr_admin" not in user_roles:
+    if "admin" not in user_roles and "super_admin" not in user_roles and "hr_admin" not in user_roles:
          raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
     try:
@@ -4288,7 +4332,7 @@ async def create_department(dept: DepartmentCreate, current_admin: dict = Depend
 @router.delete("/departments/{dept_id}")
 async def delete_department(dept_id: str, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if "admin" not in user_roles and "hr_admin" not in user_roles:
+    if "admin" not in user_roles and "super_admin" not in user_roles and "hr_admin" not in user_roles:
          raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
     try:
@@ -4552,7 +4596,7 @@ async def update_expense(expense_id: str, request: Request, current_admin: dict 
     canonical expenditure_requests statuses.
     """
     user_roles = current_admin.get("role", "").split(",")
-    if "admin" not in user_roles and "hr_admin" not in user_roles and "manager" not in user_roles:
+    if "admin" not in user_roles and "super_admin" not in user_roles and "hr_admin" not in user_roles and "manager" not in user_roles:
         raise HTTPException(status_code=403, detail="HR/Managers only")
     db = get_db()
     data = await request.json()
@@ -4780,7 +4824,7 @@ async def get_peer_reviews(current_admin: dict = Depends(verify_token)):
 @router.post("/peer-reviews", status_code=status.HTTP_201_CREATED)
 async def launch_peer_review(request: Request, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if "admin" not in user_roles and "hr_admin" not in user_roles and "manager" not in user_roles:
+    if "admin" not in user_roles and "super_admin" not in user_roles and "hr_admin" not in user_roles and "manager" not in user_roles:
         raise HTTPException(status_code=403, detail="HR/Managers only")
     db = get_db()
     data = await request.json()
@@ -5085,7 +5129,7 @@ async def get_policies(current_admin: dict = Depends(verify_token)):
 @router.post("/policies")
 async def create_policy(policy: PolicyCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if "admin" not in user_roles and "hr_admin" not in user_roles:
+    if "admin" not in user_roles and "super_admin" not in user_roles and "hr_admin" not in user_roles:
          raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
     res = await db_execute(lambda: db.table("company_policies").insert(policy.dict(exclude_unset=True)).execute())
@@ -5094,7 +5138,7 @@ async def create_policy(policy: PolicyCreate, current_admin: dict = Depends(veri
 @router.patch("/policies/{policy_id}")
 async def update_policy(policy_id: str, policy: PolicyUpdate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if "admin" not in user_roles and "hr_admin" not in user_roles:
+    if "admin" not in user_roles and "super_admin" not in user_roles and "hr_admin" not in user_roles:
          raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
     
@@ -5109,7 +5153,7 @@ async def update_policy(policy_id: str, policy: PolicyUpdate, current_admin: dic
 @router.delete("/policies/{policy_id}")
 async def delete_policy(policy_id: str, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if "admin" not in user_roles and "hr_admin" not in user_roles:
+    if "admin" not in user_roles and "super_admin" not in user_roles and "hr_admin" not in user_roles:
          raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
     
@@ -5118,10 +5162,103 @@ async def delete_policy(policy_id: str, current_admin: dict = Depends(verify_tok
     res = await db_execute(lambda: db.table("company_policies").delete().eq("id", policy_id).execute())
     return {"message": "Policy deleted"}
 
+@router.get("/role-sop/mine")
+async def get_my_role_sop(current_admin: dict = Depends(verify_token)):
+    """Return the role/SOP brief for the current user's department.
+
+    Staff `department` values are free text, so matching is tried in order:
+    1. Exact match against role_sop.department (case-insensitive)
+    2. Match against each brief's HR-editable `aliases` list (case-insensitive)
+    3. Built-in ROLE_SOP_DEPT_ALIAS fallback (covers common variants out of the box)
+    4. Loose substring match, as a last resort
+    HR manages step 1 & 2 directly from the "My Role & SOP" editor — no code
+    changes needed when a new department spelling shows up.
+    """
+    db = get_db()
+    admin_res = await db_execute(lambda: db.table("admins").select(
+        "department, staff_profiles(job_title)"
+    ).eq("id", current_admin["sub"]).execute())
+    if not admin_res.data:
+        raise HTTPException(status_code=404, detail="Staff record not found")
+
+    raw_dept = (admin_res.data[0].get("department") or "").strip()
+    raw_lower = raw_dept.lower()
+
+    all_res = await db_execute(lambda: db.table("role_sop").select("*").execute())
+    rows = all_res.data or []
+    if not raw_dept or not rows:
+        return None
+
+    # 1. Exact match
+    for row in rows:
+        if row["department"].strip().lower() == raw_lower:
+            return row
+
+    # 2. HR-managed aliases
+    for row in rows:
+        aliases = [a.strip().lower() for a in (row.get("aliases") or [])]
+        if raw_lower in aliases:
+            return row
+
+    # 3. Built-in fallback map
+    canonical = ROLE_SOP_DEPT_ALIAS.get(raw_dept)
+    if canonical:
+        for row in rows:
+            if row["department"].strip().lower() == canonical.lower():
+                return row
+
+    # 4. Loose substring match
+    for row in rows:
+        dep_lower = row["department"].lower()
+        if raw_lower in dep_lower or dep_lower in raw_lower:
+            return row
+
+    return None
+
+@router.get("/role-sop")
+async def list_role_sop(current_admin: dict = Depends(verify_token)):
+    """List all department SOP briefs — used by the HR admin editor."""
+    db = get_db()
+    res = await db_execute(lambda: db.table("role_sop").select("*").order("department").execute())
+    return res.data
+
+@router.put("/role-sop")
+async def upsert_role_sop(payload: RoleSopUpsert, current_admin: dict = Depends(verify_token)):
+    """Create or update a department SOP brief.
+
+    Pass `id` to update (and safely rename) an existing brief. Omit `id` to
+    create a new one, or to upsert-by-department-name for back-compat.
+    """
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR Admin only")
+    db = get_db()
+    data = payload.dict(exclude_unset=True, exclude={"id"})
+    data["updated_by"] = current_admin["sub"]
+    data["updated_at"] = datetime.utcnow().isoformat()
+
+    if payload.id:
+        res = await db_execute(lambda: db.table("role_sop").update(data).eq("id", payload.id).execute())
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Brief not found")
+        return res.data[0]
+
+    res = await db_execute(lambda: db.table("role_sop").upsert(data, on_conflict="department").execute())
+    return res.data[0] if res.data else data
+
+@router.delete("/role-sop/{sop_id}")
+async def delete_role_sop(sop_id: str, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR Admin only")
+    db = get_db()
+    await db_execute(lambda: db.table("role_sop").delete().eq("id", sop_id).execute())
+    return {"message": "Deleted"}
+
 @router.post("/policies/upload")
 async def upload_policy_document(file: UploadFile = File(...), current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if "admin" not in user_roles and "hr_admin" not in user_roles:
+    if "admin" not in user_roles and "super_admin" not in user_roles and "hr_admin" not in user_roles:
          raise HTTPException(status_code=403, detail="HR only")
          
     db = get_db()
