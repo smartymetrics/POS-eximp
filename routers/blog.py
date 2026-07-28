@@ -851,7 +851,7 @@ async def public_newsletter_verify(token: str):
 
     # Check if client exists in clients table
     client_res = await db_execute(
-        lambda: db.table("clients").select("id, client_type, first_name, last_name, phone").eq("email", email).execute()
+        lambda: db.table("clients").select("id, client_type, full_name, phone").eq("email", email).execute()
     )
     is_client = bool(client_res.data)
     client_info = client_res.data[0] if is_client else {}
@@ -867,10 +867,11 @@ async def public_newsletter_verify(token: str):
         "engagement_score": 10,
         "updated_at": datetime.utcnow().isoformat(),
     }
-    if client_info.get("first_name"):
-        contact_payload["first_name"] = client_info["first_name"]
-    if client_info.get("last_name"):
-        contact_payload["last_name"] = client_info["last_name"]
+    if client_info.get("full_name"):
+        parts = client_info["full_name"].strip().split(" ", 1)
+        contact_payload["first_name"] = parts[0]
+        if len(parts) > 1:
+            contact_payload["last_name"] = parts[1]
     if client_info.get("phone"):
         contact_payload["phone"] = client_info["phone"]
 
