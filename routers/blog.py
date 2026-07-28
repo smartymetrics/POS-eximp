@@ -74,6 +74,52 @@ async def get_post_or_404(post_id: str) -> dict:
     return res.data[0]
 
 
+async def _enrich_author_data(posts_list: List[dict]) -> List[dict]:
+    """Ensures author_name_snapshot and author_department_snapshot are present.
+    Preserves the static historical snapshot stored on the post (capturing the
+    writer's department at creation/publication from HR data). Only queries the
+    admins table as a fallback if snapshot fields are missing or empty."""
+    if not posts_list:
+        return posts_list
+
+    missing_author_ids = list({
+        p["author_id"] for p in posts_list
+        if isinstance(p, dict) and p.get("author_id") and (not p.get("author_name_snapshot") or not p.get("author_department_snapshot"))
+    })
+
+    admin_map = {}
+    if missing_author_ids:
+        db = get_db()
+        try:
+            admins_res = await db_execute(
+                lambda: db.table("admins").select("id, full_name, department").in_("id", missing_author_ids).execute()
+            )
+            admin_map = {a["id"]: a for a in (admins_res.data or [])}
+        except Exception as e:
+            logger.warning(f"Failed to fetch fallback admin author info: {e}")
+
+    for post in posts_list:
+        if not isinstance(post, dict):
+            continue
+        aid = post.get("author_id")
+
+        # Fallback to admins table ONLY if snapshot fields are missing
+        if aid and aid in admin_map:
+            adm = admin_map[aid]
+            if not post.get("author_name_snapshot") and adm.get("full_name"):
+                post["author_name_snapshot"] = adm["full_name"]
+            if not post.get("author_department_snapshot") and adm.get("department"):
+                post["author_department_snapshot"] = adm["department"]
+
+        # Default fallbacks if still empty
+        if not post.get("author_name_snapshot"):
+            post["author_name_snapshot"] = "Eximp & Cloves Team"
+        if not post.get("author_department_snapshot"):
+            post["author_department_snapshot"] = "General"
+
+    return posts_list
+
+
 # ─────────────────────────── models ───────────────────────────
 
 class PostCreate(BaseModel):
@@ -133,6 +179,12 @@ class ReactionRequest(BaseModel):
     reaction_type: str = "like"
 
 
+class StaffRoleUpdate(BaseModel):
+    can_publish: bool
+    can_curate: bool
+    can_moderate: bool = False
+
+
 # ─────────────────────────── posts: create / list / detail ───────────────────────────
 
 @router.post("/posts")
@@ -179,12 +231,15 @@ async def list_posts(status: Optional[str] = None, mine: bool = False, current_a
     if mine:
         query = query.eq("author_id", current_admin["sub"])
     res = await db_execute(lambda: query.execute())
-    return res.data
+    posts = await _enrich_author_data(res.data or [])
+    return posts
 
 
 @router.get("/posts/{post_id}")
 async def get_post(post_id: str, current_admin=Depends(verify_token)):
-    return await get_post_or_404(post_id)
+    post = await get_post_or_404(post_id)
+    enriched = await _enrich_author_data([post])
+    return enriched[0]
 
 
 @router.patch("/posts/{post_id}")
@@ -241,16 +296,66 @@ async def publish_post(post_id: str, current_admin=Depends(verify_token)):
 
     db = get_db()
     was_pending = post["status"] == "pending_review"
-    await db_execute(lambda: db.table("blog_posts").update({
+
+    # Sync author's latest name and department from HR (admins table)
+    author_res = await db_execute(
+        lambda: db.table("admins").select("full_name, department").eq("id", post["author_id"]).execute()
+    )
+    author_info = author_res.data[0] if author_res.data else {}
+
+    update_payload = {
         "status": "published",
         "reviewed_by_id": current_admin["sub"],
         "reviewed_at": datetime.utcnow().isoformat(),
         "published_at": post.get("published_at") or datetime.utcnow().isoformat(),
         "updated_at": datetime.utcnow().isoformat(),
-    }).eq("id", post_id).execute())
+    }
+    if not post.get("author_name_snapshot") and author_info.get("full_name"):
+        update_payload["author_name_snapshot"] = author_info["full_name"]
+    if not post.get("author_department_snapshot") and author_info.get("department"):
+        update_payload["author_department_snapshot"] = author_info["department"]
+
+    await db_execute(lambda: db.table("blog_posts").update(update_payload).eq("id", post_id).execute())
 
     await log_action(post_id, current_admin["sub"], "approved" if was_pending else "published")
     return {"status": "published"}
+
+
+@router.post("/posts/{post_id}/unpublish")
+async def unpublish_post(post_id: str, current_admin=Depends(verify_token)):
+    """Revert a published post back to draft — publisher role required."""
+    if not has_any_role(current_admin, PUBLISHER_ROLES):
+        raise HTTPException(403, "Not authorized to unpublish")
+    post = await get_post_or_404(post_id)
+
+    db = get_db()
+    await db_execute(lambda: db.table("blog_posts").update({
+        "status": "draft",
+        "updated_at": datetime.utcnow().isoformat(),
+    }).eq("id", post_id).execute())
+
+    # Clean up homepage placements if any
+    await db_execute(lambda: db.table("blog_placements").delete().eq("post_id", post_id).execute())
+
+    await log_action(post_id, current_admin["sub"], "unpublished")
+    return {"status": "draft"}
+
+
+@router.delete("/posts/{post_id}")
+async def delete_post(post_id: str, current_admin=Depends(verify_token)):
+    """Delete a post — publisher role required or author deleting their own draft."""
+    post = await get_post_or_404(post_id)
+    is_publisher = has_any_role(current_admin, PUBLISHER_ROLES)
+    is_author = post["author_id"] == current_admin["sub"]
+
+    if not (is_publisher or (is_author and post["status"] in ("draft", "rejected"))):
+        raise HTTPException(403, "Not authorized to delete this post")
+
+    db = get_db()
+    await db_execute(lambda: db.table("blog_placements").delete().eq("post_id", post_id).execute())
+    await db_execute(lambda: db.table("blog_posts").delete().eq("id", post_id).execute())
+    await log_action(post_id, current_admin["sub"], "deleted")
+    return {"status": "deleted"}
 
 
 @router.post("/posts/{post_id}/reject")
@@ -436,13 +541,14 @@ async def public_list_posts(page: int = 1, page_size: int = 10, category: Option
     start = (page - 1) * page_size
     end = start + page_size - 1
     query = db.table("blog_posts").select(
-        "id, title, slug, excerpt, cover_image_url, tags, category, published_at, author_name_snapshot, author_department_snapshot",
+        "id, title, slug, excerpt, cover_image_url, tags, category, published_at, author_id, author_name_snapshot, author_department_snapshot",
         count="exact",
     ).eq("status", "published").order("published_at", desc=True).range(start, end)
     if category:
         query = query.eq("category", category)
     res = await db_execute(lambda: query.execute())
-    return {"posts": res.data, "total": res.count, "page": page, "page_size": page_size}
+    posts = await _enrich_author_data(res.data or [])
+    return {"posts": posts, "total": res.count, "page": page, "page_size": page_size}
 
 
 @router.get("/public/posts/{slug}")
@@ -453,7 +559,8 @@ async def public_get_post(slug: str):
     )
     if not res.data:
         raise HTTPException(404, "Post not found")
-    return res.data[0]
+    posts = await _enrich_author_data(res.data)
+    return posts[0]
 
 
 @router.get("/public/preview/{slug}")
@@ -464,22 +571,29 @@ async def public_preview_post(slug: str, token: str):
     res = await db_execute(lambda: db.table("blog_posts").select("*").eq("slug", slug).execute())
     if not res.data or res.data[0].get("share_token") != token:
         raise HTTPException(404, "Preview not found or link revoked")
-    return res.data[0]
+    posts = await _enrich_author_data(res.data)
+    return posts[0]
 
 
 @router.get("/public/placements/{placement_type}")
 async def public_placements(placement_type: str):
     db = get_db()
-    now = datetime.utcnow().isoformat()
     res = await db_execute(
         lambda: db.table("blog_placements")
-        .select("position, blog_posts(id, title, slug, excerpt, cover_image_url, published_at)")
+        .select("position, blog_posts(id, title, slug, excerpt, cover_image_url, published_at, author_id, author_name_snapshot, author_department_snapshot)")
         .eq("placement_type", placement_type)
         .order("position")
         .execute()
     )
-    # filter time-bound placements in Python (starts_at/ends_at are optional)
     active = [p for p in res.data if p.get("blog_posts")]
+    if active:
+        raw_posts = [p["blog_posts"] for p in active]
+        enriched_posts = await _enrich_author_data(raw_posts)
+        enriched_map = {p["id"]: p for p in enriched_posts}
+        for item in active:
+            pid = item["blog_posts"]["id"]
+            if pid in enriched_map:
+                item["blog_posts"] = enriched_map[pid]
     return active
 
 
@@ -543,3 +657,63 @@ async def public_reaction_count(post_id: str):
         lambda: db.table("blog_reactions").select("id", count="exact").eq("post_id", post_id).execute()
     )
     return {"total_reactions": count_res.count}
+
+
+# ─────────────────────────── staff blog permissions management ───────────────────────────
+
+@router.get("/admin/staff-roles")
+async def list_staff_roles(current_admin=Depends(verify_token)):
+    if not has_any_role(current_admin, ["admin", "super_admin"]):
+        raise HTTPException(403, "Only admins can manage staff blog roles")
+    db = get_db()
+    res = await db_execute(
+        lambda: db.table("admins").select("id, full_name, email, department, role, is_active").order("full_name").execute()
+    )
+    result = []
+    for adm in (res.data or []):
+        roles = [r.strip().lower() for r in (adm.get("role") or "").split(",") if r.strip()]
+        is_admin = any(r in {"admin", "super_admin"} for r in roles)
+        result.append({
+            "id": adm["id"],
+            "full_name": adm.get("full_name") or adm.get("email"),
+            "email": adm.get("email"),
+            "department": adm.get("department") or "N/A",
+            "role": adm.get("role") or "",
+            "is_admin": is_admin,
+            "can_publish": is_admin or "blog_publisher" in roles,
+            "can_curate": is_admin or "blog_curator" in roles,
+            "can_moderate": is_admin or "blog_moderator" in roles,
+        })
+    return result
+
+
+@router.patch("/admin/staff-roles/{admin_id}")
+async def update_staff_blog_roles(admin_id: str, data: StaffRoleUpdate, current_admin=Depends(verify_token)):
+    if not has_any_role(current_admin, ["admin", "super_admin"]):
+        raise HTTPException(403, "Only admins can manage staff blog roles")
+    db = get_db()
+    adm_res = await db_execute(lambda: db.table("admins").select("role").eq("id", admin_id).execute())
+    if not adm_res.data:
+        raise HTTPException(404, "Staff member not found")
+
+    current_roles = [r.strip().lower() for r in (adm_res.data[0].get("role") or "").split(",") if r.strip()]
+    role_set = set(current_roles)
+
+    if data.can_publish:
+        role_set.add("blog_publisher")
+    else:
+        role_set.discard("blog_publisher")
+
+    if data.can_curate:
+        role_set.add("blog_curator")
+    else:
+        role_set.discard("blog_curator")
+
+    if data.can_moderate:
+        role_set.add("blog_moderator")
+    else:
+        role_set.discard("blog_moderator")
+
+    new_role_str = ",".join(sorted(role_set))
+    res = await db_execute(lambda: db.table("admins").update({"role": new_role_str}).eq("id", admin_id).execute())
+    return {"status": "updated", "role": new_role_str}

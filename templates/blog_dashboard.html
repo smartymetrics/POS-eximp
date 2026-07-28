@@ -524,6 +524,8 @@
                 class="tab-link px-3 py-1.5 rounded text-sm hidden">Pending Review</button>
             <button id="curateNavBtn" onclick="switchTab('curate')"
                 class="tab-link px-3 py-1.5 rounded text-sm hidden">Curate Homepage</button>
+            <button id="rolesNavBtn" onclick="switchTab('roles')"
+                class="tab-link px-3 py-1.5 rounded text-sm hidden"><i class="fas fa-user-shield mr-1"></i> Staff Permissions</button>
             <button onclick="newPost()"
                 class="ml-auto bg-brand-gold text-black px-4 py-1.5 rounded text-sm font-semibold"><i
                     class="fas fa-plus mr-1"></i> New Post</button>
@@ -567,6 +569,36 @@
                 </div>
             </div>
         </div>
+
+        <div id="tab-roles" class="hidden">
+            <div class="card p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 class="brand-gold font-bold text-lg">Staff Blog Permissions</h3>
+                        <p class="text-xs text-gray-400">Grant or revoke Blog Publisher (Publish/Approve) and Homepage Curation permissions for staff members.</p>
+                    </div>
+                    <button onclick="loadStaffRoles()" class="px-3 py-1.5 rounded bg-white/10 text-white text-xs font-semibold hover:bg-white/20">
+                        <i class="fas fa-sync mr-1"></i> Refresh List
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm text-gray-300">
+                        <thead class="text-xs uppercase bg-white/5 text-brand-gold border-b border-white/10">
+                            <tr>
+                                <th class="px-4 py-3">Staff Name</th>
+                                <th class="px-4 py-3">Department</th>
+                                <th class="px-4 py-3 text-center">Can Publish &amp; Approve</th>
+                                <th class="px-4 py-3 text-center">Can Curate Homepage</th>
+                                <th class="px-4 py-3">Current Roles</th>
+                            </tr>
+                        </thead>
+                        <tbody id="staffRolesList" class="divide-y divide-white/5">
+                            <tr><td colspan="5" class="px-4 py-6 text-center text-gray-500">Loading staff members...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- ═══ FULL-SCREEN GRAPESJS EDITOR ═══ -->
@@ -604,6 +636,11 @@
                     <button id="publishBtn" onclick="publishNow()"
                         class="hidden bg-green-600 hover:bg-green-500 text-white text-xs px-3.5 py-1.5 rounded font-bold">🚀
                         Publish</button>
+                    <button id="unpublishBtn" onclick="unpublishNow()"
+                        class="hidden bg-amber-600 hover:bg-amber-500 text-white text-xs px-3.5 py-1.5 rounded font-bold">⏪
+                        Unpublish</button>
+                    <button id="deleteBtn" onclick="deleteCurrentPost()"
+                        class="hidden bg-red-800 hover:bg-red-700 text-white text-xs px-2.5 py-1.5 rounded font-bold" title="Delete post">🗑️</button>
                 </div>
             </div>
             <!-- Row 2: workspace utilities -->
@@ -634,14 +671,27 @@
                 <div class="flex items-center gap-2">
                     <button
                         class="bg-[#2a2a2a] text-white text-[9px] px-2.5 py-1 rounded font-bold border border-[#3a3a3a] hover:bg-[#333] flex items-center gap-1"
-                        onclick="openGeneralAssetManager()"
-                        title="Upload or pick an image and insert it after the selected block">
+                        onclick="openMediaInsert('image')"
+                        title="Insert an image at the current position">
                         <span>📷</span> Add Image
                     </button>
                     <button
                         class="bg-[#2a2a2a] text-white text-[9px] px-2.5 py-1 rounded font-bold border border-[#3a3a3a] hover:bg-[#333] flex items-center gap-1"
-                        onclick="insertYouTubeBlock()">
+                        onclick="openMediaInsert('video')"
+                        title="Insert a YouTube, Shorts, or direct video at the current position">
                         <span><i class="fab fa-youtube"></i></span> Add Video
+                    </button>
+                    <button
+                        class="bg-[#2a2a2a] text-white text-[9px] px-2.5 py-1 rounded font-bold border border-[#3a3a3a] hover:bg-[#333] flex items-center gap-1"
+                        onclick="openListInsert()"
+                        title="Insert a styled list (bulleted, numbered, checkmarks, arrows, stars)">
+                        <span><i class="fas fa-list"></i></span> Add List
+                    </button>
+                    <button
+                        class="bg-[#2a2a2a] text-white text-[9px] px-2.5 py-1 rounded font-bold border border-[#3a3a3a] hover:bg-[#333] flex items-center gap-1"
+                        onclick="openSymbolPicker()"
+                        title="Insert special characters, currency, arrows & emojis into text">
+                        <span>🔣</span> Symbols
                     </button>
                 </div>
             </div>
@@ -705,7 +755,173 @@
         </div>
     </div>
 
+    <!-- ═══ INSERT MEDIA MODAL ═══ -->
+    <div id="mediaInsertModal" class="hidden modal-overlay">
+        <div class="modal-box" style="max-width:520px">
+            <div class="modal-header">
+                <div>
+                    <h2>Insert Media</h2>
+                    <p>Inserted after your currently selected block — click any block in the canvas first</p>
+                </div>
+                <button class="modal-close" onclick="closeMediaInsert()">✕</button>
+            </div>
+            <div class="modal-body">
+                <!-- Tabs -->
+                <div style="display:flex;gap:0;margin-bottom:20px;border-bottom:1px solid #2a2a2a;">
+                    <button id="mediaTabImg" onclick="switchMediaTab('image')"
+                        style="flex:1;padding:9px 0;font-size:12px;font-weight:700;background:none;border:none;border-bottom:2px solid #C47D0A;color:#C47D0A;cursor:pointer;">🖼️ Image</button>
+                    <button id="mediaTabVid" onclick="switchMediaTab('video')"
+                        style="flex:1;padding:9px 0;font-size:12px;font-weight:700;background:none;border:none;border-bottom:2px solid transparent;color:#666;cursor:pointer;">▶️ Video</button>
+                </div>
+
+                <!-- Image Panel -->
+                <div id="mediaPanelImage">
+                    <div style="margin-bottom:14px">
+                        <span class="field-label">Image URL</span>
+                        <input id="mediaImageUrl" class="field-input" placeholder="https://example.com/photo.jpg" oninput="onMediaImageUrlChange()">
+                    </div>
+                    <div style="text-align:center;color:#555;font-size:12px;margin:10px 0;">— or upload from your computer —</div>
+                    <div id="mediaUploadArea"
+                        style="background:rgba(196,125,10,0.07);border:2px dashed #C47D0A;border-radius:10px;padding:18px;text-align:center;cursor:pointer;margin-bottom:14px;transition:opacity .2s;"
+                        onclick="document.getElementById('mediaImageFile').click()">
+                        <div style="font-size:24px;margin-bottom:4px;">📁</div>
+                        <div id="mediaUploadLabel" style="font-size:12px;color:#aaa;">Click to choose a file</div>
+                        <input type="file" id="mediaImageFile" accept="image/*" class="hidden" onchange="onMediaFileChosen(this)">
+                    </div>
+                    <div>
+                        <span class="field-label">Caption / Alt text (optional)</span>
+                        <input id="mediaImageAlt" class="field-input" placeholder="Describe the image">
+                    </div>
+                </div>
+
+                <!-- Video Panel -->
+                <div id="mediaPanelVideo" class="hidden">
+                    <div style="margin-bottom:14px">
+                        <span class="field-label">Video URL</span>
+                        <input id="mediaVideoUrl" class="field-input"
+                            placeholder="YouTube, YouTube Shorts, youtu.be, or direct .mp4 link">
+                        <p style="font-size:11px;color:#666;margin:6px 0 0;">Supports: youtube.com/watch?v=…, youtube.com/shorts/…, youtu.be/…, or a direct .mp4 / .webm file URL</p>
+                    </div>
+                    <div>
+                        <span class="field-label">Caption (optional)</span>
+                        <input id="mediaVideoCaption" class="field-input" placeholder="Caption shown below the video">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeMediaInsert()"
+                    style="background:#222;border:1px solid #333;color:#aaa;padding:8px 18px;border-radius:6px;font-size:13px;cursor:pointer;">Cancel</button>
+                <button onclick="doInsertMedia()"
+                    style="background:#C47D0A;border:none;color:#fff;padding:8px 22px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;">Insert</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ INSERT LIST MODAL ═══ -->
+    <div id="listInsertModal" class="hidden modal-overlay">
+        <div class="modal-box" style="max-width:540px">
+            <div class="modal-header">
+                <div>
+                    <h2>Insert List</h2>
+                    <p>Choose list style and enter list items (one per line)</p>
+                </div>
+                <button class="modal-close" onclick="closeListInsert()">✕</button>
+            </div>
+            <div class="modal-body space-y-4">
+                <div>
+                    <span class="field-label">List Style / Bullets</span>
+                    <select id="listStyleSelect" class="field-input">
+                        <option value="bullet">• Standard Bulleted List</option>
+                        <option value="numbered">1, 2, 3 Numbered List</option>
+                        <option value="check">✔ Checkmark List</option>
+                        <option value="arrow">➔ Arrow List</option>
+                        <option value="star">★ Star List</option>
+                        <option value="diamond">◆ Diamond List</option>
+                    </select>
+                </div>
+                <div>
+                    <span class="field-label">List Items (one item per line)</span>
+                    <textarea id="listItemsInput" class="field-input" rows="6"
+                        placeholder="First item&#10;Second item&#10;Third item"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeListInsert()"
+                    style="background:#222;border:1px solid #333;color:#aaa;padding:8px 18px;border-radius:6px;font-size:13px;cursor:pointer;">Cancel</button>
+                <button onclick="doInsertList()"
+                    style="background:#C47D0A;border:none;color:#fff;padding:8px 22px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;">Insert List</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ SYMBOL & SPECIAL CHARACTER PICKER MODAL ═══ -->
+    <div id="symbolPickerModal" class="hidden modal-overlay">
+        <div class="modal-box" style="max-width:580px">
+            <div class="modal-header">
+                <div>
+                    <h2>Insert Symbol &amp; Special Character</h2>
+                    <p>Click any symbol to insert it directly into your active text element</p>
+                </div>
+                <button class="modal-close" onclick="closeSymbolPicker()">✕</button>
+            </div>
+            <div class="modal-body">
+                <!-- Tabs -->
+                <div style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;border-bottom:1px solid #2a2a2a;padding-bottom:8px;">
+                    <button class="sym-tab active" onclick="filterSymbolTab('all', this)">All</button>
+                    <button class="sym-tab" onclick="filterSymbolTab('bullets', this)">Bullets &amp; Markers</button>
+                    <button class="sym-tab" onclick="filterSymbolTab('currency', this)">Currency</button>
+                    <button class="sym-tab" onclick="filterSymbolTab('math', this)">Math &amp; Symbols</button>
+                    <button class="sym-tab" onclick="filterSymbolTab('arrows', this)">Arrows</button>
+                    <button class="sym-tab" onclick="filterSymbolTab('emojis', this)">Emojis</button>
+                </div>
+
+                <!-- Symbol Grid -->
+                <div id="symbolGrid" style="display:grid;grid-template-columns:repeat(8, 1fr);gap:6px;max-height:300px;overflow-y:auto;padding:4px;">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeSymbolPicker()"
+                    style="background:#222;border:1px solid #333;color:#aaa;padding:8px 18px;border-radius:6px;font-size:13px;cursor:pointer;">Close</button>
+            </div>
+        </div>
+    </div>
+
     <style>
+        .sym-tab {
+            background: #1f1f1f;
+            border: 1px solid #333;
+            color: #aaa;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .sym-tab.active {
+            background: #C47D0A;
+            color: #000;
+            font-weight: 700;
+            border-color: #C47D0A;
+        }
+        .sym-btn {
+            background: #1e1e1e;
+            border: 1px solid #333;
+            color: #fff;
+            border-radius: 6px;
+            height: 42px;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .sym-btn:hover {
+            background: #C47D0A;
+            color: #000;
+            border-color: #C47D0A;
+            transform: scale(1.1);
+        }
         .tab-link {
             background: transparent;
             color: #94a3b8;
@@ -768,6 +984,7 @@
             if (name === 'mine') loadPosts('mineList', { mine: 'true' });
             if (name === 'review') loadPosts('reviewList', { status: 'pending_review' });
             if (name === 'curate') loadCuration();
+            if (name === 'roles') loadStaffRoles();
         }
 
         function badge(status) { return `<span class="badge badge-${status}">${status.replace('_', ' ')}</span>`; }
@@ -867,13 +1084,17 @@
                     body img { max-width: 100%; border-radius: 4px; }
                     body blockquote { font-family: 'Playfair Display', Georgia, serif; }
                     body a { color: #C47D0A; }
+                    body ul, body ol { margin: 0 0 20px 24px; padding: 0; }
+                    body li { margin-bottom: 6px; }
+                    body ul.custom-symbol-list { list-style: none; padding-left: 0; margin-left: 0; }
+                    body ul.custom-symbol-list li { margin-bottom: 8px; display: flex; align-items: baseline; gap: 8px; }
+                    body ul.custom-symbol-list li span.sym-icon { color: #C47D0A; font-weight: bold; flex-shrink: 0; }
                 `;
                 doc.head.appendChild(style);
             });
         }
 
-        // ── Medium-style heading/quote shortcuts in the floating RTE toolbar
-        // (appears on text selection, not buried in the sidebar) ──
+        // ── Medium-style heading/quote/list shortcuts in floating RTE toolbar ──
         function addHeadingRTEActions(editor) {
             const rte = editor.RichTextEditor;
             rte.add('heading1', {
@@ -891,6 +1112,21 @@
                 attributes: { title: 'Quote' },
                 result: (rte) => rte.exec('formatBlock', '<blockquote>'),
             });
+            rte.add('ulist', {
+                icon: '<i class="fas fa-list-ul" style="font-size:11px"></i>',
+                attributes: { title: 'Bulleted List' },
+                result: (rte) => rte.exec('insertUnorderedList'),
+            });
+            rte.add('olist', {
+                icon: '<i class="fas fa-list-ol" style="font-size:11px"></i>',
+                attributes: { title: 'Numbered List' },
+                result: (rte) => rte.exec('insertOrderedList'),
+            });
+            rte.add('symbols', {
+                icon: '<b style="font-size:12px">🔣</b>',
+                attributes: { title: 'Insert Symbol' },
+                result: () => openSymbolPicker(),
+            });
         }
 
         // ── Curated palette: hide the generic webpage/basic blocks that
@@ -901,6 +1137,7 @@
             const keepIds = new Set([
                 'text', 'image', 'video',
                 'blog-gallery', 'blog-youtube', 'blog-pull-quote', 'blog-divider', 'blog-cta',
+                'blog-bullet-list', 'blog-numbered-list', 'blog-check-list', 'blog-symbol-list',
             ]);
             bm.getAll().forEach((block) => {
                 if (!keepIds.has(block.get('id'))) bm.remove(block.get('id'));
@@ -910,6 +1147,33 @@
         // ── Custom "Blog" category blocks ──────────────────────────
         function registerCustomBlocks(editor) {
             const bm = editor.BlockManager;
+
+            bm.add('blog-bullet-list', {
+                label: '• Bulleted List', category: 'Blog',
+                content: `<ul style="margin:20px 0 20px 24px;"><li>First bullet point</li><li>Second bullet point</li><li>Third bullet point</li></ul>`,
+            });
+
+            bm.add('blog-numbered-list', {
+                label: '1. Numbered List', category: 'Blog',
+                content: `<ol style="margin:20px 0 20px 24px;"><li>First step item</li><li>Second step item</li><li>Third step item</li></ol>`,
+            });
+
+            bm.add('blog-check-list', {
+                label: '✔ Checkmark List', category: 'Blog',
+                content: `<ul class="custom-symbol-list" style="list-style:none;padding-left:0;margin:20px 0;">
+                    <li style="margin-bottom:8px;display:flex;align-items:baseline;gap:8px;"><span class="sym-icon" style="color:#C47D0A;font-weight:bold;">✔</span><span>First verified feature or benefit</span></li>
+                    <li style="margin-bottom:8px;display:flex;align-items:baseline;gap:8px;"><span class="sym-icon" style="color:#C47D0A;font-weight:bold;">✔</span><span>Second verified feature or benefit</span></li>
+                    <li style="margin-bottom:8px;display:flex;align-items:baseline;gap:8px;"><span class="sym-icon" style="color:#C47D0A;font-weight:bold;">✔</span><span>Third verified feature or benefit</span></li>
+                </ul>`,
+            });
+
+            bm.add('blog-symbol-list', {
+                label: '★ Star List', category: 'Blog',
+                content: `<ul class="custom-symbol-list" style="list-style:none;padding-left:0;margin:20px 0;">
+                    <li style="margin-bottom:8px;display:flex;align-items:baseline;gap:8px;"><span class="sym-icon" style="color:#C47D0A;font-weight:bold;">★</span><span>Key takeaway or highlight one</span></li>
+                    <li style="margin-bottom:8px;display:flex;align-items:baseline;gap:8px;"><span class="sym-icon" style="color:#C47D0A;font-weight:bold;">★</span><span>Key takeaway or highlight two</span></li>
+                </ul>`,
+            });
 
             bm.add('blog-gallery', {
                 label: '🖼️ Image Gallery', category: 'Blog',
@@ -949,22 +1213,28 @@
             });
         }
 
+        function extractYouTubeId(url) {
+            // Supports: watch?v=, youtu.be/, /embed/, /shorts/
+            const m = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/);
+            return m ? m[1] : null;
+        }
+
         function insertYouTubeInto(component) {
-            const url = prompt('Paste YouTube URL:');
+            const url = prompt('Paste YouTube URL (watch, shorts, or youtu.be link):');
             if (!url) return;
-            const idMatch = url.match(/(?:v=|youtu\.be\/|embed\/)([a-zA-Z0-9_-]{11})/);
-            if (!idMatch) return toast('Could not read a video ID from that URL.');
-            component.components(`<iframe width="100%" height="360" src="https://www.youtube.com/embed/${idMatch[1]}" frameborder="0" allowfullscreen style="border-radius:8px;"></iframe>`);
+            const videoId = extractYouTubeId(url);
+            if (!videoId) return toast('Could not read a video ID from that URL.');
+            component.components(`<iframe width="100%" height="360" src="https://www.youtube.com/embed/${videoId}" frameborder="0" allowfullscreen style="border-radius:8px;"></iframe>`);
             component.addAttributes({ 'data-blog-youtube': null });
             component.setStyle({ padding: 0, background: 'none', border: 'none' });
         }
 
         function insertYouTubeBlock() {
-            const url = prompt('Paste YouTube URL:');
+            const url = prompt('Paste YouTube URL (watch, shorts, or youtu.be link):');
             if (!url) return;
-            const idMatch = url.match(/(?:v=|youtu\.be\/|embed\/)([a-zA-Z0-9_-]{11})/);
-            if (!idMatch) return toast('Could not read a video ID from that URL.');
-            const html = `<div><iframe width="100%" height="360" src="https://www.youtube.com/embed/${idMatch[1]}" frameborder="0" allowfullscreen style="border-radius:8px;"></iframe></div>`;
+            const videoId = extractYouTubeId(url);
+            if (!videoId) return toast('Could not read a video ID from that URL.');
+            const html = `<div><iframe width="100%" height="360" src="https://www.youtube.com/embed/${videoId}" frameborder="0" allowfullscreen style="border-radius:8px;"></iframe></div>`;
             insertAfterSelected({ type: 'default', tagName: 'div', content: html });
         }
 
@@ -986,19 +1256,228 @@
             else editor.addComponents(componentDef);
         }
 
-        function openGeneralAssetManager() {
-            editor.AssetManager.open({
-                select(asset, complete) {
-                    const url = typeof asset === 'string' ? asset : (asset.getSrc ? asset.getSrc() : asset.get('src'));
-                    if (url) {
-                        insertAfterSelected({
-                            type: 'image', src: url,
-                            style: { width: '100%', height: 'auto', 'max-width': '600px', display: 'block', margin: '10px auto' },
+        // ── Insert Media Modal ─────────────────────────────────────────
+        let _mediaTab = 'image';
+
+        function openMediaInsert(tab = 'image') {
+            _mediaTab = tab;
+            switchMediaTab(tab);
+            // reset all fields
+            document.getElementById('mediaImageUrl').value = '';
+            document.getElementById('mediaVideoUrl').value = '';
+            document.getElementById('mediaImageAlt').value = '';
+            document.getElementById('mediaVideoCaption').value = '';
+            document.getElementById('mediaImageFile').value = '';
+            document.getElementById('mediaUploadLabel').textContent = 'Click to choose a file';
+            document.getElementById('mediaUploadArea').style.borderColor = '#C47D0A';
+            document.getElementById('mediaInsertModal').classList.remove('hidden');
+        }
+
+        function closeMediaInsert() {
+            document.getElementById('mediaInsertModal').classList.add('hidden');
+        }
+
+        function switchMediaTab(tab) {
+            _mediaTab = tab;
+            const isImg = tab === 'image';
+            document.getElementById('mediaPanelImage').classList.toggle('hidden', !isImg);
+            document.getElementById('mediaPanelVideo').classList.toggle('hidden', isImg);
+            const imgBtn = document.getElementById('mediaTabImg');
+            const vidBtn = document.getElementById('mediaTabVid');
+            imgBtn.style.borderBottomColor = isImg ? '#C47D0A' : 'transparent';
+            imgBtn.style.color = isImg ? '#C47D0A' : '#666';
+            vidBtn.style.borderBottomColor = !isImg ? '#C47D0A' : 'transparent';
+            vidBtn.style.color = !isImg ? '#C47D0A' : '#666';
+        }
+
+        function onMediaImageUrlChange() {
+            const val = document.getElementById('mediaImageUrl').value.trim();
+            document.getElementById('mediaUploadArea').style.opacity = val ? '0.4' : '1';
+        }
+
+        function onMediaFileChosen(input) {
+            const file = input.files[0];
+            if (file) {
+                document.getElementById('mediaUploadLabel').textContent = '✔ ' + file.name;
+                document.getElementById('mediaImageUrl').value = ''; // clear URL if file picked
+                onMediaImageUrlChange();
+            }
+        }
+
+        async function doInsertMedia() {
+            if (_mediaTab === 'image') {
+                const url = document.getElementById('mediaImageUrl').value.trim();
+                const file = document.getElementById('mediaImageFile').files[0];
+                const alt = document.getElementById('mediaImageAlt').value.trim();
+
+                let imageUrl = url;
+                if (!imageUrl && file) {
+                    toast('Uploading…');
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    try {
+                        const res = await fetch(`${API}/upload-image`, {
+                            method: 'POST', headers: authHeaders(false), body: formData
                         });
+                        if (!res.ok) throw new Error('upload failed');
+                        const data = await res.json();
+                        imageUrl = data.data[0];
+                    } catch (e) {
+                        return toast('Upload failed: ' + e.message);
                     }
-                    if (complete) editor.AssetManager.close();
                 }
-            });
+                if (!imageUrl) return toast('Please enter an image URL or choose a file.');
+
+                // Build HTML so we can include an optional caption as a <figure>
+                const captionHtml = alt
+                    ? `<figcaption style="text-align:center;font-size:13px;color:#888;margin:6px 0 0;">${alt}</figcaption>`
+                    : '';
+                const html = `<figure style="margin:24px 0;">
+                    <img src="${imageUrl}" alt="${alt}" style="width:100%;max-width:680px;height:auto;display:block;margin:0 auto;border-radius:6px;" />
+                    ${captionHtml}
+                </figure>`;
+                insertAfterSelected({ type: 'default', tagName: 'figure', content: html });
+                closeMediaInsert();
+                toast('Image inserted.');
+
+            } else {
+                const url = document.getElementById('mediaVideoUrl').value.trim();
+                const caption = document.getElementById('mediaVideoCaption').value.trim();
+                if (!url) return toast('Please enter a video URL.');
+
+                const captionHtml = caption
+                    ? `<p style="text-align:center;font-size:13px;color:#888;margin:8px 0 0;">${caption}</p>`
+                    : '';
+
+                const videoId = extractYouTubeId(url);
+                let html;
+                if (videoId) {
+                    html = `<div style="margin:24px 0;">
+                        <iframe width="100%" height="400" src="https://www.youtube.com/embed/${videoId}"
+                            frameborder="0" allowfullscreen
+                            style="display:block;border-radius:8px;max-width:680px;margin:0 auto;"></iframe>
+                        ${captionHtml}
+                    </div>`;
+                } else if (/\.(mp4|webm|ogg)(\?|$)/i.test(url)) {
+                    html = `<div style="margin:24px 0;">
+                        <video controls src="${url}"
+                            style="width:100%;max-width:680px;display:block;margin:0 auto;border-radius:8px;"></video>
+                        ${captionHtml}
+                    </div>`;
+                } else {
+                    return toast('URL not recognised — paste a YouTube, YouTube Shorts, or direct .mp4/.webm link.');
+                }
+                insertAfterSelected({ type: 'default', tagName: 'div', content: html });
+                closeMediaInsert();
+                toast('Video inserted.');
+            }
+        }
+
+        // Legacy: keep as alias so any old calls still work
+        function openGeneralAssetManager() { openMediaInsert('image'); }
+
+        // ── List & Symbol Modals JS ─────────────────────────────────────
+        function openListInsert() {
+            document.getElementById('listItemsInput').value = '';
+            document.getElementById('listStyleSelect').value = 'bullet';
+            document.getElementById('listInsertModal').classList.remove('hidden');
+        }
+
+        function closeListInsert() {
+            document.getElementById('listInsertModal').classList.add('hidden');
+        }
+
+        function doInsertList() {
+            const style = document.getElementById('listStyleSelect').value;
+            const text = document.getElementById('listItemsInput').value.trim();
+            const items = text ? text.split('\n').map(s => s.trim()).filter(Boolean) : ['First item', 'Second item', 'Third item'];
+
+            let html = '';
+            if (style === 'bullet') {
+                html = `<ul style="margin:20px 0 20px 24px;">${items.map(i => `<li>${i}</li>`).join('')}</ul>`;
+            } else if (style === 'numbered') {
+                html = `<ol style="margin:20px 0 20px 24px;">${items.map(i => `<li>${i}</li>`).join('')}</ol>`;
+            } else {
+                const iconMap = { check: '✔', arrow: '➔', star: '★', diamond: '◆' };
+                const icon = iconMap[style] || '•';
+                html = `<ul class="custom-symbol-list" style="list-style:none;padding-left:0;margin:20px 0;">
+                    ${items.map(i => `<li style="margin-bottom:8px;display:flex;align-items:baseline;gap:8px;"><span class="sym-icon" style="color:#C47D0A;font-weight:bold;">${icon}</span><span>${i}</span></li>`).join('')}
+                </ul>`;
+            }
+            insertAfterSelected({ type: 'default', tagName: 'div', content: html });
+            closeListInsert();
+            toast('List inserted.');
+        }
+
+        // ── Symbol Picker JS ──────────────────────────────────────────
+        const SYMBOLS_DATA = {
+            bullets: ['•', '○', '■', '□', '◆', '◇', '▲', '▼', '▶', '◀', '▪', '▫', '❖', '✔', '✓', '✕', '✖', '★', '⭐', '✦', '✧', '📌', '💡', '🚩'],
+            currency: ['₦', '$', '€', '£', '¥', '₹', '₵', '₿', '¢', '₱', '₩', '₺'],
+            math: ['°', '±', '≠', '≤', '≥', '×', '÷', '≈', '∞', '—', '–', '«', '»', '“', '”', '©', '®', '™', '%', '‰', '¶', '§', 'µ', 'π', '∑', '√', '∆'],
+            arrows: ['➔', '➜', '➡', '←', '↑', '→', '↓', '↔', '↕', '↖', '↗', '↘', '↙', '↩', '↪', '⇄', '⇒', '⇐'],
+            emojis: ['🚀', '📈', '📊', '💼', '🌐', '🔥', '✨', '✅', '🎯', '🏆', '💡', '⚡', '📍', '📢', '🤝', '💰', '🏷️', '💎', '🔑', '⭐']
+        };
+
+        let _activeSymTab = 'all';
+
+        function openSymbolPicker() {
+            renderSymbolGrid('all');
+            document.getElementById('symbolPickerModal').classList.remove('hidden');
+        }
+
+        function closeSymbolPicker() {
+            document.getElementById('symbolPickerModal').classList.add('hidden');
+        }
+
+        function filterSymbolTab(cat, btn) {
+            _activeSymTab = cat;
+            document.querySelectorAll('#symbolPickerModal .sym-tab').forEach(b => b.classList.remove('active'));
+            if (btn) btn.classList.add('active');
+            renderSymbolGrid(cat);
+        }
+
+        function renderSymbolGrid(cat) {
+            let list = [];
+            if (cat === 'all') {
+                Object.values(SYMBOLS_DATA).forEach(arr => list.push(...arr));
+            } else {
+                list = SYMBOLS_DATA[cat] || [];
+            }
+            const grid = document.getElementById('symbolGrid');
+            grid.innerHTML = list.map(sym => `
+                <button class="sym-btn" onclick="insertSymbol('${sym}')" title="Insert ${sym}">${sym}</button>
+            `).join('');
+        }
+
+        function insertSymbol(sym) {
+            const rte = editor && editor.RichTextEditor;
+            // If GrapesJS inline rich-text editor is actively focused
+            if (rte && rte.active) {
+                try {
+                    rte.exec('insertText', sym);
+                    toast(`Symbol '${sym}' inserted.`);
+                    closeSymbolPicker();
+                    return;
+                } catch(e) {}
+            }
+
+            // Fallback: selected component or insert as text block
+            const selected = editor ? editor.getSelected() : null;
+            if (selected && selected.is('text')) {
+                const el = selected.getEl();
+                if (el) {
+                    el.innerHTML += sym;
+                    selected.set('content', el.innerHTML);
+                } else {
+                    const c = selected.get('content') || '';
+                    selected.set('content', c + sym);
+                }
+                toast(`Symbol '${sym}' added to text.`);
+            } else {
+                insertAfterSelected({ type: 'text', content: `<span>${sym} </span>` });
+                toast(`Symbol '${sym}' inserted.`);
+            }
+            closeSymbolPicker();
         }
 
         // ── Device / Preview / Fullscreen controls ─────────────────
@@ -1058,8 +1537,27 @@
 
         function togglePublishButton(status) {
             const canPublish = hasRole('blog_publisher', 'admin');
-            document.getElementById('publishBtn').classList.toggle('hidden', !canPublish);
+            const isPublished = status === 'published';
+            document.getElementById('publishBtn').classList.toggle('hidden', !canPublish || isPublished);
+            document.getElementById('unpublishBtn').classList.toggle('hidden', !canPublish || !isPublished);
+            document.getElementById('deleteBtn').classList.toggle('hidden', !currentPostId);
             document.getElementById('reviewPanel').classList.toggle('hidden', !(status === 'pending_review' && canPublish));
+        }
+
+        async function unpublishNow() {
+            if (!currentPostId) return;
+            if (!confirm('Are you sure you want to unpublish this post? It will revert to draft status and be hidden from the public website.')) return;
+            await api(`/posts/${currentPostId}/unpublish`, { method: 'POST', headers: authHeaders() });
+            toast('Post unpublished and reverted to draft.');
+            exitEditor();
+        }
+
+        async function deleteCurrentPost() {
+            if (!currentPostId) return;
+            if (!confirm('Are you sure you want to delete this post permanently? This cannot be undone.')) return;
+            await api(`/posts/${currentPostId}`, { method: 'DELETE', headers: authHeaders() });
+            toast('Post deleted.');
+            exitEditor();
         }
 
         async function openPost(id) {
@@ -1203,9 +1701,75 @@
             loadCuration();
         }
 
+        // ── Staff Permissions ─────────────────────────────────────
+        async function loadStaffRoles() {
+            const container = document.getElementById('staffRolesList');
+            if (!container) return;
+            try {
+                const staff = await api('/admin/staff-roles', { headers: authHeaders() });
+                container.innerHTML = staff.map(s => {
+                    const isAdmin = s.is_admin;
+                    return `
+                        <tr class="hover:bg-white/5 transition-colors">
+                            <td class="px-4 py-3 font-medium text-white">
+                                ${s.full_name || 'Staff Member'}
+                                <div class="text-xs text-gray-500">${s.email || ''}</div>
+                            </td>
+                            <td class="px-4 py-3 text-gray-400">${s.department || 'N/A'}</td>
+                            <td class="px-4 py-3 text-center">
+                                <label class="inline-flex items-center cursor-pointer ${isAdmin ? 'opacity-50 cursor-not-allowed' : ''}">
+                                    <input type="checkbox" class="sr-only peer" ${s.can_publish ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} onchange="saveStaffBlogRoles('${s.id}', this, 'publish')">
+                                    <div class="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-600 relative"></div>
+                                </label>
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                <label class="inline-flex items-center cursor-pointer ${isAdmin ? 'opacity-50 cursor-not-allowed' : ''}">
+                                    <input type="checkbox" class="sr-only peer" ${s.can_curate ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} onchange="saveStaffBlogRoles('${s.id}', this, 'curate')">
+                                    <div class="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-600 relative"></div>
+                                </label>
+                            </td>
+                            <td class="px-4 py-3 text-xs text-gray-400">
+                                ${isAdmin ? '<span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 font-bold">Admin (All Access)</span>' : (s.role || 'Staff')}
+                            </td>
+                        </tr>
+                    `;
+                }).join('') || '<tr><td colspan="5" class="px-4 py-6 text-center text-gray-500">No staff members found.</td></tr>';
+            } catch (e) {
+                container.innerHTML = `<tr><td colspan="5" class="px-4 py-6 text-center text-red-400">${e.message}</td></tr>`;
+            }
+        }
+
+        async function saveStaffBlogRoles(adminId, checkboxEl) {
+            const row = checkboxEl.closest('tr');
+            const checkboxes = row.querySelectorAll('input[type="checkbox"]');
+            const publishInput = checkboxes[0];
+            const curateInput = checkboxes[1];
+
+            const payload = {
+                can_publish: publishInput.checked,
+                can_curate: curateInput.checked,
+                can_moderate: false
+            };
+
+            try {
+                await api(`/admin/staff-roles/${adminId}`, {
+                    method: 'PATCH',
+                    headers: authHeaders(),
+                    body: JSON.stringify(payload)
+                });
+                toast('Staff permissions updated.');
+            } catch (e) {
+                toast('Failed to update roles: ' + e.message);
+                checkboxEl.checked = !checkboxEl.checked;
+            }
+        }
+
         // ── Init ─────────────────────────────────────────────────
         document.getElementById('reviewNavBtn').classList.toggle('hidden', !hasRole('blog_publisher', 'admin'));
         document.getElementById('curateNavBtn').classList.toggle('hidden', !hasRole('blog_curator', 'admin'));
+        if (document.getElementById('rolesNavBtn')) {
+            document.getElementById('rolesNavBtn').classList.toggle('hidden', !hasRole('admin', 'super_admin'));
+        }
         document.querySelector('.tab-link').classList.add('active');
         loadPosts('postsList');
     </script>
