@@ -1,0 +1,1214 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blog Manager | Eximp & Cloves</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap"
+        rel="stylesheet">
+    <link href="https://unpkg.com/grapesjs/dist/css/grapes.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/grapesjs"></script>
+    <script src="https://unpkg.com/grapesjs-preset-webpage"></script>
+    <script src="https://unpkg.com/grapesjs-blocks-basic"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { theme: { extend: { colors: { brand: { gold: '#C47D0A', dark: '#111111', card: '#1A1A1A' } } } } }
+    </script>
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+            background: #111;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+        }
+
+        #gjs {
+            border: none;
+            flex-grow: 1;
+            height: auto !important;
+        }
+
+        .editor-top-bar {
+            background: #1A1A1A;
+            color: white;
+            border-bottom: 2px solid #C47D0A;
+            position: relative;
+            z-index: 9999;
+            flex-shrink: 0;
+        }
+
+        .brand-logo {
+            color: #C47D0A;
+            font-weight: 700;
+            font-size: 1.1rem;
+            letter-spacing: 0.05em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .save-status {
+            font-size: 0.8rem;
+            color: #888;
+            margin-right: 12px;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 99999;
+        }
+
+        .modal-overlay.hidden {
+            display: none;
+        }
+
+        .modal-box {
+            background: #1a1a1a;
+            border-radius: 14px;
+            width: 90vw;
+            max-width: 720px;
+            max-height: 88vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #333;
+        }
+
+        .modal-header {
+            padding: 22px 26px 14px;
+            border-bottom: 1px solid #2a2a2a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            color: white;
+            font-family: 'Playfair Display', serif;
+            font-size: 1.4rem;
+            margin: 0;
+        }
+
+        .modal-header p {
+            color: #888;
+            font-size: 0.82rem;
+            margin: 4px 0 0 0;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: #666;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        .modal-close:hover {
+            color: white;
+            background: #333;
+        }
+
+        .modal-body {
+            overflow-y: auto;
+            padding: 22px 26px;
+            flex: 1;
+        }
+
+        .modal-footer {
+            padding: 16px 26px;
+            border-top: 1px solid #2a2a2a;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .field-input {
+            background: #111;
+            border: 1px solid #333;
+            color: #fff;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 13px;
+            width: 100%;
+        }
+
+        .field-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #888;
+            font-weight: 700;
+            margin-bottom: 4px;
+            display: block;
+        }
+
+        /* ── LIST/QUEUE VIEW (Tailwind dark card look, same as before) ── */
+        .list-shell {
+            padding: 32px;
+            height: 100%;
+            overflow-y: auto;
+            background: #0F1115;
+        }
+
+        .card {
+            background-color: #16181D;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 12px;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .badge-draft {
+            background: rgba(148, 163, 184, 0.15);
+            color: #94a3b8;
+        }
+
+        .badge-pending_review {
+            background: rgba(245, 158, 11, 0.15);
+            color: #f59e0b;
+        }
+
+        .badge-published {
+            background: rgba(34, 197, 94, 0.15);
+            color: #22c55e;
+        }
+
+        .badge-rejected {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+        }
+
+        .post-row:hover {
+            background-color: rgba(255, 255, 255, 0.03);
+        }
+
+        .brand-gold {
+            color: #C47D0A;
+        }
+
+        /* ══════════════ PREMIUM GRAPESJS RESKIN (mirrors marketing_editor_v2) ══════════════ */
+        .gjs-pn-panel {
+            background: #1a1a1a !important;
+        }
+
+        .gjs-block-category .gjs-title {
+            color: #C47D0A !important;
+            background: #1e1e1e !important;
+        }
+
+        .gjs-am-file-uploader {
+            padding: 15px !important;
+            background: rgba(196, 125, 10, 0.15) !important;
+            border: 2px dashed #C47D0A !important;
+            border-radius: 12px !important;
+            margin-bottom: 20px !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+
+        .gjs-am-file-uploader>form #gjs-am-title {
+            color: #C47D0A !important;
+            font-weight: 700 !important;
+            font-size: 1.1rem !important;
+        }
+
+        .gjs-am-file-uploader>form input[type=file] {
+            cursor: pointer !important;
+            height: 100% !important;
+        }
+
+        .gjs-cv-canvas {
+            background-color: #f1f5f9 !important;
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: calc(100% - 300px) !important;
+            height: 100% !important;
+            box-sizing: border-box !important;
+        }
+
+        .gjs-cv-canvas-frame {
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.08) !important;
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 4px !important;
+        }
+
+        .gjs-pn-views-container {
+            position: absolute !important;
+            top: 40px !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            left: auto !important;
+            width: 300px !important;
+            height: calc(100% - 40px) !important;
+            background-color: #111827 !important;
+            border-left: 1px solid #374151 !important;
+            box-shadow: -4px 0 15px rgba(0, 0, 0, 0.15) !important;
+            z-index: 99 !important;
+        }
+
+        .gjs-pn-views {
+            position: absolute !important;
+            top: 0 !important;
+            right: 0 !important;
+            left: auto !important;
+            width: 300px !important;
+            height: 40px !important;
+            z-index: 100 !important;
+            background: #111827 !important;
+            border-left: 1px solid #374151 !important;
+            border-bottom: 1px solid #374151 !important;
+            display: flex !important;
+            padding: 0 !important;
+        }
+
+        body.preview-active .gjs-cv-canvas,
+        .gjs-editor.preview-active .gjs-cv-canvas {
+            width: 100% !important;
+        }
+
+        body.preview-active .gjs-pn-views-container,
+        body.preview-active .gjs-pn-views,
+        body.preview-active .editor-top-bar,
+        .gjs-editor.preview-active .gjs-pn-views-container,
+        .gjs-editor.preview-active .gjs-pn-views {
+            display: none !important;
+        }
+
+        .gjs-pn-views-container.gjs-pn-hidden,
+        .gjs-pn-views.gjs-pn-hidden {
+            display: none !important;
+        }
+
+        @media (max-width: 1024px) {
+            .gjs-cv-canvas {
+                width: 100% !important;
+            }
+
+            .gjs-pn-views-container,
+            .gjs-pn-views {
+                transform: translateX(100%);
+                transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            }
+
+            body.sidebar-open .gjs-pn-views-container,
+            body.sidebar-open .gjs-pn-views {
+                transform: translateX(0) !important;
+                z-index: 99999 !important;
+            }
+
+            body.sidebar-open .gjs-cv-canvas::after {
+                content: '';
+                position: absolute;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.5);
+                pointer-events: all;
+                z-index: 9998;
+                cursor: pointer;
+            }
+        }
+
+        .gjs-pn-commands,
+        .gjs-pn-options,
+        .gjs-pn-devices-c {
+            display: none !important;
+        }
+
+        .gjs-clm-header,
+        .gjs-clm-tags-w input,
+        .gjs-clm-new-key,
+        #gjs-clm-new {
+            display: none !important;
+        }
+
+        .gjs-clm-sel {
+            padding: 12px 16px !important;
+            background-color: #1f2937 !important;
+            border-bottom: 1px solid #374151 !important;
+            display: block !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+        }
+
+        .gjs-sm-property input[type="range"],
+        .gjs-field-range,
+        .gjs-field-range-input,
+        .gjs-sm-slider {
+            background-color: #4b5563 !important;
+            height: 6px !important;
+            border-radius: 3px !important;
+            cursor: pointer !important;
+            margin-top: 6px !important;
+        }
+
+        .gjs-field-range-fill {
+            background-color: #C47D0A !important;
+            height: 6px !important;
+            border-radius: 3px !important;
+        }
+
+        .gjs-field-range-thumb,
+        .gjs-sm-slider-thumb {
+            background-color: #fff !important;
+            border: 2px solid #C47D0A !important;
+            width: 14px !important;
+            height: 14px !important;
+            border-radius: 50% !important;
+            cursor: pointer !important;
+            transition: transform 0.1s ease !important;
+            margin-top: -4px !important;
+        }
+
+        .gjs-field-range-thumb:hover,
+        .gjs-sm-slider-thumb:hover {
+            transform: scale(1.2) !important;
+        }
+
+        .gjs-one-bg {
+            background-color: #111827 !important;
+        }
+
+        .gjs-two-bg {
+            background-color: #1f2937 !important;
+        }
+
+        .gjs-three-bg {
+            background-color: #C47D0A !important;
+            color: white !important;
+        }
+
+        .gjs-four-color,
+        .gjs-four-color-h:hover {
+            color: #C47D0A !important;
+        }
+
+        .gjs-field {
+            background-color: #111827 !important;
+            border: 1px solid #374151 !important;
+            border-radius: 6px !important;
+            color: #f3f4f6 !important;
+            padding: 6px 10px !important;
+        }
+
+        .gjs-block {
+            background-color: #1f2937 !important;
+            border: 1px solid #374151 !important;
+            border-radius: 12px !important;
+            color: #f3f4f6 !important;
+            padding: 16px 8px !important;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 6px !important;
+            width: calc(50% - 8px) !important;
+            margin: 4px !important;
+        }
+
+        .gjs-block:hover {
+            border-color: #C47D0A !important;
+            color: #C47D0A !important;
+            transform: translateY(-2px) !important;
+            box-shadow: 0 10px 15px -3px rgba(196, 125, 10, 0.2) !important;
+        }
+
+        .gjs-block-label {
+            font-size: 10px !important;
+            font-weight: 700 !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.5px !important;
+            color: #e5e7eb !important;
+        }
+
+        .gjs-blocks-container {
+            display: flex !important;
+            flex-wrap: wrap !important;
+            padding: 8px !important;
+        }
+
+        .gjs-pn-views .gjs-pn-btn {
+            flex: 1 !important;
+            text-align: center !important;
+            padding: 0 4px !important;
+            border-radius: 0 !important;
+            margin: 0 !important;
+            border-right: 1px solid #374151 !important;
+            font-size: 9px !important;
+            font-weight: 800 !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.5px !important;
+            color: #9ca3af !important;
+            transition: all 0.2s !important;
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            height: 100% !important;
+            box-sizing: border-box !important;
+        }
+
+        .gjs-pn-views .gjs-pn-btn.gjs-pn-active {
+            background: #1f2937 !important;
+            color: #C47D0A !important;
+            border-bottom: 2px solid #C47D0A !important;
+        }
+
+        .gjs-sm-sector {
+            border-bottom: 1px solid #374151 !important;
+        }
+
+        .gjs-sm-title {
+            font-weight: 700 !important;
+            text-transform: uppercase !important;
+            font-size: 10px !important;
+            letter-spacing: 0.5px !important;
+            color: #e5e7eb !important;
+            padding: 14px 16px !important;
+            background-color: #1a2238 !important;
+        }
+
+        .gjs-sm-properties {
+            padding: 16px !important;
+            background-color: #111827 !important;
+        }
+    </style>
+</head>
+
+<body>
+    <script>
+        if (!localStorage.getItem('ec_token')) window.location.href = '/login';
+    </script>
+
+    <!-- ═══ LIST / QUEUE / CURATION VIEWS (unchanged Tailwind dark UI) ═══ -->
+    <div id="listShell" class="list-shell">
+        <div class="flex items-center gap-2 mb-6">
+            <button onclick="switchTab('list')" class="tab-link px-3 py-1.5 rounded text-sm">All Posts</button>
+            <button onclick="switchTab('mine')" class="tab-link px-3 py-1.5 rounded text-sm">My Drafts</button>
+            <button id="reviewNavBtn" onclick="switchTab('review')"
+                class="tab-link px-3 py-1.5 rounded text-sm hidden">Pending Review</button>
+            <button id="curateNavBtn" onclick="switchTab('curate')"
+                class="tab-link px-3 py-1.5 rounded text-sm hidden">Curate Homepage</button>
+            <button onclick="newPost()"
+                class="ml-auto bg-brand-gold text-black px-4 py-1.5 rounded text-sm font-semibold"><i
+                    class="fas fa-plus mr-1"></i> New Post</button>
+        </div>
+
+        <div id="tab-list">
+            <div id="postsList" class="card divide-y divide-white/5"></div>
+        </div>
+        <div id="tab-mine" class="hidden">
+            <div id="mineList" class="card divide-y divide-white/5"></div>
+        </div>
+        <div id="tab-review" class="hidden">
+            <div id="reviewList" class="card divide-y divide-white/5"></div>
+        </div>
+        <div id="tab-curate" class="hidden">
+            <div class="grid grid-cols-3 gap-6">
+                <div class="card p-4" data-placement="featured">
+                    <h3 class="brand-gold font-semibold mb-3">Featured</h3>
+                    <div class="placement-list space-y-2 text-sm"></div>
+                </div>
+                <div class="card p-4" data-placement="ticker">
+                    <h3 class="brand-gold font-semibold mb-3">Scrolling Ticker</h3>
+                    <div class="placement-list space-y-2 text-sm"></div>
+                </div>
+                <div class="card p-4" data-placement="top_content">
+                    <h3 class="brand-gold font-semibold mb-3">Top Content</h3>
+                    <div class="placement-list space-y-2 text-sm"></div>
+                </div>
+            </div>
+            <div class="card p-4 mt-6">
+                <h3 class="font-semibold mb-3">Add a published post to a shelf</h3>
+                <div class="flex gap-3">
+                    <select id="curatePostSelect" class="field-input flex-1"></select>
+                    <select id="curatePlacementType" class="field-input" style="width:160px">
+                        <option value="featured">Featured</option>
+                        <option value="ticker">Ticker</option>
+                        <option value="top_content">Top Content</option>
+                    </select>
+                    <button onclick="addPlacement()"
+                        class="bg-brand-gold text-black px-4 py-2 rounded font-semibold">Add</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ FULL-SCREEN GRAPESJS EDITOR ═══ -->
+    <div id="editorShell" class="hidden" style="display:flex; flex-direction:column; height:100vh;">
+        <div class="editor-top-bar flex flex-col">
+            <!-- Row 1 -->
+            <div class="flex items-center justify-between p-3 border-b border-[#2b2b2b] gap-3">
+                <div class="flex items-center gap-3 shrink-0">
+                    <button onclick="exitEditor()"
+                        class="bg-[#222] hover:bg-gray-800 text-white text-[11px] px-2.5 py-1 rounded border border-[#333]"><i
+                            class="fas fa-arrow-left"></i></button>
+                    <div class="brand-logo"><span class="text-brand-gold font-bold text-sm tracking-wider">Blog
+                            Builder</span></div>
+                </div>
+                <div
+                    class="flex items-center gap-2 bg-[#111] px-2.5 py-1 rounded border border-[#333] flex-1 max-w-[600px]">
+                    <span class="text-[9px] text-gray-400 uppercase font-black tracking-wider shrink-0">Title</span>
+                    <input type="text" id="postTitle" class="bg-transparent text-xs w-full outline-none text-white"
+                        placeholder="Your post title...">
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    <span class="save-status" id="save-status"></span>
+                    <button onclick="openMetaPanel()"
+                        class="bg-[#2a2a2a] text-white text-xs px-3 py-1.5 rounded font-bold border border-[#3a3a3a] hover:bg-[#333]"><i
+                            class="fas fa-tags mr-1"></i> Details &amp; SEO</button>
+                    <button onclick="saveDraft()"
+                        class="bg-brand-gold hover:bg-brand-gold/90 text-white text-xs px-3.5 py-1.5 rounded font-bold"><i
+                            class="fas fa-save mr-1"></i> Save</button>
+                    <button onclick="createShareLink()"
+                        class="bg-[#2a2a2a] text-white text-xs px-3 py-1.5 rounded font-bold border border-[#3a3a3a] hover:bg-[#333]"><i
+                            class="fas fa-link mr-1"></i> Share</button>
+                    <button onclick="submitForReview()"
+                        class="bg-[#2a2a2a] text-white text-xs px-3 py-1.5 rounded font-bold border border-brand-gold/60 hover:bg-[#333]">Submit
+                        for Review</button>
+                    <button id="publishBtn" onclick="publishNow()"
+                        class="hidden bg-green-600 hover:bg-green-500 text-white text-xs px-3.5 py-1.5 rounded font-bold">🚀
+                        Publish</button>
+                </div>
+            </div>
+            <!-- Row 2: workspace utilities -->
+            <div class="flex items-center justify-between px-4 py-2 bg-[#141414] border-t border-[#111] gap-3">
+                <div class="flex items-center gap-1 bg-[#1f1f1f] px-2 py-0.5 rounded border border-[#333]">
+                    <span class="text-[8px] uppercase tracking-wider text-gray-500 font-bold mr-1">Workspace</span>
+                    <button id="device-desktop" onclick="setEditorDevice('Desktop')"
+                        class="px-2 py-0.5 rounded text-[8px] font-bold bg-brand-gold text-white">🖥️ Desktop</button>
+                    <button id="device-tablet" onclick="setEditorDevice('Tablet')"
+                        class="px-2 py-0.5 rounded text-[8px] font-bold text-gray-400 hover:text-white">📟
+                        Tablet</button>
+                    <button id="device-mobile" onclick="setEditorDevice('Mobile')"
+                        class="px-2 py-0.5 rounded text-[8px] font-bold text-gray-400 hover:text-white">📱
+                        Mobile</button>
+                </div>
+                <div class="flex items-center gap-1 bg-[#1f1f1f] px-2 py-0.5 rounded border border-[#333]">
+                    <span class="text-[8px] uppercase tracking-wider text-gray-500 font-bold mr-1">View</span>
+                    <button id="btn-preview" onclick="toggleEditorPreview()"
+                        class="px-2 py-0.5 rounded text-[8px] font-bold text-gray-400 hover:text-white">👁️
+                        Preview</button>
+                    <button id="btn-fullscreen" onclick="toggleEditorFullscreen()"
+                        class="px-2 py-0.5 rounded text-[8px] font-bold text-gray-400 hover:text-white">⛶
+                        Fullscreen</button>
+                    <button onclick="toggleMobileSidebar()"
+                        class="lg:hidden px-2 py-0.5 rounded text-[8px] font-bold text-gray-400 hover:text-white">⚙️
+                        Panels</button>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button
+                        class="bg-[#2a2a2a] text-white text-[9px] px-2.5 py-1 rounded font-bold border border-[#3a3a3a] hover:bg-[#333] flex items-center gap-1"
+                        onclick="openGeneralAssetManager()"
+                        title="Upload or pick an image and insert it after the selected block">
+                        <span>📷</span> Add Image
+                    </button>
+                    <button
+                        class="bg-[#2a2a2a] text-white text-[9px] px-2.5 py-1 rounded font-bold border border-[#3a3a3a] hover:bg-[#333] flex items-center gap-1"
+                        onclick="insertYouTubeBlock()">
+                        <span><i class="fab fa-youtube"></i></span> Add Video
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="gjs"></div>
+    </div>
+
+    <!-- META / SEO / REVIEW MODAL -->
+    <div id="metaModal" class="hidden modal-overlay">
+        <div class="modal-box">
+            <div class="modal-header">
+                <div>
+                    <h2>Post Details &amp; SEO</h2>
+                    <p>Category, tags, cover image and search-engine metadata</p>
+                </div>
+                <button class="modal-close" onclick="closeMetaPanel()">✕</button>
+            </div>
+            <div class="modal-body space-y-4">
+                <div class="grid grid-cols-2 gap-3">
+                    <div><span class="field-label">Category</span><input id="postCategory" class="field-input"></div>
+                    <div><span class="field-label">Tags (comma separated)</span><input id="postTags"
+                            class="field-input"></div>
+                </div>
+                <div>
+                    <span class="field-label">Cover Image</span>
+                    <div class="flex gap-2">
+                        <input id="postCover" class="field-input flex-1" placeholder="Paste an image URL, or upload">
+                        <button onclick="document.getElementById('coverFileInput').click()"
+                            class="px-3 py-2 rounded border border-white/10 text-white"><i
+                                class="fas fa-upload"></i></button>
+                        <input type="file" id="coverFileInput" accept="image/*" class="hidden"
+                            onchange="uploadCover(this.files[0])">
+                    </div>
+                </div>
+                <div><span class="field-label">Excerpt</span><textarea id="postExcerpt" class="field-input" rows="2"
+                        placeholder="Short summary used for previews and as an SEO description fallback"></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div><span class="field-label">SEO Title (optional)</span><input id="seoTitle" class="field-input">
+                    </div>
+                    <div><span class="field-label">SEO Description (optional)</span><input id="seoDescription"
+                            class="field-input"></div>
+                </div>
+
+                <div id="reviewPanel" class="hidden pt-4 border-t border-[#2a2a2a]">
+                    <h4 class="font-semibold mb-2 text-sm text-white">Review this submission</h4>
+                    <textarea id="rejectComment" class="field-input mb-3" rows="2"
+                        placeholder="Reason for sending back (required if rejecting)"></textarea>
+                    <div class="flex gap-2">
+                        <button onclick="approvePost()"
+                            class="bg-green-600/80 hover:bg-green-600 px-4 py-2 rounded text-sm text-white">Approve
+                            &amp; Publish</button>
+                        <button onclick="rejectPost()"
+                            class="bg-red-600/80 hover:bg-red-600 px-4 py-2 rounded text-sm text-white">Reject</button>
+                    </div>
+                </div>
+
+                <div id="auditTrail" class="pt-4 border-t border-[#2a2a2a] text-xs text-gray-400"></div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .tab-link {
+            background: transparent;
+            color: #94a3b8;
+            border: 1px solid transparent;
+        }
+
+        .tab-link.active {
+            background: #C47D0A;
+            color: #0F1115;
+            font-weight: 600;
+        }
+    </style>
+
+    <script>
+        const API = '/api/blog';
+        function authHeaders(json = true) {
+            const h = { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` };
+            if (json) h['Content-Type'] = 'application/json';
+            return h;
+        }
+        const currentUser = JSON.parse(localStorage.getItem('admin') || '{}');
+        let currentPostId = null;
+        let editor = null; // GrapesJS instance
+
+        function toast(msg) {
+            const t = document.createElement('div');
+            t.style.cssText = 'position:fixed;bottom:24px;right:24px;background:#16181D;border:1px solid rgba(196,125,10,0.4);color:#E5E7EB;padding:12px 20px;border-radius:8px;z-index:100000;font-size:13px;';
+            t.textContent = msg;
+            document.body.appendChild(t);
+            setTimeout(() => t.remove(), 2500);
+        }
+
+        function hasRole(...roles) {
+            const all = `${currentUser.role || ''},${currentUser.primary_role || ''}`.toLowerCase();
+            if (all.includes('super_admin')) return true;
+            return roles.some(r => all.split(',').map(s => s.trim()).includes(r));
+        }
+
+        async function api(path, options = {}) {
+            const res = await fetch(`${API}${path}`, options);
+            if (res.status === 401) {
+                toast('Session expired — please log in again.');
+                setTimeout(() => window.location.href = '/login', 1200);
+                throw new Error('unauthorized');
+            }
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                throw new Error(body.detail || `Request failed (${res.status})`);
+            }
+            return res.status === 204 ? null : res.json();
+        }
+
+        // ── Tab switching (list views) ──────────────────────────
+        function switchTab(name) {
+            document.querySelectorAll('.tab-link').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('[id^="tab-"]').forEach(s => s.classList.add('hidden'));
+            document.getElementById(`tab-${name}`).classList.remove('hidden');
+            event?.target?.closest('.tab-link')?.classList.add('active');
+            if (name === 'list') loadPosts('postsList');
+            if (name === 'mine') loadPosts('mineList', { mine: 'true' });
+            if (name === 'review') loadPosts('reviewList', { status: 'pending_review' });
+            if (name === 'curate') loadCuration();
+        }
+
+        function badge(status) { return `<span class="badge badge-${status}">${status.replace('_', ' ')}</span>`; }
+
+        async function loadPosts(targetId, params = {}) {
+            const qs = new URLSearchParams(params).toString();
+            const el = document.getElementById(targetId);
+            try {
+                const posts = await api(`/posts?${qs}`, { headers: authHeaders() });
+                el.innerHTML = posts.map(p => `
+                    <div class="post-row flex items-center justify-between px-4 py-3 cursor-pointer" onclick="openPost('${p.id}')">
+                        <div>
+                            <div class="font-medium text-white">${p.title || '(untitled)'}</div>
+                            <div class="text-xs text-gray-400">${p.author_name_snapshot || ''}${p.author_department_snapshot ? ' · ' + p.author_department_snapshot : ''}</div>
+                        </div>
+                        ${badge(p.status)}
+                    </div>
+                `).join('') || '<div class="px-4 py-6 text-gray-500 text-sm">No posts yet.</div>';
+            } catch (e) { el.innerHTML = `<div class="px-4 py-6 text-red-400 text-sm">${e.message}</div>`; }
+        }
+
+        function showEditorShell(show) {
+            document.getElementById('editorShell').classList.toggle('hidden', !show);
+            document.getElementById('listShell').classList.toggle('hidden', show);
+        }
+
+        function exitEditor() { showEditorShell(false); switchTab('list'); }
+
+        // ── GrapesJS init (once) ──────────────────────────────────
+        function initGrapesJS() {
+            if (editor) return editor;
+            editor = grapesjs.init({
+                container: '#gjs',
+                height: '100%',
+                fromElement: false,
+                storageManager: false,
+                assetManager: {
+                    upload: `${API}/upload-image`,
+                    uploadName: 'file',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` },
+                    embedAsBase64: false,
+                },
+                deviceManager: {
+                    devices: [
+                        { name: 'Desktop', width: '' },
+                        { name: 'Tablet', width: '768px', widthMedia: '992px' },
+                        { name: 'Mobile', width: '375px', widthMedia: '575px' },
+                    ],
+                },
+                plugins: ['gjs-preset-webpage', 'gjs-blocks-basic'],
+                pluginsOpts: {
+                    'gjs-preset-webpage': { modalImportTitle: 'Import HTML', blocks: ['link-block', 'quote', 'text-basic'] },
+                    'gjs-blocks-basic': { blocks: ['text', 'image', 'video'], flexGrid: true },
+                },
+                canvas: {
+                    styles: [
+                        'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@400;700&display=swap',
+                    ],
+                },
+                // Medium/Blogger-style RTE: a focused floating toolbar on text
+                // selection instead of relying only on the sidebar Style Manager.
+                rte: {
+                    actions: ['bold', 'italic', 'underline', 'strikethrough', 'link', 'wrap'],
+                    custom: false,
+                },
+            });
+
+            registerCustomBlocks(editor);
+            wirePreviewFullscreen(editor);
+            applyMediumStyleCanvas(editor);
+            addHeadingRTEActions(editor);
+            curateBlockPalette(editor);
+            return editor;
+        }
+
+        // ── Medium/Blogger-style reading canvas: constrained width, serif
+        // article typography, generous line-height — instead of a blank
+        // full-width page like a generic site builder. ──
+        function applyMediumStyleCanvas(editor) {
+            editor.on('load', () => {
+                const doc = editor.Canvas.getDocument();
+                if (!doc) return;
+                const style = doc.createElement('style');
+                style.innerHTML = `
+                    body {
+                        max-width: 680px;
+                        margin: 0 auto;
+                        padding: 60px 20px 120px;
+                        font-family: Georgia, 'Playfair Display', serif;
+                        font-size: 20px;
+                        line-height: 1.7;
+                        color: #1a1a1a;
+                    }
+                    body h1 { font-family: 'Playfair Display', Georgia, serif; font-size: 40px; line-height: 1.25; font-weight: 700; margin: 0 0 16px; }
+                    body h2 { font-family: 'Playfair Display', Georgia, serif; font-size: 30px; margin: 40px 0 12px; }
+                    body p { margin: 0 0 20px; }
+                    body img { max-width: 100%; border-radius: 4px; }
+                    body blockquote { font-family: 'Playfair Display', Georgia, serif; }
+                    body a { color: #C47D0A; }
+                `;
+                doc.head.appendChild(style);
+            });
+        }
+
+        // ── Medium-style heading/quote shortcuts in the floating RTE toolbar
+        // (appears on text selection, not buried in the sidebar) ──
+        function addHeadingRTEActions(editor) {
+            const rte = editor.RichTextEditor;
+            rte.add('heading1', {
+                icon: '<b style="font-size:12px">H1</b>',
+                attributes: { title: 'Heading' },
+                result: (rte) => rte.exec('formatBlock', '<h1>'),
+            });
+            rte.add('heading2', {
+                icon: '<b style="font-size:11px">H2</b>',
+                attributes: { title: 'Subheading' },
+                result: (rte) => rte.exec('formatBlock', '<h2>'),
+            });
+            rte.add('blockquote', {
+                icon: '<i class="fas fa-quote-left" style="font-size:11px"></i>',
+                attributes: { title: 'Quote' },
+                result: (rte) => rte.exec('formatBlock', '<blockquote>'),
+            });
+        }
+
+        // ── Curated palette: hide the generic webpage/basic blocks that
+        // don't belong in a focused writing tool, keep only what a blog
+        // author actually needs (Basic: Text/Image/Video + our Blog set) ──
+        function curateBlockPalette(editor) {
+            const bm = editor.BlockManager;
+            const keepIds = new Set([
+                'text', 'image', 'video',
+                'blog-gallery', 'blog-youtube', 'blog-pull-quote', 'blog-divider', 'blog-cta',
+            ]);
+            bm.getAll().forEach((block) => {
+                if (!keepIds.has(block.get('id'))) bm.remove(block.get('id'));
+            });
+        }
+
+        // ── Custom "Blog" category blocks ──────────────────────────
+        function registerCustomBlocks(editor) {
+            const bm = editor.BlockManager;
+
+            bm.add('blog-gallery', {
+                label: '🖼️ Image Gallery', category: 'Blog',
+                content: `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:16px 0;">
+                    <img src="https://via.placeholder.com/300x200?text=Add+Image" style="width:100%;border-radius:6px;" />
+                    <img src="https://via.placeholder.com/300x200?text=Add+Image" style="width:100%;border-radius:6px;" />
+                    <img src="https://via.placeholder.com/300x200?text=Add+Image" style="width:100%;border-radius:6px;" />
+                </div>`,
+            });
+
+            bm.add('blog-youtube', {
+                label: '▶️ YouTube Video', category: 'Blog',
+                content: `<div style="padding:40px;text-align:center;background:#f3f4f6;border:2px dashed #d1d5db;border-radius:8px;" data-blog-youtube="1">
+                    Click "Add Video" in the top toolbar after dropping this block, or drop it and double-click to set the URL.
+                </div>`,
+            });
+
+            bm.add('blog-pull-quote', {
+                label: '❝ Pull Quote', category: 'Blog',
+                content: `<blockquote style="border-left:4px solid #C47D0A;padding:12px 24px;margin:24px 0;font-size:22px;font-style:italic;font-family:'Playfair Display',serif;color:#333;">Add your pull quote here.</blockquote>`,
+            });
+
+            bm.add('blog-divider', {
+                label: '➖ Divider', category: 'Blog',
+                content: `<hr style="border:none;border-top:1px solid #e5e7eb;margin:32px 0;" />`,
+            });
+
+            bm.add('blog-cta', {
+                label: '🔘 CTA Button', category: 'Blog',
+                content: `<a href="#" style="display:inline-block;background:#C47D0A;color:#0F1115;padding:12px 28px;border-radius:6px;font-weight:700;text-decoration:none;margin:16px 0;">Learn More</a>`,
+            });
+
+            // Double-click a YouTube placeholder to set/change its URL
+            editor.on('component:dblclick', (component) => {
+                const el = component.getEl && component.getEl();
+                if (el && el.getAttribute('data-blog-youtube') === '1') insertYouTubeInto(component);
+            });
+        }
+
+        function insertYouTubeInto(component) {
+            const url = prompt('Paste YouTube URL:');
+            if (!url) return;
+            const idMatch = url.match(/(?:v=|youtu\.be\/|embed\/)([a-zA-Z0-9_-]{11})/);
+            if (!idMatch) return toast('Could not read a video ID from that URL.');
+            component.components(`<iframe width="100%" height="360" src="https://www.youtube.com/embed/${idMatch[1]}" frameborder="0" allowfullscreen style="border-radius:8px;"></iframe>`);
+            component.addAttributes({ 'data-blog-youtube': null });
+            component.setStyle({ padding: 0, background: 'none', border: 'none' });
+        }
+
+        function insertYouTubeBlock() {
+            const url = prompt('Paste YouTube URL:');
+            if (!url) return;
+            const idMatch = url.match(/(?:v=|youtu\.be\/|embed\/)([a-zA-Z0-9_-]{11})/);
+            if (!idMatch) return toast('Could not read a video ID from that URL.');
+            const html = `<div><iframe width="100%" height="360" src="https://www.youtube.com/embed/${idMatch[1]}" frameborder="0" allowfullscreen style="border-radius:8px;"></iframe></div>`;
+            insertAfterSelected({ type: 'default', tagName: 'div', content: html });
+        }
+
+        // ── Insert-after-selected helper (same pattern as the marketing editor's Add Image) ──
+        function insertAfterSelected(componentDef) {
+            const selected = editor.getSelected();
+            if (selected) {
+                const parent = selected.parent();
+                if (parent) {
+                    const index = selected.index ? selected.index() : parent.components().indexOf(selected);
+                    parent.append(componentDef, { at: index + 1 });
+                    return;
+                }
+                selected.append(componentDef);
+                return;
+            }
+            const wrapper = editor.getWrapper();
+            if (wrapper) wrapper.append(componentDef);
+            else editor.addComponents(componentDef);
+        }
+
+        function openGeneralAssetManager() {
+            editor.AssetManager.open({
+                select(asset, complete) {
+                    const url = typeof asset === 'string' ? asset : (asset.getSrc ? asset.getSrc() : asset.get('src'));
+                    if (url) {
+                        insertAfterSelected({
+                            type: 'image', src: url,
+                            style: { width: '100%', height: 'auto', 'max-width': '600px', display: 'block', margin: '10px auto' },
+                        });
+                    }
+                    if (complete) editor.AssetManager.close();
+                }
+            });
+        }
+
+        // ── Device / Preview / Fullscreen controls ─────────────────
+        function setEditorDevice(device) {
+            editor.setDevice(device);
+            ['desktop', 'tablet', 'mobile'].forEach(d => {
+                const btn = document.getElementById(`device-${d}`);
+                if (!btn) return;
+                btn.className = d === device.toLowerCase()
+                    ? 'px-2 py-0.5 rounded text-[8px] font-bold bg-brand-gold text-white'
+                    : 'px-2 py-0.5 rounded text-[8px] font-bold text-gray-400 hover:text-white';
+            });
+        }
+
+        function toggleEditorPreview() {
+            const isActive = editor.Commands.isActive('preview') || editor.Commands.isActive('core:preview');
+            if (isActive) { editor.stopCommand('preview'); editor.stopCommand('core:preview'); }
+            else { try { editor.Commands.get('preview') ? editor.runCommand('preview') : editor.runCommand('core:preview'); } catch (e) { try { editor.runCommand('core:preview'); } catch (err) { } } }
+        }
+
+        function toggleEditorFullscreen() {
+            const isActive = editor.Commands.isActive('fullscreen') || editor.Commands.isActive('core:fullscreen');
+            if (isActive) { editor.stopCommand('fullscreen'); editor.stopCommand('core:fullscreen'); }
+            else { try { editor.Commands.get('fullscreen') ? editor.runCommand('fullscreen') : editor.runCommand('core:fullscreen'); } catch (e) { try { editor.runCommand('core:fullscreen'); } catch (err) { } } }
+        }
+
+        function wirePreviewFullscreen(editor) {
+            const startPreview = () => {
+                document.body.classList.add('preview-active');
+                document.querySelector('.gjs-editor')?.classList.add('preview-active');
+                const btn = document.getElementById('btn-preview');
+                if (btn) btn.className = 'px-2 py-0.5 rounded text-[8px] font-bold bg-brand-gold text-white';
+            };
+            const stopPreview = () => {
+                document.body.classList.remove('preview-active');
+                document.querySelector('.gjs-editor')?.classList.remove('preview-active');
+                const btn = document.getElementById('btn-preview');
+                if (btn) btn.className = 'px-2 py-0.5 rounded text-[8px] font-bold text-gray-400 hover:text-white';
+            };
+            editor.on('run', (id) => { if (id === 'preview' || id === 'core:preview') startPreview(); });
+            editor.on('stop', (id) => { if (id === 'preview' || id === 'core:preview') stopPreview(); });
+        }
+
+        function toggleMobileSidebar() { document.body.classList.toggle('sidebar-open'); }
+
+        // ── Post CRUD / workflow ─────────────────────────────────
+        function newPost() {
+            currentPostId = null;
+            initGrapesJS().setComponents('<h1>Your headline here</h1><p>Start writing your story…</p>');
+            editor.setStyle('');
+            ['postTitle', 'postCategory', 'postTags', 'postCover', 'seoTitle', 'seoDescription', 'postExcerpt'].forEach(id => document.getElementById(id).value = '');
+            document.getElementById('reviewPanel').classList.add('hidden');
+            document.getElementById('auditTrail').innerHTML = '';
+            togglePublishButton('draft');
+            showEditorShell(true);
+        }
+
+        function togglePublishButton(status) {
+            const canPublish = hasRole('blog_publisher', 'admin');
+            document.getElementById('publishBtn').classList.toggle('hidden', !canPublish);
+            document.getElementById('reviewPanel').classList.toggle('hidden', !(status === 'pending_review' && canPublish));
+        }
+
+        async function openPost(id) {
+            const p = await api(`/posts/${id}`, { headers: authHeaders() });
+            currentPostId = p.id;
+            document.getElementById('postTitle').value = p.title;
+            document.getElementById('postCategory').value = p.category || '';
+            document.getElementById('postTags').value = (p.tags || []).join(', ');
+            document.getElementById('postCover').value = p.cover_image_url || '';
+            document.getElementById('postExcerpt').value = p.excerpt || '';
+            document.getElementById('seoTitle').value = p.seo_title || '';
+            document.getElementById('seoDescription').value = p.seo_description || '';
+
+            const ed = initGrapesJS();
+            ed.setComponents((p.content && p.content.html) || '<p>Start writing…</p>');
+            ed.setStyle((p.content && p.content.css) || '');
+
+            togglePublishButton(p.status);
+            showEditorShell(true);
+            loadAuditTrail(id);
+        }
+
+        function openMetaPanel() { document.getElementById('metaModal').classList.remove('hidden'); }
+        function closeMetaPanel() { document.getElementById('metaModal').classList.add('hidden'); }
+
+        function gatherPayload() {
+            return {
+                title: document.getElementById('postTitle').value,
+                content: { html: editor.getHtml(), css: editor.getCss() },
+                excerpt: document.getElementById('postExcerpt').value,
+                cover_image_url: document.getElementById('postCover').value,
+                seo_title: document.getElementById('seoTitle').value,
+                seo_description: document.getElementById('seoDescription').value,
+                category: document.getElementById('postCategory').value,
+                tags: document.getElementById('postTags').value.split(',').map(t => t.trim()).filter(Boolean),
+            };
+        }
+
+        function setSaveStatus(msg) {
+            const el = document.getElementById('save-status');
+            if (el) el.textContent = msg;
+            if (msg) setTimeout(() => { if (el) el.textContent = ''; }, 2000);
+        }
+
+        async function saveDraft(silent = false) {
+            const payload = gatherPayload();
+            if (!payload.title.trim()) { toast('Please add a title first.'); throw new Error('no title'); }
+            if (!currentPostId) {
+                const p = await api('/posts', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) });
+                currentPostId = p.id;
+            } else {
+                await api(`/posts/${currentPostId}`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify(payload) });
+            }
+            setSaveStatus('Saved ✓');
+            if (!silent) toast('Saved.');
+        }
+
+        async function submitForReview() {
+            await saveDraft(true);
+            await api(`/posts/${currentPostId}/submit`, { method: 'POST', headers: authHeaders() });
+            toast('Submitted for review.');
+            exitEditor();
+        }
+
+        async function publishNow() {
+            await saveDraft(true);
+            await api(`/posts/${currentPostId}/publish`, { method: 'POST', headers: authHeaders() });
+            toast('Published.');
+            exitEditor();
+        }
+
+        async function approvePost() {
+            await api(`/posts/${currentPostId}/publish`, { method: 'POST', headers: authHeaders() });
+            toast('Approved and published.');
+            closeMetaPanel();
+            exitEditor();
+        }
+
+        async function rejectPost() {
+            const comment = document.getElementById('rejectComment').value;
+            if (!comment) return toast('Please explain what needs to change.');
+            await api(`/posts/${currentPostId}/reject`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ comment }) });
+            toast('Sent back to author.');
+            closeMetaPanel();
+            exitEditor();
+        }
+
+        async function createShareLink() {
+            if (!currentPostId) await saveDraft(true);
+            const data = await api(`/posts/${currentPostId}/share-link`, { method: 'POST', headers: authHeaders() });
+            prompt('Shareable preview link (works even while in draft/review):', window.location.origin + data.preview_path);
+        }
+
+        async function loadAuditTrail(id) {
+            const log = await api(`/posts/${id}/audit-log`, { headers: authHeaders() });
+            document.getElementById('auditTrail').innerHTML = '<div class="font-semibold mb-2 text-gray-300">Audit Trail</div>' +
+                log.map(l => `<div>${new Date(l.created_at).toLocaleString()} — ${l.action}${l.comment ? ': ' + l.comment : ''}</div>`).join('');
+        }
+
+        async function uploadCover(file) {
+            if (!file) return;
+            toast('Uploading cover image…');
+            const formData = new FormData();
+            formData.append('file', file);
+            try {
+                const res = await fetch(`${API}/upload-image`, { method: 'POST', headers: authHeaders(false), body: formData });
+                if (!res.ok) throw new Error('upload failed');
+                const data = await res.json();
+                document.getElementById('postCover').value = data.data[0];
+                toast('Cover image uploaded.');
+            } catch (e) { toast('Upload failed: ' + e.message); }
+        }
+
+        // ── Curation ─────────────────────────────────────────────
+        async function loadCuration() {
+            const posts = await api('/posts?status=published', { headers: authHeaders() });
+            const select = document.getElementById('curatePostSelect');
+            select.innerHTML = posts.map(p => `<option value="${p.id}">${p.title}</option>`).join('') || '<option disabled>No published posts yet</option>';
+            for (const type of ['featured', 'ticker', 'top_content']) {
+                const placements = await api(`/placements?placement_type=${type}`, { headers: authHeaders() });
+                const container = document.querySelector(`[data-placement="${type}"] .placement-list`);
+                container.innerHTML = placements.map(pl => `
+                    <div class="flex items-center justify-between bg-white/5 px-3 py-2 rounded text-white">
+                        <span>${pl.blog_posts?.title || ''}</span>
+                        <button onclick="removePlacement('${pl.id}')" class="text-red-400 text-xs">Remove</button>
+                    </div>
+                `).join('') || '<div class="text-gray-500">Empty</div>';
+            }
+        }
+
+        async function addPlacement() {
+            const post_id = document.getElementById('curatePostSelect').value;
+            const placement_type = document.getElementById('curatePlacementType').value;
+            if (!post_id) return;
+            await api('/placements', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ post_id, placement_type, position: 0 }) });
+            loadCuration();
+        }
+
+        async function removePlacement(id) {
+            await api(`/placements/${id}`, { method: 'DELETE', headers: authHeaders() });
+            loadCuration();
+        }
+
+        // ── Init ─────────────────────────────────────────────────
+        document.getElementById('reviewNavBtn').classList.toggle('hidden', !hasRole('blog_publisher', 'admin'));
+        document.getElementById('curateNavBtn').classList.toggle('hidden', !hasRole('blog_curator', 'admin'));
+        document.querySelector('.tab-link').classList.add('active');
+        loadPosts('postsList');
+    </script>
+</body>
+
+</html>

@@ -44,7 +44,8 @@ from routers import (
     biodata,
     guarantor,
     kyc_links,
-    discount_codes
+    discount_codes,
+    blog
 )
 from routers import refunds
 from routers import feedback
@@ -207,6 +208,7 @@ app.include_router(discount_codes.router, prefix="/api/discount-codes", tags=["d
 app.include_router(refunds.router, prefix="/api/refunds", tags=["refunds"])
 app.include_router(feedback.router, prefix="/api/feedback", tags=["feedback"])
 
+app.include_router(blog.router, prefix="/api/blog", tags=["blog"])
 
 
 
@@ -468,6 +470,10 @@ async def handle_legal_placeholders(tag: str):
 
     # 3. Fall through to 404
     raise HTTPException(status_code=404, detail="Not Found")
+
+@app.get("/blog-manager", response_class=HTMLResponse)
+async def blog_manager_page(request: Request):
+    return templates.TemplateResponse(request, "blog_dashboard.html", {"request": request})
 
 
 @app.get("/favicon.ico", include_in_schema=False)

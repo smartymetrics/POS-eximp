@@ -5,6 +5,7 @@ import mimetypes
 logger = logging.getLogger(__name__)
 
 PORTAL_CLAIMS_BUCKET = "Cloud Infrastructure"
+BLOG_MEDIA_BUCKET = "blog-media"
 
 def generate_signed_url(bucket: str, path: str, expires_in: int = 3600) -> str:
     """
