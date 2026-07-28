@@ -14,10 +14,11 @@ Follows existing project conventions:
   "admin" / "super_admin" always pass every check (has_any_role handles this).
 """
 
+import os
 import re
 import uuid
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, List
 
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, UploadFile, File
@@ -34,7 +35,7 @@ router = APIRouter()
 
 PUBLISHER_ROLES = ["admin", "super_admin", "blog_publisher"]
 CURATOR_ROLES = ["admin", "super_admin", "blog_curator"]
-MODERATOR_ROLES = ["admin", "super_admin", "blog_moderator"]
+MODERATOR_ROLES = ["admin", "super_admin", "blog_moderator", "blog_publisher", "blog_curator"]
 
 
 # ─────────────────────────── helpers ───────────────────────────
@@ -142,6 +143,18 @@ class PostUpdate(BaseModel):
     seo_description: Optional[str] = None
     tags: Optional[List[str]] = None
     category: Optional[str] = None
+
+
+class NewsletterSubscribeRequest(BaseModel):
+    email: str
+
+
+class ProfileCompleteRequest(BaseModel):
+    token: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    dob: Optional[str] = None
+    phone: Optional[str] = None
 
 
 class RejectRequest(BaseModel):
@@ -731,3 +744,180 @@ async def update_staff_blog_roles(admin_id: str, data: StaffRoleUpdate, current_
     new_role_str = ",".join(sorted(role_set))
     res = await db_execute(lambda: db.table("admins").update({"role": new_role_str}).eq("id", admin_id).execute())
     return {"status": "updated", "role": new_role_str}
+
+
+# ─────────────────────────── public newsletter & double opt-in ───────────────────────────
+
+async def _send_newsletter_verification_email(to_email: str, token: str):
+    site_url = os.getenv("SITE_URL", "https://eximps-cloves.com")
+    verify_link = f"{site_url}/verify-subscription?token={token}"
+    subject = "Confirm your subscription to Eximp & Cloves Insights"
+    html = f"""
+    <div style="font-family:'Inter',system-ui,sans-serif;max-width:600px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
+      <div style="background:#0F1115;padding:24px 32px;border-bottom:3px solid #C47D0A;">
+        <span style="color:#C47D0A;font-weight:800;font-size:18px;letter-spacing:0.05em;">EXIMP &amp; CLOVES</span>
+        <span style="color:#9CA3AF;font-size:12px;margin-left:8px;">INSIGHTS</span>
+      </div>
+      <div style="padding:32px;color:#1F2937;">
+        <h2 style="color:#111827;font-size:22px;margin-top:0;">Verify Your Email Address</h2>
+        <p style="font-size:15px;line-height:1.6;color:#4B5563;">
+          Thank you for subscribing to Eximp &amp; Cloves Insights! Please click the button below to verify your email address and confirm your subscription.
+        </p>
+        <div style="margin:28px 0;text-align:center;">
+          <a href="{verify_link}" style="background:#C47D0A;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:6px;font-weight:700;font-size:14px;display:inline-block;">
+            Confirm Subscription
+          </a>
+        </div>
+        <p style="font-size:13px;color:#6B7280;line-height:1.5;">
+          If the button above does not work, copy and paste this link into your browser:<br>
+          <a href="{verify_link}" style="color:#C47D0A;word-break:break-all;">{verify_link}</a>
+        </p>
+        <p style="font-size:12px;color:#9CA3AF;margin-top:24px;">
+          If you did not request this subscription, you can safely ignore this email.
+        </p>
+      </div>
+      <div style="background:#F9FAFB;padding:20px 32px;border-top:1px solid #E5E7EB;font-size:11px;color:#9CA3AF;text-align:center;">
+        Eximp &amp; Cloves Infrastructure Limited · 57B Isaac John Street, Yaba, Lagos
+      </div>
+    </div>
+    """
+    try:
+        import resend
+        if not getattr(resend, "api_key", None):
+            resend.api_key = os.getenv("RESEND_API_KEY")
+        from_addr = os.getenv("FROM_EMAIL", "newsletter@eximps-cloves.com")
+        import asyncio
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, lambda: resend.Emails.send({
+            "from": f"Eximp & Cloves <{from_addr}>",
+            "to": [to_email],
+            "subject": subject,
+            "html": html,
+        }))
+    except Exception as e:
+        logger.error(f"Failed to send newsletter verification email to {to_email}: {e}")
+
+
+@router.post("/public/newsletter/subscribe")
+async def public_newsletter_subscribe(data: NewsletterSubscribeRequest, background_tasks: BackgroundTasks):
+    email = (data.email or "").strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(400, "Please provide a valid email address.")
+
+    db = get_db()
+    token = str(uuid.uuid4())
+    expires_at = (datetime.utcnow() + timedelta(hours=24)).isoformat()
+
+    try:
+        await db_execute(lambda: db.table("blog_newsletter_subscriptions").upsert({
+            "email": email,
+            "verification_token": token,
+            "status": "pending",
+            "token_expires_at": expires_at,
+            "updated_at": datetime.utcnow().isoformat(),
+        }, on_conflict="email").execute())
+    except Exception as e:
+        logger.warning(f"Newsletter subscription database upsert error: {e}")
+
+    background_tasks.add_task(_send_newsletter_verification_email, email, token)
+
+    return {
+        "status": "pending_verification",
+        "message": "Verification link sent! Please check your email to confirm your subscription."
+    }
+
+
+@router.get("/public/newsletter/verify")
+async def public_newsletter_verify(token: str):
+    if not token:
+        raise HTTPException(400, "Verification token is required.")
+
+    db = get_db()
+    sub_res = await db_execute(
+        lambda: db.table("blog_newsletter_subscriptions").select("*").eq("verification_token", token).execute()
+    )
+    if not sub_res.data:
+        raise HTTPException(404, "Invalid or expired verification link.")
+
+    sub = sub_res.data[0]
+    email = sub["email"]
+
+    # Update subscription to verified
+    await db_execute(lambda: db.table("blog_newsletter_subscriptions").update({
+        "status": "verified",
+        "verified_at": datetime.utcnow().isoformat(),
+        "updated_at": datetime.utcnow().isoformat(),
+    }).eq("id", sub["id"]).execute())
+
+    # Check if client exists in clients table
+    client_res = await db_execute(
+        lambda: db.table("clients").select("id, client_type, first_name, last_name, phone").eq("email", email).execute()
+    )
+    is_client = bool(client_res.data)
+    client_info = client_res.data[0] if is_client else {}
+
+    # Upsert into marketing_contacts table (Lead or Client)
+    contact_type = "client" if is_client else "lead"
+    contact_payload = {
+        "email": email,
+        "contact_type": contact_type,
+        "source": "newsletter_double_optin",
+        "is_subscribed": True,
+        "tags": ["newsletter", "double_optin_verified"],
+        "engagement_score": 10,
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+    if client_info.get("first_name"):
+        contact_payload["first_name"] = client_info["first_name"]
+    if client_info.get("last_name"):
+        contact_payload["last_name"] = client_info["last_name"]
+    if client_info.get("phone"):
+        contact_payload["phone"] = client_info["phone"]
+
+    try:
+        await db_execute(
+            lambda: db.table("marketing_contacts").upsert(contact_payload, on_conflict="email").execute()
+        )
+    except Exception as e:
+        logger.warning(f"Error syncing marketing_contacts for {email}: {e}")
+
+    return {
+        "status": "verified",
+        "email": email,
+        "is_client": is_client,
+        "message": "Subscription verified successfully! Welcome to Eximp & Cloves Insights."
+    }
+
+
+@router.post("/public/newsletter/complete-profile")
+async def public_newsletter_complete_profile(data: ProfileCompleteRequest):
+    if not data.token:
+        raise HTTPException(400, "Token is required.")
+
+    db = get_db()
+    sub_res = await db_execute(
+        lambda: db.table("blog_newsletter_subscriptions").select("email").eq("verification_token", data.token).execute()
+    )
+    if not sub_res.data:
+        raise HTTPException(404, "Invalid token.")
+
+    email = sub_res.data[0]["email"]
+
+    updates = {"updated_at": datetime.utcnow().isoformat()}
+    if data.first_name:
+        updates["first_name"] = data.first_name.strip()
+    if data.last_name:
+        updates["last_name"] = data.last_name.strip()
+    if data.dob:
+        updates["dob"] = data.dob.strip()
+    if data.phone:
+        updates["phone"] = data.phone.strip()
+
+    await db_execute(
+        lambda: db.table("marketing_contacts").update(updates).eq("email", email).execute()
+    )
+
+    return {
+        "status": "success",
+        "message": "Thank you! Your profile has been updated."
+    }

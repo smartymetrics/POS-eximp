@@ -525,7 +525,7 @@
             <button id="curateNavBtn" onclick="switchTab('curate')"
                 class="tab-link px-3 py-1.5 rounded text-sm hidden">Curate Homepage</button>
             <button id="commentsNavBtn" onclick="switchTab('comments')"
-                class="tab-link px-3 py-1.5 rounded text-sm"><i class="fas fa-comments mr-1"></i> Comments</button>
+                class="tab-link px-3 py-1.5 rounded text-sm hidden"><i class="fas fa-comments mr-1"></i> Comments</button>
             <button id="rolesNavBtn" onclick="switchTab('roles')"
                 class="tab-link px-3 py-1.5 rounded text-sm hidden"><i class="fas fa-user-shield mr-1"></i> Staff Permissions</button>
             <button onclick="newPost()"
@@ -612,11 +612,12 @@
                                 <th class="px-4 py-3">Department</th>
                                 <th class="px-4 py-3 text-center">Can Publish &amp; Approve</th>
                                 <th class="px-4 py-3 text-center">Can Curate Homepage</th>
+                                <th class="px-4 py-3 text-center">Can Moderate Comments</th>
                                 <th class="px-4 py-3">Current Roles</th>
                             </tr>
                         </thead>
                         <tbody id="staffRolesList" class="divide-y divide-white/5">
-                            <tr><td colspan="5" class="px-4 py-6 text-center text-gray-500">Loading staff members...</td></tr>
+                            <tr><td colspan="6" class="px-4 py-6 text-center text-gray-500">Loading staff members...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -647,13 +648,13 @@
                     <button onclick="openMetaPanel()"
                         class="bg-[#2a2a2a] text-white text-xs px-3 py-1.5 rounded font-bold border border-[#3a3a3a] hover:bg-[#333]"><i
                             class="fas fa-tags mr-1"></i> Details &amp; SEO</button>
-                    <button onclick="saveDraft()"
+                    <button id="saveBtn" onclick="saveDraft()"
                         class="bg-brand-gold hover:bg-brand-gold/90 text-white text-xs px-3.5 py-1.5 rounded font-bold"><i
                             class="fas fa-save mr-1"></i> Save</button>
                     <button onclick="createShareLink()"
                         class="bg-[#2a2a2a] text-white text-xs px-3 py-1.5 rounded font-bold border border-[#3a3a3a] hover:bg-[#333]"><i
                             class="fas fa-link mr-1"></i> Share</button>
-                    <button onclick="submitForReview()"
+                    <button id="submitBtn" onclick="submitForReview()"
                         class="bg-[#2a2a2a] text-white text-xs px-3 py-1.5 rounded font-bold border border-brand-gold/60 hover:bg-[#333]">Submit
                         for Review</button>
                     <button id="publishBtn" onclick="publishNow()"
@@ -1018,15 +1019,26 @@
             const el = document.getElementById(targetId);
             try {
                 const posts = await api(`/posts?${qs}`, { headers: authHeaders() });
-                el.innerHTML = posts.map(p => `
-                    <div class="post-row flex items-center justify-between px-4 py-3 cursor-pointer" onclick="openPost('${p.id}')">
-                        <div>
-                            <div class="font-medium text-white">${p.title || '(untitled)'}</div>
-                            <div class="text-xs text-gray-400">${p.author_name_snapshot || ''}${p.author_department_snapshot ? ' · ' + p.author_department_snapshot : ''}</div>
+                el.innerHTML = posts.map(p => {
+                    const isMine = p.author_id === currentUser.id;
+                    const canEdit = hasRole('blog_publisher', 'admin', 'super_admin') || (isMine && (p.status === 'draft' || p.status === 'rejected'));
+                    const lockBadge = !canEdit ? '<span class="text-xs text-gray-500 ml-2" title="Read-only view"><i class="fas fa-lock text-[10px]"></i> View only</span>' : '';
+                    return `
+                        <div class="post-row flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-white/5 transition-colors" onclick="openPost('${p.id}')">
+                            <div>
+                                <div class="font-medium text-white flex items-center gap-1.5">
+                                    ${p.title || '(untitled)'}
+                                    ${lockBadge}
+                                </div>
+                                <div class="text-xs text-gray-400">
+                                    ${p.author_name_snapshot || 'Eximp & Cloves'}${p.author_department_snapshot ? ' · ' + p.author_department_snapshot : ''}
+                                    ${isMine ? ' <span class="text-amber-400/80 font-semibold">(You)</span>' : ''}
+                                </div>
+                            </div>
+                            ${badge(p.status)}
                         </div>
-                        ${badge(p.status)}
-                    </div>
-                `).join('') || '<div class="px-4 py-6 text-gray-500 text-sm">No posts yet.</div>';
+                    `;
+                }).join('') || '<div class="px-4 py-6 text-gray-500 text-sm">No posts yet.</div>';
             } catch (e) { el.innerHTML = `<div class="px-4 py-6 text-red-400 text-sm">${e.message}</div>`; }
         }
 
@@ -1559,13 +1571,36 @@
             showEditorShell(true);
         }
 
-        function togglePublishButton(status) {
-            const canPublish = hasRole('blog_publisher', 'admin');
+        function togglePublishButton(status, authorId = null) {
+            const canPublish = hasRole('blog_publisher', 'admin', 'super_admin');
+            const isMine = !authorId || (currentPostId ? authorId === currentUser.id : true);
+            const canEdit = canPublish || (isMine && (status === 'draft' || status === 'rejected'));
             const isPublished = status === 'published';
+
             document.getElementById('publishBtn').classList.toggle('hidden', !canPublish || isPublished);
             document.getElementById('unpublishBtn').classList.toggle('hidden', !canPublish || !isPublished);
-            document.getElementById('deleteBtn').classList.toggle('hidden', !currentPostId);
+            document.getElementById('deleteBtn').classList.toggle('hidden', !currentPostId || (!canPublish && (!isMine || isPublished)));
             document.getElementById('reviewPanel').classList.toggle('hidden', !(status === 'pending_review' && canPublish));
+
+            const saveBtn = document.getElementById('saveBtn');
+            if (saveBtn) saveBtn.classList.toggle('hidden', !canEdit);
+
+            const submitBtn = document.getElementById('submitBtn');
+            if (submitBtn) submitBtn.classList.toggle('hidden', !canEdit || isPublished || status === 'pending_review');
+
+            let readOnlyBanner = document.getElementById('readOnlyBanner');
+            if (!readOnlyBanner) {
+                readOnlyBanner = document.createElement('div');
+                readOnlyBanner.id = 'readOnlyBanner';
+                readOnlyBanner.className = 'hidden bg-amber-500/10 border border-amber-500/30 text-amber-300 px-3 py-1 text-xs rounded font-medium items-center gap-1.5 ml-2';
+                readOnlyBanner.innerHTML = '<i class="fas fa-lock text-amber-400"></i> Read-Only (Created by another staff member)';
+                const topBarContainer = document.querySelector('.editor-top-bar > div');
+                if (topBarContainer) topBarContainer.appendChild(readOnlyBanner);
+            }
+            readOnlyBanner.classList.toggle('hidden', canEdit);
+
+            const titleInput = document.getElementById('postTitle');
+            if (titleInput) titleInput.readOnly = !canEdit;
         }
 
         async function unpublishNow() {
@@ -1599,7 +1634,7 @@
             ed.setComponents((p.content && p.content.html) || '<p>Start writing…</p>');
             ed.setStyle((p.content && p.content.css) || '');
 
-            togglePublishButton(p.status);
+            togglePublishButton(p.status, p.author_id);
             showEditorShell(true);
             loadAuditTrail(id);
         }
@@ -1629,6 +1664,16 @@
         async function saveDraft(silent = false) {
             const payload = gatherPayload();
             if (!payload.title.trim()) { toast('Please add a title first.'); throw new Error('no title'); }
+
+            const canPublish = hasRole('blog_publisher', 'admin', 'super_admin');
+            if (currentPostId && !canPublish) {
+                const currentPost = await api(`/posts/${currentPostId}`, { headers: authHeaders() });
+                if (currentPost.author_id !== currentUser.id) {
+                    toast('You can only edit posts created by yourself unless you have publisher/admin rights.');
+                    throw new Error('read-only post');
+                }
+            }
+
             if (!currentPostId) {
                 const p = await api('/posts', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) });
                 currentPostId = p.id;
@@ -1742,13 +1787,19 @@
                             <td class="px-4 py-3 text-gray-400">${s.department || 'N/A'}</td>
                             <td class="px-4 py-3 text-center">
                                 <label class="inline-flex items-center cursor-pointer ${isAdmin ? 'opacity-50 cursor-not-allowed' : ''}">
-                                    <input type="checkbox" class="sr-only peer" ${s.can_publish ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} onchange="saveStaffBlogRoles('${s.id}', this, 'publish')">
+                                    <input type="checkbox" class="sr-only peer" ${s.can_publish ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} onchange="saveStaffBlogRoles('${s.id}', this)">
                                     <div class="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-600 relative"></div>
                                 </label>
                             </td>
                             <td class="px-4 py-3 text-center">
                                 <label class="inline-flex items-center cursor-pointer ${isAdmin ? 'opacity-50 cursor-not-allowed' : ''}">
-                                    <input type="checkbox" class="sr-only peer" ${s.can_curate ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} onchange="saveStaffBlogRoles('${s.id}', this, 'curate')">
+                                    <input type="checkbox" class="sr-only peer" ${s.can_curate ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} onchange="saveStaffBlogRoles('${s.id}', this)">
+                                    <div class="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-600 relative"></div>
+                                </label>
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                <label class="inline-flex items-center cursor-pointer ${isAdmin ? 'opacity-50 cursor-not-allowed' : ''}">
+                                    <input type="checkbox" class="sr-only peer" ${s.can_moderate ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} onchange="saveStaffBlogRoles('${s.id}', this)">
                                     <div class="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-600 relative"></div>
                                 </label>
                             </td>
@@ -1757,9 +1808,9 @@
                             </td>
                         </tr>
                     `;
-                }).join('') || '<tr><td colspan="5" class="px-4 py-6 text-center text-gray-500">No staff members found.</td></tr>';
+                }).join('') || '<tr><td colspan="6" class="px-4 py-6 text-center text-gray-500">No staff members found.</td></tr>';
             } catch (e) {
-                container.innerHTML = `<tr><td colspan="5" class="px-4 py-6 text-center text-red-400">${e.message}</td></tr>`;
+                container.innerHTML = `<tr><td colspan="6" class="px-4 py-6 text-center text-red-400">${e.message}</td></tr>`;
             }
         }
 
@@ -1768,11 +1819,12 @@
             const checkboxes = row.querySelectorAll('input[type="checkbox"]');
             const publishInput = checkboxes[0];
             const curateInput = checkboxes[1];
+            const moderateInput = checkboxes[2];
 
             const payload = {
                 can_publish: publishInput.checked,
                 can_curate: curateInput.checked,
-                can_moderate: false
+                can_moderate: moderateInput.checked
             };
 
             try {
@@ -1895,6 +1947,9 @@
         // ── Init ─────────────────────────────────────────────────
         document.getElementById('reviewNavBtn').classList.toggle('hidden', !hasRole('blog_publisher', 'admin'));
         document.getElementById('curateNavBtn').classList.toggle('hidden', !hasRole('blog_curator', 'admin'));
+        if (document.getElementById('commentsNavBtn')) {
+            document.getElementById('commentsNavBtn').classList.toggle('hidden', !hasRole('blog_publisher', 'blog_curator', 'blog_moderator', 'admin', 'super_admin'));
+        }
         if (document.getElementById('rolesNavBtn')) {
             document.getElementById('rolesNavBtn').classList.toggle('hidden', !hasRole('admin', 'super_admin'));
         }
