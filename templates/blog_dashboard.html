@@ -524,6 +524,8 @@
                 class="tab-link px-3 py-1.5 rounded text-sm hidden">Pending Review</button>
             <button id="curateNavBtn" onclick="switchTab('curate')"
                 class="tab-link px-3 py-1.5 rounded text-sm hidden">Curate Homepage</button>
+            <button id="commentsNavBtn" onclick="switchTab('comments')"
+                class="tab-link px-3 py-1.5 rounded text-sm"><i class="fas fa-comments mr-1"></i> Comments</button>
             <button id="rolesNavBtn" onclick="switchTab('roles')"
                 class="tab-link px-3 py-1.5 rounded text-sm hidden"><i class="fas fa-user-shield mr-1"></i> Staff Permissions</button>
             <button onclick="newPost()"
@@ -566,6 +568,27 @@
                     </select>
                     <button onclick="addPlacement()"
                         class="bg-brand-gold text-black px-4 py-2 rounded font-semibold">Add</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ COMMENTS MODERATION TAB ═══ -->
+        <div id="tab-comments" class="hidden">
+            <div class="card p-5">
+                <div class="flex items-center gap-4 mb-4">
+                    <div class="flex-1">
+                        <h3 class="brand-gold font-bold text-lg"><i class="fas fa-comments mr-2"></i>Comment Moderation</h3>
+                        <p class="text-xs text-gray-400 mt-0.5">Review, hide, or delete reader comments on any post.</p>
+                    </div>
+                    <select id="commentPostSelect" class="field-input" style="max-width:320px;" onchange="loadPostComments(this.value)">
+                        <option value="">— Select a post to view comments —</option>
+                    </select>
+                    <button onclick="loadCommentPostList()" class="px-3 py-1.5 rounded bg-white/10 text-white text-xs font-semibold hover:bg-white/20">
+                        <i class="fas fa-sync mr-1"></i> Refresh
+                    </button>
+                </div>
+                <div id="commentsList" class="divide-y divide-white/5 text-sm">
+                    <div class="text-gray-500 text-center py-8">Select a post above to view its comments.</div>
                 </div>
             </div>
         </div>
@@ -985,6 +1008,7 @@
             if (name === 'review') loadPosts('reviewList', { status: 'pending_review' });
             if (name === 'curate') loadCuration();
             if (name === 'roles') loadStaffRoles();
+            if (name === 'comments') loadCommentPostList();
         }
 
         function badge(status) { return `<span class="badge badge-${status}">${status.replace('_', ' ')}</span>`; }
@@ -1762,6 +1786,110 @@
                 toast('Failed to update roles: ' + e.message);
                 checkboxEl.checked = !checkboxEl.checked;
             }
+        }
+
+        // ── Comment Moderation ─────────────────────────────────────
+        async function loadCommentPostList() {
+            try {
+                const posts = await api('/posts', { headers: authHeaders() });
+                const select = document.getElementById('commentPostSelect');
+                select.innerHTML = '<option value="">— Select a post to view comments —</option>' +
+                    posts.map(p => `<option value="${p.id}">${p.title} (${p.status})</option>`).join('');
+            } catch(e) { toast('Failed to load posts: ' + e.message); }
+        }
+
+        async function loadPostComments(postId) {
+            const container = document.getElementById('commentsList');
+            if (!postId) {
+                container.innerHTML = '<div class="text-gray-500 text-center py-8">Select a post above to view its comments.</div>';
+                return;
+            }
+            container.innerHTML = '<div class="text-gray-500 text-center py-6"><i class="fas fa-spinner fa-spin mr-2"></i>Loading comments…</div>';
+            try {
+                const comments = await api(`/posts/${postId}/comments`, { headers: authHeaders() });
+                if (!comments || comments.length === 0) {
+                    container.innerHTML = '<div class="text-gray-500 text-center py-8">No comments on this post yet.</div>';
+                    return;
+                }
+                container.innerHTML = comments.map(c => {
+                    const date = c.created_at ? new Date(c.created_at).toLocaleString() : '';
+                    const isHidden = c.status === 'hidden';
+                    const isDeleted = c.status === 'deleted';
+                    const statusBadge = isHidden
+                        ? '<span class="ml-2 px-2 py-0.5 rounded text-[10px] font-bold bg-yellow-500/20 text-yellow-400">HIDDEN</span>'
+                        : isDeleted
+                        ? '<span class="ml-2 px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400">DELETED</span>'
+                        : '';
+                    const isParent = !c.parent_comment_id;
+                    return `
+                        <div class="py-4 ${isParent ? '' : 'pl-8 border-l-2 border-white/10'}" id="comment-${c.id}">
+                            <div class="flex items-start gap-3">
+                                <div class="w-8 h-8 rounded-full bg-brand-gold/30 text-brand-gold flex items-center justify-center font-bold text-sm shrink-0">
+                                    ${(c.author_name || 'A')[0].toUpperCase()}
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2 flex-wrap mb-1">
+                                        <span class="font-semibold text-white text-xs">${c.author_name || 'Anonymous'}</span>
+                                        ${statusBadge}
+                                        <span class="text-gray-500 text-xs ml-auto">${date}</span>
+                                    </div>
+                                    <div class="text-gray-300 text-sm leading-relaxed ${isHidden || isDeleted ? 'opacity-40 line-through' : ''}">${c.body || ''}</div>
+                                    ${c.hidden_reason ? `<div class="text-yellow-500/70 text-xs mt-1"><i class="fas fa-eye-slash mr-1"></i>Hidden: ${c.hidden_reason}</div>` : ''}
+                                </div>
+                            </div>
+                            ${!isDeleted ? `
+                            <div class="flex gap-2 mt-2 ml-11">
+                                ${!isHidden ? `
+                                <button onclick="hideComment('${c.id}', '${postId}')" class="text-xs px-3 py-1 rounded bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20 border border-yellow-500/20">
+                                    <i class="fas fa-eye-slash mr-1"></i>Hide
+                                </button>` : `
+                                <button onclick="unhideComment('${c.id}', '${postId}')" class="text-xs px-3 py-1 rounded bg-green-500/10 text-green-400 hover:bg-green-500/20 border border-green-500/20">
+                                    <i class="fas fa-eye mr-1"></i>Unhide
+                                </button>`}
+                                <button onclick="deleteComment('${c.id}', '${postId}')" class="text-xs px-3 py-1 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20">
+                                    <i class="fas fa-trash mr-1"></i>Delete
+                                </button>
+                            </div>` : ''}
+                        </div>
+                    `;
+                }).join('');
+            } catch(e) {
+                container.innerHTML = `<div class="text-red-400 text-center py-6">${e.message}</div>`;
+            }
+        }
+
+        async function hideComment(commentId, postId) {
+            const reason = prompt('Reason for hiding this comment (optional):') ?? '';
+            try {
+                await api(`/comments/${commentId}/hide`, {
+                    method: 'PATCH',
+                    headers: authHeaders(),
+                    body: JSON.stringify({ reason })
+                });
+                toast('Comment hidden.');
+                loadPostComments(postId);
+            } catch(e) { toast('Error: ' + e.message); }
+        }
+
+        async function unhideComment(commentId, postId) {
+            try {
+                await api(`/comments/${commentId}/unhide`, {
+                    method: 'PATCH',
+                    headers: authHeaders(),
+                    body: JSON.stringify({})
+                });
+                toast('Comment restored.');
+                loadPostComments(postId);
+            } catch(e) { toast('Error: ' + e.message); }
+        }
+
+        async function deleteComment(commentId, postId) {
+            if (!confirm('Permanently delete this comment? This cannot be undone.')) return;
+            try {
+                await api(`/comments/${commentId}`, { method: 'DELETE', headers: authHeaders() });
+                toast('Comment deleted.');
+                loadPostComments(postId);
+            } catch(e) { toast('Error: ' + e.message); }
         }
 
         // ── Init ─────────────────────────────────────────────────

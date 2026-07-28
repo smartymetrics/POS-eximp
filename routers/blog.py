@@ -524,6 +524,20 @@ async def hide_comment(comment_id: str, data: HideCommentRequest, current_admin=
     return res.data[0]
 
 
+@router.patch("/comments/{comment_id}/unhide")
+async def unhide_comment(comment_id: str, current_admin=Depends(verify_token)):
+    if not has_any_role(current_admin, MODERATOR_ROLES):
+        raise HTTPException(403, "Not authorized to moderate comments")
+    db = get_db()
+    res = await db_execute(lambda: db.table("blog_comments").update({
+        "status": "approved",
+        "hidden_by": None,
+        "hidden_at": None,
+        "hidden_reason": None,
+    }).eq("id", comment_id).execute())
+    return res.data[0]
+
+
 @router.delete("/comments/{comment_id}")
 async def delete_comment(comment_id: str, current_admin=Depends(verify_token)):
     if not has_any_role(current_admin, MODERATOR_ROLES):
