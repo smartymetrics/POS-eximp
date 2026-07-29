@@ -792,7 +792,8 @@ def render_contract_html(invoice: dict, client: dict, witnesses: list = None, is
     # Evaluate custom execution HTML if it exists, so Jinja logic for signatures is retained
     if invoice_data.get("custom_execution_html"):
         try:
-            exec_tmpl = env.from_string(invoice_data["custom_execution_html"])
+            exec_raw = invoice_data["custom_execution_html"].replace("&gt;", ">").replace("&lt;", "<")
+            exec_tmpl = env.from_string(exec_raw)
             invoice_data["custom_execution_html_rendered"] = exec_tmpl.render(
                 company=company,
                 invoice=invoice_data,
