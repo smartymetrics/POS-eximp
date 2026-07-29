@@ -148,6 +148,13 @@ async def db_execute(query_fn, retries: int = 3):
                 )
                 global supabase
                 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+                # Re-attach the HybridStorage shim — the freshly-created client
+                # has a plain Supabase storage backend, which would silently
+                # send all new uploads to Supabase instead of Cloudinary.
+                if STORAGE_BACKEND == "hybrid":
+                    from hybrid_storage import HybridStorage
+                    _real = supabase.storage
+                    supabase._storage = HybridStorage(real_storage=_real)
                 await asyncio.sleep(wait)
                 continue
             raise

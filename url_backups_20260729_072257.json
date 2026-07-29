@@ -1,0 +1,100 @@
+[
+  {
+    "table": "invoices",
+    "id_column": "id",
+    "id": "2464edce-fb49-47a2-be78-d816aeb04467",
+    "column": "contract_signature_url",
+    "previous_value": "https://scsdnstqtrqjsosbmxyf.supabase.co/storage/v1/object/public/signatures/contracts/2464edce-fb49-47a2-be78-d816aeb04467/client.png"
+  },
+  {
+    "table": "invoices",
+    "id_column": "id",
+    "id": "3976c352-5d4c-4312-92fc-1525419052eb",
+    "column": "contract_signature_url",
+    "previous_value": "https://scsdnstqtrqjsosbmxyf.supabase.co/storage/v1/object/public/signatures/contracts/3976c352-5d4c-4312-92fc-1525419052eb/client.png"
+  },
+  {
+    "table": "invoices",
+    "id_column": "id",
+    "id": "a577f941-9a5a-42b4-a519-f98b20225bad",
+    "column": "payment_proof_url",
+    "previous_value": "https://scsdnstqtrqjsosbmxyf.supabase.co/storage/v1/object/public/signatures/client_documents/UP_f600e2_receipt.png?"
+  },
+  {
+    "table": "invoices",
+    "id_column": "id",
+    "id": "782a0547-d642-42a9-bfe1-609f944e1059",
+    "column": "payment_proof_url",
+    "previous_value": "[\"https://scsdnstqtrqjsosbmxyf.supabase.co/storage/v1/object/public/signatures/client_documents/UP_ffd86c_receipt.png?\", \"https://scsdnstqtrqjsosbmxyf.supabase.co/storage/v1/object/public/signatures/client_documents/UP_f95581_receipt.png?\"]"
+  },
+  {
+    "table": "invoices",
+    "id_column": "id",
+    "id": "98e592a7-21af-4485-862d-f2eece7229fe",
+    "column": "payment_proof_url",
+    "previous_value": "https://scsdnstqtrqjsosbmxyf.supabase.co/storage/v1/object/public/signatures/client_documents/UP_cba015_receipt.png?"
+  },
+  {
+    "table": "clients",
+    "id_column": "id",
+    "id": "5c7b1656-fcac-4bd5-a12b-972e54cf2cd5",
+    "column": "id_document_url",
+    "previous_value": "https://scsdnstqtrqjsosbmxyf.supabase.co/storage/v1/object/public/signatures/client_documents/UP_c0d3b4_id_document.png?"
+  },
+  {
+    "table": "clients",
+    "id_column": "id",
+    "id": "3475dac5-54f0-4031-af8c-485e143d9ef1",
+    "column": "id_document_url",
+    "previous_value": "https://scsdnstqtrqjsosbmxyf.supabase.co/storage/v1/object/public/signatures/client_documents/UP_f4c1af_id_document.pdf?"
+  },
+  {
+    "table": "clients",
+    "id_column": "id",
+    "id": "51fa8c37-76d1-459d-b66b-85110090b648",
+    "column": "id_document_url",
+    "previous_value": "https://scsdnstqtrqjsosbmxyf.supabase.co/storage/v1/object/public/signatures/client_documents/UP_be3aa7_id_document.png?"
+  },
+  {
+    "table": "clients",
+    "id_column": "id",
+    "id": "4bcbe6db-74ef-4312-b996-20ddb49e6512",
+    "column": "id_document_url",
+    "previous_value": "https://scsdnstqtrqjsosbmxyf.supabase.co/storage/v1/object/public/signatures/client_documents/UP_ff2171_id_document.png?"
+  },
+  {
+    "table": "clients",
+    "id_column": "id",
+    "id": "11cdac39-a644-470a-89cd-6404ca5de4ea",
+    "column": "passport_photo_url",
+    "previous_value": "https://scsdnstqtrqjsosbmxyf.supabase.co/storage/v1/object/public/signatures/client_documents/UP_e2809b_passport.png?"
+  },
+  {
+    "table": "clients",
+    "id_column": "id",
+    "id": "5c7b1656-fcac-4bd5-a12b-972e54cf2cd5",
+    "column": "passport_photo_url",
+    "previous_value": "https://scsdnstqtrqjsosbmxyf.supabase.co/storage/v1/object/public/signatures/client_documents/UP_f5343a_passport.png?"
+  },
+  {
+    "table": "clients",
+    "id_column": "id",
+    "id": "6775f35b-c540-4414-890f-9521a361170a",
+    "column": "passport_photo_url",
+    "previous_value": "https://scsdnstqtrqjsosbmxyf.supabase.co/storage/v1/object/public/signatures/client_documents/UP_fcc82e_passport.png?"
+  },
+  {
+    "table": "clients",
+    "id_column": "id",
+    "id": "3475dac5-54f0-4031-af8c-485e143d9ef1",
+    "column": "passport_photo_url",
+    "previous_value": "https://scsdnstqtrqjsosbmxyf.supabase.co/storage/v1/object/public/signatures/client_documents/UP_d85654_passport.png?"
+  },
+  {
+    "table": "clients",
+    "id_column": "id",
+    "id": "ac753861-ebed-41e3-8e20-ca710b594468",
+    "column": "passport_photo_url",
+    "previous_value": "https://scsdnstqtrqjsosbmxyf.supabase.co/storage/v1/object/public/signatures/client_documents/UP_ad4773_passport.png?"
+  }
+]

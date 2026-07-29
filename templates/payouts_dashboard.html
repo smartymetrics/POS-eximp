@@ -4576,12 +4576,14 @@
                 const { url: signedUrl } = await fileRes.json();
                 if (!signedUrl) throw new Error("No signed URL returned");
 
+                const cleanUrl = signedUrl.includes(' ') ? encodeURI(signedUrl) : signedUrl;
+
                 loader.style.display = 'none';
                 if (isPdf) {
-                    frame.src = signedUrl;
+                    frame.src = cleanUrl;
                     frame.style.display = 'block';
                 } else {
-                    img.src = signedUrl;
+                    img.src = cleanUrl;
                     img.style.display = 'block';
                 }
             } catch (e) {

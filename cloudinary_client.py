@@ -10,6 +10,7 @@ import os
 import io
 import logging
 import mimetypes
+import requests
 import cloudinary
 import cloudinary.uploader
 import cloudinary.api
@@ -248,22 +249,50 @@ def upload_bytes(bucket: str, path: str, file_bytes: bytes, content_type: str = 
     return result
 
 
+_LOCATION_CACHE = {}
+
+
 def resource_exists(bucket: str, path: str, content_type: str = None) -> dict | None:
     """Returns the Cloudinary resource dict if it exists, else None.
-    Used by the hybrid shim to decide Cloudinary-vs-legacy-Supabase on reads."""
-    delivery_type = "upload" if bucket in PUBLIC_BUCKETS else "authenticated"
+    Uses an in-memory cache and non-blocking CDN HEAD requests to avoid
+    Cloudinary Admin API rate-limiting (500 req/hr)."""
+    cache_key = (bucket, path)
+    if cache_key in _LOCATION_CACHE:
+        return _LOCATION_CACHE[cache_key]
 
-    # We don't reliably know image/video/raw for a bare path on read, so
-    # try the guessed type first, then the other two as a fallback. For
-    # each type, try the clean (post-fix) public_id before the legacy
-    # extension-doubled one.
+    default_delivery = "upload" if bucket in PUBLIC_BUCKETS else "authenticated"
+    delivery_types = [default_delivery]
+    other_delivery = "authenticated" if default_delivery == "upload" else "upload"
+    delivery_types.append(other_delivery)
+
     guessed = resource_type_for(path, content_type)
-    for rtype in [guessed] + [t for t in ("image", "raw", "video") if t != guessed]:
-        for public_id in cloudinary_public_ids(bucket, path, rtype):
-            try:
-                return cloudinary.api.resource(public_id, resource_type=rtype, type=delivery_type)
-            except Exception:
-                continue
+    rtypes = [guessed] + [t for t in ("image", "raw", "video") if t != guessed]
+
+    for d_type in delivery_types:
+        for rtype in rtypes:
+            for public_id in cloudinary_public_ids(bucket, path, rtype):
+                try:
+                    url, _ = cloudinary.utils.cloudinary_url(
+                        public_id,
+                        resource_type=rtype,
+                        type=d_type,
+                        sign_url=(d_type == "authenticated"),
+                        secure=True,
+                    )
+                    resp = requests.head(url, timeout=3)
+                    if resp.status_code in (200, 302):
+                        result = {
+                            "public_id": public_id,
+                            "resource_type": rtype,
+                            "type": d_type,
+                            "secure_url": url,
+                        }
+                        _LOCATION_CACHE[cache_key] = result
+                        return result
+                except Exception:
+                    continue
+
+    _LOCATION_CACHE[cache_key] = None
     return None
 
 
@@ -280,11 +309,14 @@ def build_url(bucket: str, path: str, resource: dict, expires_in: int = None) ->
             sign_url=True,
             secure=True,
         )
-        return url
+    else:
+        url = resource.get("secure_url") or cloudinary.utils.cloudinary_url(
+            public_id, resource_type=rtype, type="upload", secure=True
+        )[0]
 
-    return resource.get("secure_url") or cloudinary.utils.cloudinary_url(
-        public_id, resource_type=rtype, type="upload", secure=True
-    )[0]
+    if url and " " in url:
+        url = url.replace(" ", "%20")
+    return url
 
 
 def delete(bucket: str, path: str, content_type: str = None) -> bool:

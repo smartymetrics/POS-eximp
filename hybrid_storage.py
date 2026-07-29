@@ -47,11 +47,12 @@ class _HybridBucket:
 
         try:
             cc.upload_bytes(self.bucket, path, file, content_type)
+            logger.info(f"[Cloudinary] Uploaded {self.bucket}/{path} ({len(file) if file else 0} bytes)")
             return {"path": path}
         except Exception as e:
             logger.warning(
-                f"⚠️  Cloudinary upload failed for {self.bucket}/{path} ({e}) — "
-                f"falling back to Supabase"
+                f"⚠️  Cloudinary upload FAILED for {self.bucket}/{path} "
+                f"[{type(e).__name__}]: {e} — falling back to Supabase"
             )
             try:
                 self._legacy.upload(path=path, file=file, file_options=file_options)
@@ -96,7 +97,14 @@ class _HybridBucket:
             return {"signedURL": url, "signed_url": url}
 
         logger.info(f"↩️  Hybrid storage: {self.bucket}/{path} not on Cloudinary, falling back to Supabase")
-        return self._legacy.create_signed_url(path, expires_in)
+        legacy_res = self._legacy.create_signed_url(path, expires_in)
+        if isinstance(legacy_res, dict):
+            for k in ("signedURL", "signed_url"):
+                if k in legacy_res and isinstance(legacy_res[k], str) and " " in legacy_res[k]:
+                    legacy_res[k] = legacy_res[k].replace(" ", "%20")
+        elif isinstance(legacy_res, str) and " " in legacy_res:
+            legacy_res = legacy_res.replace(" ", "%20")
+        return legacy_res
 
     def get_public_url(self, path: str):
         resource = cc.resource_exists(self.bucket, path)
@@ -104,7 +112,10 @@ class _HybridBucket:
             return cc.build_url(self.bucket, path, resource)
 
         logger.info(f"↩️  Hybrid storage: {self.bucket}/{path} not on Cloudinary, falling back to Supabase")
-        return self._legacy.get_public_url(path)
+        url = self._legacy.get_public_url(path)
+        if url and isinstance(url, str) and " " in url:
+            url = url.replace(" ", "%20")
+        return url
 
 
 class HybridStorage:

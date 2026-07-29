@@ -14,3 +14,5 @@ old*.html
 tmp_*.html
 test_js.js
 po
+*.doc
+*.docx

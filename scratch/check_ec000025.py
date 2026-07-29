@@ -1,52 +1,91 @@
-import sys
-import os
-import json
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
+import sys, os
 sys.stdout.reconfigure(encoding='utf-8')
+from dotenv import load_dotenv
+load_dotenv()
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import logging
+logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
 
 from database import get_db
+import cloudinary_client as cc
+import cloudinary.api
+import requests as req
 
 db = get_db()
 
-print("=== INVOICE SEARCH EC-000025 ===")
-inv_res = db.table("invoices").select("*").eq("invoice_number", "EC-000025").execute()
+TARGET_ID = "e90c3926-5909-44be-9694-eaf462c08ce5"
 
-if inv_res.data:
-    inv = inv_res.data[0]
-    print("--- INVOICE DUMP ---")
-    for k, v in sorted(inv.items()):
-        print(f"{k}: {repr(v)}")
+print(f"=== Investigating Expenditure Request: {TARGET_ID[:8]}... ===\n")
 
-    invoice_id = inv["id"]
+res = db.table("expenditure_requests").select("*").eq("id", TARGET_ID).execute()
+if not res.data:
+    print("[ERROR] Record not found")
+    exit(1)
 
-    print("\n=== WITNESS SIGNATURES TABLE ===")
-    try:
-        wit_res = db.table("witness_signatures").select("*").eq("invoice_id", invoice_id).execute()
-        print("Witness signatures count (by invoice_id):", len(wit_res.data))
-        for w in wit_res.data:
-            print(json.dumps(w, indent=2, default=str))
-    except Exception as e:
-        print("Witness signatures query err:", e)
+row = res.data[0]
+print(f"Title        : {row.get('title')}")
+print(f"Status       : {row.get('status')}")
+print(f"Created at   : {row.get('created_at')}")
+print(f"receipt_url  : {row.get('receipt_url')}")
+print(f"proforma_url : {row.get('proforma_url')}")
+print()
 
-    print("\n=== SIGNING SESSIONS ===")
-    try:
-        sessions_res = db.table("signing_sessions").select("*").eq("invoice_id", invoice_id).execute()
-        print("Signing sessions count:", len(sessions_res.data))
-        for s in sessions_res.data:
-            print(json.dumps(s, indent=2, default=str))
-            wit_sess = db.table("witness_signatures").select("*").eq("session_id", s["id"]).execute()
-            print("  Witness count for session:", len(wit_sess.data))
-            for ws in wit_sess.data:
-                print("  ", json.dumps(ws, indent=2, default=str))
-    except Exception as e:
-        print("Signing sessions query err:", e)
+import json
 
-    print("\n=== LEGAL MATTERS ===")
-    try:
-        matters_res = db.table("legal_matters").select("*").eq("invoice_id", invoice_id).execute()
-        print("Legal matters count:", len(matters_res.data))
-        for m in matters_res.data:
-            print(json.dumps(m, indent=2, default=str))
-    except Exception as e:
-        print("Legal matters query err:", e)
+def check_file(label, raw_path):
+    if not raw_path:
+        print(f"{label}: <empty>")
+        return
+
+    paths = [raw_path]
+    if raw_path.startswith("["):
+        try:
+            paths = json.loads(raw_path)
+        except Exception:
+            pass
+
+    for p in paths:
+        print(f"\n{label}: {p}")
+
+        # 1. Check Cloudinary via Admin API (authoritative)
+        try:
+            resource = cloudinary.api.resource(
+                f"Cloud Infrastructure/{p}",
+                resource_type="image",
+                type="authenticated"
+            )
+            print(f"  [CLOUDINARY ADMIN] FOUND - public_id: {resource.get('public_id')}, created: {resource.get('created_at')}")
+        except Exception as e:
+            err = str(e)
+            if "not found" in err.lower() or "Resource not found" in err:
+                print(f"  [CLOUDINARY ADMIN] NOT FOUND (404)")
+            else:
+                print(f"  [CLOUDINARY ADMIN] Error: {err[:80]}")
+
+        # 2. Check CDN HEAD probe (what hybrid_storage uses)
+        resource_cdn = cc.resource_exists("Cloud Infrastructure", p)
+        print(f"  [CDN PROBE]        {'FOUND -> ' + str(resource_cdn) if resource_cdn else 'NOT FOUND (returns None)'}")
+
+        # 3. Check if it exists in Supabase by trying to sign a URL
+        try:
+            from database import supabase
+            real_storage = supabase.storage._real_storage
+            res2 = real_storage.from_("Cloud Infrastructure").create_signed_url(p, 60)
+            signed = res2.get("signedURL") or res2.get("signed_url") if isinstance(res2, dict) else str(res2)
+            if signed:
+                resp = req.head(signed, timeout=5)
+                print(f"  [SUPABASE]         {'FOUND (HTTP ' + str(resp.status_code) + ')' if resp.status_code == 200 else 'HTTP ' + str(resp.status_code)}")
+            else:
+                print(f"  [SUPABASE]         No signed URL returned")
+        except Exception as e:
+            err = str(e)
+            if "not_found" in err or "Object not found" in err:
+                print(f"  [SUPABASE]         NOT FOUND")
+            else:
+                print(f"  [SUPABASE]         Error: {err[:80]}")
+
+check_file("receipt_url ", row.get("receipt_url"))
+check_file("proforma_url", row.get("proforma_url"))
+
+print("\nDone.")

@@ -21,9 +21,15 @@ def generate_signed_url(bucket: str, path: str, expires_in: int = 3600) -> str:
         res = db.storage.from_(bucket).create_signed_url(path, expires_in)
         
         # Handle different SDK version return types
+        url = ""
         if isinstance(res, dict):
-            return res.get('signedURL') or res.get('signed_url', "")
-        return str(res)
+            url = res.get('signedURL') or res.get('signed_url', "")
+        else:
+            url = str(res)
+            
+        if url and " " in url:
+            url = url.replace(" ", "%20")
+        return url
     except Exception as e:
         logger.error(f"❌ Storage Error: Failed to generate signed URL for {path} in {bucket}: {e}")
         return ""
