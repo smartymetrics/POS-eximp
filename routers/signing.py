@@ -44,7 +44,11 @@ def _upload_witness_signature(db, invoice_id: str, witness_number: int, signatur
             file=img_data,
             file_options={"content-type": "image/png"}
         )
-        return f"{SUPABASE_URL}/storage/v1/object/public/signatures/{file_path}"
+        # Don't hardcode a Supabase URL here — the "signatures" bucket is
+        # migrated to Cloudinary (see hybrid_storage.py), so the file may
+        # actually live on Cloudinary. Ask the storage client for wherever
+        # it actually resolved the upload to.
+        return db.storage.from_("signatures").get_public_url(file_path)
     except Exception as e:
         print(f"WARNING: Witness signature upload failed: {e}")
         return signature_base64
@@ -80,7 +84,11 @@ def _upload_client_signature(db, invoice_id: str, signature_base64: str) -> str:
             file=img_data,
             file_options={"content-type": "image/png"}
         )
-        return f"{SUPABASE_URL}/storage/v1/object/public/signatures/{file_path}"
+        # Don't hardcode a Supabase URL here — the "signatures" bucket is
+        # migrated to Cloudinary (see hybrid_storage.py), so the file may
+        # actually live on Cloudinary. Ask the storage client for wherever
+        # it actually resolved the upload to.
+        return db.storage.from_("signatures").get_public_url(file_path)
     except Exception as e:
         print(f"WARNING: Client signature upload failed: {e}")
         return signature_base64
