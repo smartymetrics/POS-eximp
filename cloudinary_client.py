@@ -246,6 +246,21 @@ def upload_bytes(bucket: str, path: str, file_bytes: bytes, content_type: str = 
         unique_filename=False,
     )
     logger.info(f"✅ Cloudinary: uploaded {public_id} ({rtype}/{delivery_type})")
+
+    # Populate the location cache straight from Cloudinary's own upload
+    # response — this is authoritative and avoids the race where a
+    # caller (e.g. signing.py) immediately calls get_public_url()/
+    # resource_exists() right after upload, before the CDN has finished
+    # propagating the new asset. Without this, that immediate check can
+    # 404, and resource_exists() permanently caches the negative result
+    # for the life of the process (see below) — silently poisoning every
+    # future lookup for this exact file until a restart.
+    _LOCATION_CACHE[(bucket, path)] = {
+        "public_id": result.get("public_id", public_id),
+        "resource_type": result.get("resource_type", rtype),
+        "type": result.get("type", delivery_type),
+        "secure_url": result.get("secure_url"),
+    }
     return result
 
 
@@ -292,7 +307,12 @@ def resource_exists(bucket: str, path: str, content_type: str = None) -> dict | 
                 except Exception:
                     continue
 
-    _LOCATION_CACHE[cache_key] = None
+    # Deliberately NOT caching the negative case: a miss here can be a
+    # transient CDN propagation delay or network blip rather than the
+    # file genuinely not existing. Caching it as None would poison this
+    # exact (bucket, path) for the remaining life of the process — every
+    # future call falls back to Supabase even after Cloudinary catches up.
+    # Positive hits are still cached above since those are safe/stable.
     return None
 
 
