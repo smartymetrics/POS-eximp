@@ -94,9 +94,20 @@ def _upload_client_signature(db, invoice_id: str, signature_base64: str) -> str:
 
 
 def _delete_witness_signature_from_storage(db, signature_url: str):
-    if not signature_url or not signature_url.startswith(f"{SUPABASE_URL}/storage/v1/object/public/"):
+    if not signature_url:
         return
-    file_path = signature_url.replace(f"{SUPABASE_URL}/storage/v1/object/public/", "")
+    # This used to only handle Supabase URLs and silently no-op for
+    # anything else — which meant Cloudinary-hosted witness signatures
+    # (the normal case now) never actually got cleaned up on rejection.
+    # The "signatures" bucket name is always present in the path for
+    # either backend, so extract everything after it instead of assuming
+    # a specific host/prefix.
+    marker = "signatures/"
+    idx = signature_url.find(marker)
+    if idx == -1:
+        return
+    file_path = signature_url[idx + len(marker):]
+    file_path = file_path.split("?")[0]  # strip any query string
     try:
         db.storage.from_("signatures").remove([file_path])
     except Exception:

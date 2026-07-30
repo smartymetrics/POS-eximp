@@ -397,8 +397,11 @@ async def submit_witness_signature(token: str, data: WitnessSignatureSubmit, req
             "user_agent": request.headers.get("user-agent", "unknown")
         }).execute()
         
-        # 5. Update session status
-        new_status = "completed"
+        # 5. Update session status — only "completed" once BOTH witnesses
+        # have actually signed. Previously this was hardcoded to
+        # "completed" on every call, so it fired after witness 1 alone.
+        total_signed = len(signed_numbers) + 1  # signed_numbers was fetched before this insert
+        new_status = "completed" if total_signed >= 2 else "partial"
         await db_execute(lambda: db.table("contract_signing_sessions").update({"status": new_status}).eq("id", session["id"]).execute())
         
         # 5b. Send Confirmation Email to Witness
@@ -420,13 +423,24 @@ async def submit_witness_signature(token: str, data: WitnessSignatureSubmit, req
             invoice_id=invoice["id"]
         )
         
-        # 7. Notify legal and admin once the contract is fully witnessed
-        if new_status == "completed":
+        # 7. Notify legal and admin once the contract is fully witnessed AND
+        # the client has actually signed. Both witnesses signing doesn't
+        # necessarily mean the client has — check the invoice's own
+        # contract_signature_url rather than assuming from witness status.
+        client_has_signed = bool(invoice.get("contract_signature_url"))
+        if new_status == "completed" and client_has_signed:
             from email_service import send_ready_for_execution_email
             background_tasks.add_task(send_ready_for_execution_email, invoice, invoice["clients"])
             await log_activity(
                 "contract_ready",
                 f"Contract for {invoice['invoice_number']} is now fully witnessed and ready for execution.",
+                "system",
+                invoice_id=invoice["id"]
+            )
+        elif new_status == "completed" and not client_has_signed:
+            await log_activity(
+                "witnesses_complete_awaiting_client",
+                f"Both witnesses have signed for {invoice['invoice_number']}, but the client has not signed yet.",
                 "system",
                 invoice_id=invoice["id"]
             )
@@ -436,7 +450,8 @@ async def submit_witness_signature(token: str, data: WitnessSignatureSubmit, req
             db, "witness",
             title=f"🖊️ Witness {witness_num} signed — {invoice.get('invoice_number', 'Contract')}",
             message=f"{data.full_name} has witnessed the contract."
-            + (" Contract is now fully witnessed and ready for execution." if new_status == "completed" else "")
+            + (" Contract is now fully witnessed and ready for execution." if new_status == "completed" and client_has_signed else "")
+            + (" Both witnesses have signed; awaiting client signature." if new_status == "completed" and not client_has_signed else "")
         )
 
         return {"message": "Signature recorded successfully", "witness_number": witness_num}
