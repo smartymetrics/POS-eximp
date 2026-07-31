@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% if post %}
+    <title>{{ post.seo_title or post.title }} | Eximp & Cloves Blog</title>
+    <meta name="description" content="{{ post.seo_description or post.excerpt or post.title }}">
+    {% else %}
+    <title>Blog Preview | Eximp & Cloves</title>
+    {% endif %}
+    {% if is_preview %}
+    <meta name="robots" content="noindex, nofollow, nocache">
+    {% endif %}
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: #ffffff;
+            color: #1a1a1a;
+            font-family: 'Inter', sans-serif;
+        }
+        /* Header */
+        .site-header {
+            background: #ffffff;
+            border-bottom: 1px solid #eaeaea;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+        }
+        .header-container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 14px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .logo-link {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+        }
+        .logo-box {
+            font-weight: 800;
+            font-size: 18px;
+            color: #C47D0A;
+            letter-spacing: -0.02em;
+        }
+        .logo-badge {
+            background: #f5efe6;
+            color: #C47D0A;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            padding: 3px 8px;
+            border-radius: 4px;
+            border: 1px solid rgba(196, 125, 10, 0.2);
+        }
+        .site-nav {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .nav-link {
+            color: #444;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .nav-link:hover {
+            color: #C47D0A;
+        }
+        .primary-btn {
+            background: #C47D0A;
+            color: #fff;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 700;
+            padding: 8px 16px;
+            border-radius: 6px;
+        }
+
+        /* Preview Banner */
+        .preview-banner {
+            background: #fff7e6;
+            border: 1px solid #f0c36d;
+            color: #7a5b00;
+            padding: 14px 18px;
+            border-radius: 8px;
+            font-family: 'Inter', sans-serif;
+            font-size: 13.5px;
+            margin-bottom: 32px;
+        }
+
+        /* Main Page */
+        .page-main {
+            font-family: Georgia, serif;
+            background: #ffffff;
+            color: #1a1a1a;
+            padding-bottom: 80px;
+            flex: 1;
+        }
+        .header-column {
+            max-width: 740px;
+            margin: 0 auto;
+            padding: 48px 20px 0;
+        }
+        .category-badge {
+            display: inline-block;
+            background: #f5efe6;
+            color: #C47D0A;
+            padding: 4px 14px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 20px;
+            font-family: 'Inter', sans-serif;
+        }
+        .post-title {
+            font-family: Georgia, serif;
+            font-size: clamp(28px, 5.5vw, 46px);
+            font-weight: 700;
+            line-height: 1.2;
+            color: #111;
+            margin: 0 0 20px;
+            letter-spacing: -0.02em;
+        }
+        .post-excerpt {
+            font-family: Georgia, serif;
+            font-size: 22px;
+            line-height: 1.6;
+            color: #555;
+            margin: 0 0 28px;
+            font-style: italic;
+        }
+        .author-bar {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            font-family: 'Inter', sans-serif;
+            margin-bottom: 24px;
+        }
+        .author-avatar {
+            width: 46px;
+            height: 46px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #C47D0A, #e09c2e);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 18px;
+            flex-shrink: 0;
+            box-shadow: 0 2px 8px rgba(196,125,10,0.25);
+        }
+        .author-info { flex: 1; }
+        .author-name {
+            font-weight: 700;
+            font-size: 15px;
+            color: #111;
+            margin-bottom: 3px;
+        }
+        .author-meta {
+            font-size: 13px;
+            color: #777;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .dept-tag {
+            color: #C47D0A;
+            font-weight: 600;
+        }
+        .dot-sep { color: #bbb; }
+        .reaction-pill {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            background: #f9f9f9;
+            border: 1px solid #eee;
+            border-radius: 999px;
+            padding: 5px 14px;
+            font-size: 13px;
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            color: #555;
+        }
+        .header-divider {
+            height: 1px;
+            background: #eaeaea;
+            margin: 0;
+        }
+
+        /* Cover Image */
+        .cover-figure {
+            margin: 0;
+            padding: 0;
+            background: #f3f4f6;
+            max-height: 520px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .cover-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            max-height: 520px;
+        }
+
+        /* Article Body */
+        .article-body {
+            max-width: 740px;
+            margin: 48px auto 0;
+            padding: 0 20px;
+            font-size: 19px;
+            line-height: 1.85;
+            color: #1a1a1a;
+            font-family: Georgia, serif;
+        }
+        .article-body p { margin-bottom: 1.5rem; }
+        .article-body img { max-width: 100%; height: auto; border-radius: 8px; margin: 20px 0; }
+        .article-body blockquote {
+            border-left: 4px solid #C47D0A;
+            padding-left: 18px;
+            font-style: italic;
+            color: #555;
+            margin: 24px 0;
+        }
+
+        /* Tags */
+        .tags-row {
+            max-width: 740px;
+            margin: 40px auto 0;
+            padding: 0 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .tag-pill {
+            display: inline-block;
+            background: #f5f5f5;
+            color: #555;
+            border: 1px solid #e5e7eb;
+            border-radius: 999px;
+            padding: 5px 14px;
+            font-size: 13px;
+            font-family: 'Inter', sans-serif;
+            font-weight: 500;
+        }
+
+        /* Action Bar */
+        .action-bar {
+            max-width: 740px;
+            margin: 40px auto 0;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-top: 1px solid #eaeaea;
+            border-bottom: 1px solid #eaeaea;
+            gap: 16px;
+            flex-wrap: wrap;
+            font-family: 'Inter', sans-serif;
+        }
+        .like-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #fdf6ec;
+            border: 1px solid #f9e2c2;
+            color: #C47D0A;
+            padding: 8px 18px;
+            border-radius: 999px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .like-btn:hover { background: #fae8d0; }
+        .share-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .share-label {
+            font-size: 13px;
+            color: #999;
+            font-weight: 500;
+            margin-right: 4px;
+        }
+        .share-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 1px solid #e5e7eb;
+            background: #fff;
+            color: #444;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 700;
+            transition: border-color 0.15s, background 0.15s;
+        }
+        .share-btn:hover {
+            border-color: #C47D0A;
+            color: #C47D0A;
+        }
+
+        /* Author Card */
+        .author-card {
+            max-width: 740px;
+            margin: 48px auto 0;
+            padding: 28px 24px;
+            display: flex;
+            align-items: flex-start;
+            gap: 18px;
+            background: #fafafa;
+            border: 1px solid #eaeaea;
+            border-radius: 14px;
+            font-family: 'Inter', sans-serif;
+        }
+        .author-card-avatar {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #C47D0A, #e09c2e);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 22px;
+            flex-shrink: 0;
+            box-shadow: 0 2px 8px rgba(196,125,10,0.2);
+        }
+        .author-card-body { flex: 1; }
+        .author-card-name {
+            font-weight: 700;
+            font-size: 16px;
+            color: #111;
+            margin-bottom: 4px;
+        }
+        .author-card-dept {
+            font-size: 13px;
+            color: #C47D0A;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+        .author-card-bio {
+            font-size: 13px;
+            color: #888;
+            line-height: 1.5;
+        }
+
+        /* Comments */
+        .comments-wrapper {
+            max-width: 680px;
+            margin: 64px auto 0;
+            padding: 0 20px;
+            font-family: 'Inter', sans-serif;
+        }
+        .comments-heading {
+            font-family: Georgia, serif;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        .comments-list {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 40px;
+        }
+        .comment-item {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        .comment-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: #C47D0A;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+        .comment-header {
+            display: flex;
+            gap: 10px;
+            align-items: baseline;
+        }
+        .comment-date { font-size: 12px; color: #999; }
+        .comment-body { margin: 4px 0 0; font-size: 15px; line-height: 1.6; color: #333; }
+        .comment-form {
+            border-top: 1px solid #eee;
+            padding-top: 28px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .form-heading { font-size: 16px; font-weight: 700; margin: 0; }
+        .form-input {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: 'Inter', sans-serif;
+            box-sizing: border-box;
+        }
+        .form-hint { font-size: 11.5px; color: #999; margin: 4px 0 0; }
+        .form-success { background: #f0fdf4; color: #166534; padding: 10px 14px; border-radius: 6px; font-size: 13.5px; }
+        .submit-btn {
+            align-self: flex-start;
+            background: #C47D0A;
+            color: #fff;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .submit-btn:hover { background: #b07009; }
+
+        /* Error state */
+        .error-card {
+            max-width: 480px;
+            margin: 80px auto;
+            padding: 40px 24px;
+            text-align: center;
+            background: #fff;
+            border: 1px solid #eaeaea;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Footer */
+        .site-footer {
+            background: #0F1115;
+            color: #e5e7eb;
+            padding: 48px 20px 32px;
+            border-top: 3px solid #C47D0A;
+            margin-top: 60px;
+            font-family: 'Inter', sans-serif;
+        }
+        .footer-container {
+            max-width: 1100px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+        .footer-brand-title {
+            color: #C47D0A;
+            font-weight: 800;
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+        .footer-desc {
+            color: #9ca3af;
+            font-size: 14px;
+            line-height: 1.6;
+            margin: 0;
+            max-width: 540px;
+        }
+        .footer-copy {
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 20px;
+            color: #6b7280;
+            font-size: 13px;
+            margin: 0;
+        }
+
+        {% if post and post.content and post.content is mapping and post.content.css %}
+        {{ post.content.css | safe }}
+        {% endif %}
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="site-header">
+        <div class="header-container">
+            <a href="/blog-manager" class="logo-link">
+                <span class="logo-box">EXIMP & CLOVES</span>
+                <span class="logo-badge">Blog</span>
+            </a>
+            <nav class="site-nav">
+                <a href="https://eximps-cloves.com" class="nav-link">Main Website</a>
+                <a href="/blog-manager" class="nav-link">Blog Manager</a>
+            </nav>
+        </div>
+    </header>
+
+    {% if error %}
+    <main class="page-main">
+        <div class="error-card">
+            <h2 style="margin: 0 0 12px; color: #111;">Invalid or Expired Preview</h2>
+            <p style="color: #666; font-size: 14px; margin-bottom: 24px;">{{ error }}</p>
+            <a href="/blog-manager" class="primary-btn">Return to Blog Manager</a>
+        </div>
+    </main>
+    {% else %}
+    <main class="page-main">
+
+        <div class="header-column">
+            {% if is_preview %}
+            <div class="preview-banner">
+                Preview mode — this post is <strong>{{ (post.status or 'draft').replace('_', ' ') }}</strong> and not publicly visible or indexed. Only people with this exact link can see it.
+            </div>
+            {% endif %}
+
+            <article>
+                <!-- Category -->
+                {% if post.category %}
+                <span class="category-badge">{{ post.category }}</span>
+                {% endif %}
+
+                <!-- Title -->
+                <h1 class="post-title">{{ post.title }}</h1>
+
+                <!-- Excerpt -->
+                {% if post.excerpt %}
+                <p class="post-excerpt">{{ post.excerpt }}</p>
+                {% endif %}
+
+                <!-- Author bar -->
+                <div class="author-bar">
+                    <div class="author-avatar">
+                        {{ (post.author_name_snapshot or 'E')[0].upper() }}
+                    </div>
+                    <div class="author-info">
+                        <div class="author-name">
+                            By <strong>{{ post.author_name_snapshot or 'Eximp & Cloves Team' }}</strong>
+                        </div>
+                        <div class="author-meta">
+                            {% if post.author_department_snapshot %}
+                            <span class="dept-tag">{{ post.author_department_snapshot }}</span>
+                            <span class="dot-sep">·</span>
+                            {% endif %}
+                            {% if post.published_at %}
+                            <span>{{ post.published_at[:10] }}</span>
+                            {% else %}
+                            <span>Draft Preview</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Inline reaction count pill -->
+                    <div class="reaction-pill">
+                        <span>❤️</span>
+                        <span id="headerReactionCount">0</span>
+                    </div>
+                </div>
+
+                <div class="header-divider"></div>
+            </article>
+        </div>
+
+        <!-- Cover Image -->
+        {% if post.cover_image_url %}
+        <figure class="cover-figure">
+            <img src="{{ post.cover_image_url }}" alt="{{ post.title }}" class="cover-img">
+        </figure>
+        {% endif %}
+
+        <!-- Body -->
+        <div class="article-body">
+            {% if post.content %}
+                {% if post.content is mapping %}
+                    {{ post.content.html | safe }}
+                {% elif post.content is string %}
+                    {{ post.content | safe }}
+                {% else %}
+                    {{ post.content | safe }}
+                {% endif %}
+            {% else %}
+                <p style="color: #999; font-style: italic;">No content available for this post.</p>
+            {% endif %}
+        </div>
+
+        <!-- Tags -->
+        {% if post.tags %}
+        <div class="tags-row">
+            {% for tag in post.tags %}
+            <span class="tag-pill">#{{ tag }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Action Bar -->
+        <div class="action-bar">
+            <button id="likeBtn" onclick="reactPost()" class="like-btn">
+                <span>❤️</span>
+                <span id="reactionCount">0</span>
+                <span>Likes</span>
+            </button>
+
+            <div class="share-group">
+                <span class="share-label">Share</span>
+                <a id="shareX" target="_blank" rel="noopener noreferrer" class="share-btn" title="Share on X">𝕏</a>
+                <a id="shareLinkedIn" target="_blank" rel="noopener noreferrer" class="share-btn" title="Share on LinkedIn">in</a>
+                <a id="shareWA" target="_blank" rel="noopener noreferrer" class="share-btn" title="Share on WhatsApp">💬</a>
+            </div>
+        </div>
+
+        <!-- Author Card -->
+        <div class="author-card">
+            <div class="author-card-avatar">
+                {{ (post.author_name_snapshot or 'E')[0].upper() }}
+            </div>
+            <div class="author-card-body">
+                <div class="author-card-name">
+                    {{ post.author_name_snapshot or 'Eximp & Cloves Team' }}
+                </div>
+                {% if post.author_department_snapshot %}
+                <div class="author-card-dept">
+                    {{ post.author_department_snapshot }} · Eximp & Cloves Infrastructure Ltd
+                </div>
+                {% endif %}
+                <div class="author-card-bio">
+                    Published by Eximp & Cloves Infrastructure Ltd.
+                </div>
+            </div>
+        </div>
+
+        <!-- Comments -->
+        <div class="comments-wrapper">
+            <h2 class="comments-heading" id="commentsCountTitle">Comments</h2>
+
+            <ul class="comments-list" id="commentsList">
+                <p style="color: #888; font-size: 14px;">Loading comments...</p>
+            </ul>
+
+            <form class="comment-form" id="commentForm" onsubmit="submitComment(event)">
+                <h3 class="form-heading">Leave a comment</h3>
+                <div id="commentSuccess" class="form-success" style="display: none;">
+                    Thanks — your comment is awaiting a quick review before it appears.
+                </div>
+
+                <input type="text" id="commentAuthor" class="form-input" placeholder="Your name" required>
+                <div>
+                    <input type="email" id="commentEmail" class="form-input" placeholder="Email" required>
+                    <p class="form-hint">Won't be published — used only to prevent spam.</p>
+                </div>
+                <textarea id="commentContent" class="form-input" rows="4" placeholder="Write your comment…" required style="resize: vertical;"></textarea>
+
+                <button type="submit" id="submitBtn" class="submit-btn">Post Comment</button>
+            </form>
+        </div>
+
+    </main>
+    {% endif %}
+
+    <!-- Footer -->
+    <footer class="site-footer">
+        <div class="footer-container">
+            <div>
+                <div class="footer-brand-title">EXIMP & CLOVES</div>
+                <p class="footer-desc">
+                    Eximp & Cloves Infrastructure Ltd — Driving excellence in real estate, property developments, and capital growth.
+                </p>
+            </div>
+            <div>
+                <p class="footer-copy">
+                    © 2026 Eximp & Cloves Infrastructure Ltd. All rights reserved.
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    {% if post %}
+    <script>
+        const POST_ID = "{{ post.id }}";
+        const POST_TITLE = {{ post.title | tojson }};
+        const POST_SLUG = {{ post.slug | tojson }};
+        const API_BASE = "/api/blog";
+
+        // Setup share links
+        const currentUrl = window.location.href;
+        document.getElementById('shareX').href = `https://twitter.com/intent/tweet?text=${encodeURIComponent(POST_TITLE)}&url=${encodeURIComponent(currentUrl)}`;
+        document.getElementById('shareLinkedIn').href = `https://www.linkedin.com/shareArticle?mini=true&url=${encodeURIComponent(currentUrl)}&title=${encodeURIComponent(POST_TITLE)}`;
+        document.getElementById('shareWA').href = `https://wa.me/?text=${encodeURIComponent(POST_TITLE + ' — ' + currentUrl)}`;
+
+        async function loadReactions() {
+            try {
+                const res = await fetch(`${API_BASE}/public/posts/${POST_ID}/reactions`);
+                const data = await res.json();
+                const count = data.total_reactions || 0;
+                document.getElementById('reactionCount').textContent = count;
+                document.getElementById('headerReactionCount').textContent = count;
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function reactPost() {
+            try {
+                let readerId = localStorage.getItem('blog_reader_id');
+                if (!readerId) {
+                    readerId = 'reader_' + Math.random().toString(36).substring(2);
+                    localStorage.setItem('blog_reader_id', readerId);
+                }
+                const res = await fetch(`${API_BASE}/public/posts/${POST_ID}/react`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reader_identifier: readerId, reaction_type: 'like' })
+                });
+                const data = await res.json();
+                const count = data.total_reactions || 0;
+                document.getElementById('reactionCount').textContent = count;
+                document.getElementById('headerReactionCount').textContent = count;
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function loadComments() {
+            try {
+                const res = await fetch(`${API_BASE}/public/posts/${POST_ID}/comments`);
+                const comments = await res.json();
+                const container = document.getElementById('commentsList');
+                const titleEl = document.getElementById('commentsCountTitle');
+
+                if (!comments || comments.length === 0) {
+                    titleEl.textContent = 'Comments';
+                    container.innerHTML = '<p style="color: #888; font-size: 14px;">Be the first to comment.</p>';
+                    return;
+                }
+
+                titleEl.textContent = `Comments (${comments.length})`;
+                container.innerHTML = comments.map(c => `
+                    <li class="comment-item">
+                        <div class="comment-avatar">${escapeHtml((c.author_name || '?').charAt(0).toUpperCase())}</div>
+                        <div>
+                            <div class="comment-header">
+                                <strong>${escapeHtml(c.author_name)}</strong>
+                                <span class="comment-date">${new Date(c.created_at).toLocaleDateString()}</span>
+                            </div>
+                            <p class="comment-body">${escapeHtml(c.content)}</p>
+                        </div>
+                    </li>
+                `).join('');
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function submitComment(e) {
+            e.preventDefault();
+            const btn = document.getElementById('submitBtn');
+            const name = document.getElementById('commentAuthor').value;
+            const email = document.getElementById('commentEmail').value;
+            const content = document.getElementById('commentContent').value;
+
+            btn.disabled = true;
+            btn.textContent = 'Posting…';
+
+            try {
+                const res = await fetch(`${API_BASE}/public/posts/${POST_ID}/comments`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ author_name: name, author_email: email, content: content })
+                });
+                if (res.ok) {
+                    document.getElementById('commentForm').reset();
+                    document.getElementById('commentSuccess').style.display = 'block';
+                    setTimeout(() => { document.getElementById('commentSuccess').style.display = 'none'; }, 6000);
+                } else {
+                    alert('Could not post your comment. Please try again.');
+                }
+            } catch (err) {
+                alert('Error submitting comment.');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Post Comment';
+            }
+        }
+
+        function escapeHtml(str) {
+            return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadReactions();
+            loadComments();
+        });
+    </script>
+    {% endif %}
+</body>
+</html>

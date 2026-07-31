@@ -476,6 +476,63 @@ async def blog_manager_page(request: Request):
     return templates.TemplateResponse(request, "blog_dashboard.html", {"request": request})
 
 
+@app.get("/blog/preview/{slug}", response_class=HTMLResponse)
+async def blog_preview_page(request: Request, slug: str, token: str = None):
+    from database import get_db, db_execute
+    from routers.blog import _enrich_author_data
+    db = get_db()
+    res = await db_execute(lambda: db.table("blog_posts").select("*").eq("slug", slug).execute())
+    if not res.data or not token or res.data[0].get("share_token") != token:
+        return templates.TemplateResponse(request, "blog_post.html", {
+            "request": request,
+            "error": "The preview link is invalid or has expired.",
+            "is_preview": True,
+            "post": None
+        }, status_code=404)
+    posts = await _enrich_author_data(res.data)
+    return templates.TemplateResponse(request, "blog_post.html", {
+        "request": request,
+        "post": posts[0],
+        "is_preview": True
+    })
+
+
+@app.get("/blog/{slug}", response_class=HTMLResponse)
+async def blog_public_post_page(request: Request, slug: str, token: str = None):
+    from database import get_db, db_execute
+    from routers.blog import _enrich_author_data
+    db = get_db()
+    res = await db_execute(lambda: db.table("blog_posts").select("*").eq("slug", slug).execute())
+    if not res.data:
+        return templates.TemplateResponse(request, "blog_post.html", {
+            "request": request,
+            "error": "Blog post not found.",
+            "is_preview": False,
+            "post": None
+        }, status_code=404)
+    
+    post = res.data[0]
+    is_preview = False
+    if post.get("status") != "published":
+        if token and post.get("share_token") == token:
+            is_preview = True
+        else:
+            return templates.TemplateResponse(request, "blog_post.html", {
+                "request": request,
+                "error": "This blog post is not yet published.",
+                "is_preview": False,
+                "post": None
+            }, status_code=404)
+            
+    posts = await _enrich_author_data([post])
+    return templates.TemplateResponse(request, "blog_post.html", {
+        "request": request,
+        "post": posts[0],
+        "is_preview": is_preview
+    })
+
+
+
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
     """Returns a transparent 1x1 pixel for favicon requests to keep logs clean."""
