@@ -5658,7 +5658,6 @@
     async function loadClients() {
       // Show only actual clients on the Finance Dashboard
       const data = await apiFetch('/api/clients/?client_type=client').then(r => r.json());
-      allClients = data;
       document.getElementById('clientsTable').innerHTML = data.length ? `
     <div class="table-responsive">
       <table class="data-table">
@@ -5805,7 +5804,7 @@
       }
 
       try {
-        if (!allClients.length) allClients = await apiFetch('/api/clients/').then(r => r.json());
+        allClients = await apiFetch('/api/clients/').then(r => r.json());
         if (!allProperties.length) allProperties = await apiFetch('/api/properties/').then(r => r.json());
       } catch (e) {
         toast((e && e.message) || 'Error loading required data', 'error');
@@ -6102,6 +6101,7 @@
         address: document.getElementById('cl-address').value,
         city: document.getElementById('cl-city').value,
         state: document.getElementById('cl-state').value,
+        client_type: 'client'
       };
       if (!body.full_name || !body.email) return toast('Name and email are required', 'error');
 
@@ -6115,7 +6115,8 @@
         toast(`Client ${data.client.full_name} added`, 'success');
         closeModal('addClientModal');
         allClients = [];
-        loadDashboard();
+        loadClients();
+        if (document.getElementById('section-dashboard').style.display === '') loadDashboard();
       } catch (e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
     }
 
@@ -6162,7 +6163,8 @@
         toast(`Client ${data.client.full_name} updated`, 'success');
         closeModal('editClientModal');
         allClients = [];
-        loadDashboard();
+        loadClients();
+        if (document.getElementById('section-dashboard').style.display === '') loadDashboard();
       } catch (e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
     }
 
