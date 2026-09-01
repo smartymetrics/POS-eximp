@@ -103,47 +103,44 @@ async def create_invoice(
     discount_code = (data.discount_code or "").strip().upper()
     discount_amount = 0.0
     original_amount = float(data.amount)
+    code_rec_id = None
+    new_uses_count = 0
     
     if discount_code:
         code_res = await db_execute(lambda: db.table("discount_codes").select("*").eq("code", discount_code).execute())
-        if code_res.data:
-            code_rec = code_res.data[0]
-            if code_rec.get("is_active", True):
-                is_expired = False
-                expires_str = code_rec.get("expires_at")
-                if expires_str:
-                    try:
-                        t_str = expires_str.replace("Z", "+00:00")
-                        expires_at = datetime.fromisoformat(t_str)
-                        from datetime import timezone
-                        now = datetime.now(timezone.utc)
-                        if expires_at < now:
-                            is_expired = True
-                    except Exception:
-                        pass
-                
-                max_uses = code_rec.get("max_uses")
-                uses_count = code_rec.get("uses_count", 0)
-                is_exhausted = max_uses is not None and uses_count >= max_uses
-                
-                if not is_expired and not is_exhausted:
-                    d_val = float(code_rec.get("discount_value") or 0)
-                    d_type = code_rec.get("discount_type", "percentage")
-                    if d_type == "percentage":
-                        discount_amount = original_amount * d_val / 100.0
-                    else:
-                        discount_amount = min(d_val, original_amount)
-                    
-                    # Increment uses count
-                    await db_execute(lambda: db.table("discount_codes").update({
-                        "uses_count": uses_count + 1
-                    }).eq("id", code_rec["id"]).execute())
-                else:
-                    discount_code = None
-            else:
-                discount_code = None
+        if not code_res.data:
+            raise HTTPException(status_code=400, detail=f"Discount code '{discount_code}' not found")
+        
+        code_rec = code_res.data[0]
+        if not code_rec.get("is_active", True):
+            raise HTTPException(status_code=400, detail=f"Discount code '{discount_code}' is currently inactive")
+            
+        expires_str = code_rec.get("expires_at")
+        if expires_str:
+            try:
+                t_str = expires_str.replace("Z", "+00:00")
+                expires_at = datetime.fromisoformat(t_str)
+                from datetime import timezone
+                now = datetime.now(timezone.utc)
+                if expires_at < now:
+                    raise HTTPException(status_code=400, detail=f"Discount code '{discount_code}' has expired")
+            except Exception:
+                pass
+        
+        max_uses = code_rec.get("max_uses")
+        uses_count = code_rec.get("uses_count", 0)
+        if max_uses is not None and uses_count >= max_uses:
+            raise HTTPException(status_code=400, detail=f"Discount code '{discount_code}' has reached its usage limit ({max_uses} uses)")
+        
+        d_val = float(code_rec.get("discount_value") or 0)
+        d_type = code_rec.get("discount_type", "percentage")
+        if d_type == "percentage":
+            discount_amount = original_amount * d_val / 100.0
         else:
-            discount_code = None
+            discount_amount = min(d_val, original_amount)
+            
+        code_rec_id = code_rec["id"]
+        new_uses_count = uses_count + 1
             
     final_total = max(0.0, original_amount - discount_amount)
     
@@ -177,7 +174,8 @@ async def create_invoice(
         "documentation_fee": documentation_fee,
         "vat_amount": vat_amount,
         "discount_code": discount_code if discount_amount > 0 else None,
-        "discount_amount": discount_amount if discount_amount > 0 else None
+        "discount_amount": discount_amount if discount_amount > 0 else None,
+        "pipeline_stage": "interest"
     }
     
     # 3. REVENUE ATTRIBUTION (HubSpot Standard)
@@ -197,6 +195,15 @@ async def create_invoice(
     encoded_data = jsonable_encoder(invoice_data)
     result = await db_execute(lambda: db.table("invoices").insert(encoded_data).execute())
     
+    # Increment discount code uses count after invoice is created successfully
+    if code_rec_id and discount_amount > 0:
+        background_tasks.add_task(
+            db_execute,
+            lambda: db.table("discount_codes").update({
+                "uses_count": new_uses_count
+            }).eq("id", code_rec_id).execute()
+        )
+
     # 4. PROMOTE TO CLIENT (Automatic Conversion)
     # When an invoice is created, the lead officially becomes a client.
     background_tasks.add_task(
