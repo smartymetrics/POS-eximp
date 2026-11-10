@@ -42,7 +42,8 @@ except Exception as e:
 # reads fall back to this same Supabase client for anything not yet
 # migrated. See hybrid_storage.py and migrate_to_cloudinary.py.
 STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "hybrid")  # "hybrid" | "supabase"
-if STORAGE_BACKEND == "hybrid":
+has_cloudinary = bool(os.getenv("CLOUDINARY_CLOUD_NAME") and os.getenv("CLOUDINARY_API_KEY") and os.getenv("CLOUDINARY_API_SECRET"))
+if STORAGE_BACKEND == "hybrid" and has_cloudinary:
     from hybrid_storage import HybridStorage
     # `supabase.storage` is a read-only @property backed by `_storage` — it
     # has no setter, so we populate the private backing field directly

@@ -45,7 +45,8 @@ from routers import (
     guarantor,
     kyc_links,
     discount_codes,
-    blog
+    blog,
+    cooperatives
 )
 from routers import refunds
 from routers import feedback
@@ -162,6 +163,7 @@ templates = Jinja2Templates(env=_jinja_env)
 app.mount("/hr", StaticFiles(directory="hrm-portal/dist", html=True), name="hr")
 
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(clients.router, prefix="/api/clients", tags=["clients"])
 app.include_router(properties.router, prefix="/api/properties", tags=["properties"])
 app.include_router(invoices.router, prefix="/api/invoices", tags=["invoices"])
@@ -209,6 +211,7 @@ app.include_router(refunds.router, prefix="/api/refunds", tags=["refunds"])
 app.include_router(feedback.router, prefix="/api/feedback", tags=["feedback"])
 
 app.include_router(blog.router, prefix="/api/blog", tags=["blog"])
+app.include_router(cooperatives.router, prefix="/api/cooperatives", tags=["cooperatives"])
 
 
 
@@ -532,6 +535,14 @@ async def blog_public_post_page(request: Request, slug: str, token: str = None):
     })
 
 
+
+@app.get("/cooperative/dashboard", response_class=HTMLResponse)
+async def cooperative_dashboard_page(request: Request):
+    return templates.TemplateResponse(request, "cooperative_dashboard.html", {"request": request})
+
+@app.get("/cooperative/my-property", response_class=HTMLResponse)
+async def cooperative_member_page(request: Request):
+    return templates.TemplateResponse(request, "cooperative_member_portal.html", {"request": request})
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():

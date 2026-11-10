@@ -4,6 +4,9 @@ import jwt
 import bcrypt
 import os
 from datetime import datetime, timedelta
+import logging
+
+logger = logging.getLogger(__name__)
 from models import (
     AdminLogin, AdminCreate, TokenResponse,
     ChangePasswordRequest, ResetPasswordRequest, UpdateProfileRequest
@@ -16,7 +19,7 @@ security = HTTPBearer()
 
 SECRET_KEY = os.getenv("JWT_SECRET", "eximp-cloves-secret-key-change-in-production")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_HOURS = 24
+ACCESS_TOKEN_EXPIRE_HOURS = 12
 
 
 def create_token(data: dict) -> str:
@@ -48,30 +51,10 @@ def verify_token_optional(authorization: str = Header(None)):
         return None
 
 
-def has_any_role(admin_payload: dict, *roles) -> bool:
-    """Check if the admin has any of the given roles (supports comma-separated multi-role).
-
-    Accepts roles as individual string args:  has_any_role(admin, "admin", "operations")
-    Or as a single list arg:                  has_any_role(admin, ["admin", "operations"])
-    """
-    # Flatten: handle both has_any_role(admin, "a", "b") and has_any_role(admin, ["a", "b"])
-    flat_roles: list[str] = []
-    for r in roles:
-        if isinstance(r, (list, tuple, set)):
-            flat_roles.extend(r)
-        else:
-            flat_roles.append(r)
-    role_str = admin_payload.get("role") or ""
-    primary_role_str = admin_payload.get("primary_role") or ""
-    all_roles_str = f"{role_str},{primary_role_str}"
-    
-    user_roles = {r.strip().lower().replace(" ", "_") for r in all_roles_str.split(",") if r.strip()}
-    flat_roles_normalized = {r.strip().lower().replace(" ", "_") for r in flat_roles if r}
-    
-    # Always allow super_admin
-    if "super_admin" in user_roles:
-        return True
-    return bool(user_roles & flat_roles_normalized)
+def has_any_role(admin_payload: dict, *roles: str) -> bool:
+    """Check if the admin has any of the given roles (supports comma-separated multi-role)."""
+    user_roles = {r.strip() for r in (admin_payload.get("role") or "").split(",") if r.strip()}
+    return bool(user_roles & set(roles))
 
 
 # Alias for dependency consistency
@@ -104,56 +87,143 @@ def resolve_admin_token(token: str = None, authorization: str = Header(None)):
 @router.post("/login", response_model=TokenResponse)
 async def login(data: AdminLogin):
     db = get_db()
-    result = await db_execute(lambda: db.table("admins").select("*").eq("email", data.email).eq("is_active", True).execute())
-    if not result.data:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    admin = result.data[0]
-    if not bcrypt.checkpw(data.password.encode(), admin["password_hash"].encode()):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    if admin.get("is_archived"):
-        raise HTTPException(status_code=403, detail="This account has been archived")
-    # Fetch staff info from profiles
-    profile_res = await db_execute(lambda: db.table("staff_profiles").select("staff_type, tin").eq("admin_id", admin["id"]).execute())
-    profile = profile_res.data[0] if profile_res.data else {}
-    staff_type = profile.get("staff_type", "full")
-    tin = profile.get("tin")
+    identifier = data.email.strip()
 
-    token = create_token({
-        "sub": admin["id"], 
-        "email": admin["email"], 
-        "role": admin.get("role") or "staff", 
-        "primary_role": admin.get("primary_role", "staff"),
-        "staff_type": staff_type
-    })
-    return {
-        "access_token": token,
-        "admin": {
-            "id": admin["id"], 
-            "name": admin["full_name"], 
-            "email": admin["email"], 
-            "role": admin.get("role") or "staff",
-            "primary_role": admin.get("primary_role", "staff"),
-            "staff_type": staff_type,
-            "tin": tin
-        }
-    }
+    # 1. Check Eximp Staff & Admins
+    result = await db_execute(lambda: db.table("admins").select("*").eq("email", identifier.lower()).eq("is_active", True).execute())
+    if result.data:
+        admin = result.data[0]
+        if bcrypt.checkpw(data.password.encode(), admin["password_hash"].encode()):
+            if admin.get("is_archived"):
+                raise HTTPException(status_code=403, detail="This account has been archived")
+            profile_res = await db_execute(lambda: db.table("staff_profiles").select("staff_type").eq("admin_id", admin["id"]).execute())
+            staff_type = profile_res.data[0]["staff_type"] if profile_res.data else "full"
+
+            token = create_token({
+                "sub": admin["id"], 
+                "email": admin["email"], 
+                "role": admin.get("role") or "staff", 
+                "primary_role": admin.get("primary_role", "staff"),
+                "staff_type": staff_type
+            })
+            return {
+                "access_token": token,
+                "token_type": "bearer",
+                "user_type": "staff",
+                "redirect_url": "/",
+                "admin": {
+                    "id": admin["id"], 
+                    "name": admin["full_name"], 
+                    "email": admin["email"], 
+                    "role": admin.get("role") or "staff", 
+                    "primary_role": admin.get("primary_role", "staff"),
+                    "staff_type": staff_type
+                }
+            }
+
+    # 2. Check Cooperative Admins
+    try:
+        res_coop_admin = await db_execute(lambda: db.table("cooperative_admins")
+            .select("*, cooperatives(*)")
+            .ilike("email", identifier.lower())
+            .eq("is_active", True)
+            .execute())
+        if res_coop_admin.data:
+            coop_adm = res_coop_admin.data[0]
+            from routers.cooperatives import verify_password, create_portal_token
+            if verify_password(data.password, coop_adm["password_hash"]):
+                token_payload = {
+                    "sub": coop_adm["id"],
+                    "user_type": "coop_admin",
+                    "admin_id": coop_adm["id"],
+                    "full_name": coop_adm["full_name"],
+                    "email": coop_adm["email"],
+                    "role": coop_adm["role"],
+                    "cooperative_id": coop_adm["cooperative_id"],
+                    "cooperative_name": coop_adm["cooperatives"]["name"] if coop_adm.get("cooperatives") else "Cooperative",
+                }
+                token = create_portal_token(token_payload)
+                await db_execute(lambda: db.table("cooperative_admins").update({
+                    "last_login_at": datetime.utcnow().isoformat()
+                }).eq("id", coop_adm["id"]).execute())
+
+                return {
+                    "access_token": token,
+                    "token_type": "bearer",
+                    "user_type": "coop_admin",
+                    "redirect_url": f"/cooperative/dashboard?coop={coop_adm['cooperative_id']}",
+                    "admin": {
+                        "id": coop_adm["id"],
+                        "name": coop_adm["full_name"],
+                        "email": coop_adm["email"],
+                        "role": coop_adm["role"],
+                        "primary_role": "coop_admin",
+                        "cooperative_id": coop_adm["cooperative_id"]
+                    }
+                }
+    except Exception as e:
+        logger.warning(f"Coop admin check error: {e}")
+
+    # 3. Check Cooperative Members
+    try:
+        res_member = await db_execute(lambda: db.table("cooperative_members")
+            .select("*, cooperatives(id, name, code)")
+            .or_(f"email.ilike.{identifier.lower()},phone.eq.{identifier}")
+            .eq("is_portal_active", True)
+            .execute())
+        if res_member.data:
+            mem = res_member.data[0]
+            from routers.cooperatives import verify_password, create_portal_token
+            pwd_hash = mem.get("password_hash")
+            pwd_valid = False
+            if pwd_hash:
+                pwd_valid = verify_password(data.password, pwd_hash)
+            elif data.password == mem.get("phone"):
+                pwd_valid = True
+
+            if pwd_valid:
+                token_payload = {
+                    "sub": mem["id"],
+                    "user_type": "coop_member",
+                    "member_id": mem["id"],
+                    "full_name": mem["full_name"],
+                    "email": mem["email"],
+                    "phone": mem["phone"],
+                    "cooperative_id": mem["cooperative_id"],
+                    "sub_index": mem.get("sub_index"),
+                    "cooperative_name": mem["cooperatives"]["name"] if mem.get("cooperatives") else "Cooperative",
+                }
+                token = create_portal_token(token_payload)
+                await db_execute(lambda: db.table("cooperative_members").update({
+                    "last_login_at": datetime.utcnow().isoformat()
+                }).eq("id", mem["id"]).execute())
+
+                return {
+                    "access_token": token,
+                    "token_type": "bearer",
+                    "user_type": "coop_member",
+                    "redirect_url": "/cooperative/my-property",
+                    "admin": {
+                        "id": mem["id"],
+                        "name": mem["full_name"],
+                        "email": mem.get("email") or mem.get("phone") or "",
+                        "role": "member",
+                        "primary_role": "coop_member",
+                        "cooperative_id": mem["cooperative_id"]
+                    }
+                }
+    except Exception as e:
+        logger.warning(f"Coop member check error: {e}")
+
+    raise HTTPException(status_code=401, detail="Invalid email/phone or password")
 
 
 # GET CURRENT USER
 @router.get("/me")
 async def me(current_admin=Depends(verify_token)):
     db = get_db()
-    res = await db_execute(lambda: db.table("admins").select("id, full_name, email, role, primary_role, created_at").eq("id", current_admin["sub"]).execute())
-    if not res.data: return {}
-    admin = res.data[0]
-    
-    # Fetch profile
-    prof_res = await db_execute(lambda: db.table("staff_profiles").select("staff_type, tin").eq("admin_id", admin["id"]).execute())
-    profile = prof_res.data[0] if prof_res.data else {}
-    
-    admin["staff_type"] = profile.get("staff_type", "full")
-    admin["tin"] = profile.get("tin")
-    return admin
+    result = await db_execute(lambda: db.table("admins").select("id, full_name, email, role, primary_role, created_at").eq("id", current_admin["sub"]).execute())
+    return result.data[0] if result.data else {}
 
 
 # CREATE TEAM MEMBER (admin only)
@@ -205,10 +275,10 @@ async def list_admins(current_admin=Depends(verify_token)):
 def require_roles(allowed_roles: list[str]):
     """
     Returns a dependency that checks if the current user has any of the required roles.
-    Uses resolve_admin_token to support both Header and Query Param tokens.
     """
-    async def role_checker(current_admin=Depends(resolve_admin_token)):
-        if not has_any_role(current_admin, allowed_roles):
+    async def role_checker(current_admin=Depends(verify_token)):
+        user_roles = [r.strip() for r in current_admin.get("role", "").split(",")]
+        if not any(role in user_roles for role in allowed_roles):
             raise HTTPException(
                 status_code=403, 
                 detail=f"Access denied. Required roles: {', '.join(allowed_roles)}"
@@ -300,21 +370,12 @@ async def archive_admin(admin_id: str, current_admin=Depends(verify_token)):
     return {"message": f"{target.data[0]['full_name']} has been archived"}
 
 
-# UPDATE ROLES (admin/super_admin full access; hr_admin restricted access)
-# HR admins may assign only these roles — they cannot elevate staff to admin-level roles.
-HR_ASSIGNABLE_ROLES = {"sales_rep", "staff", "line_manager", "customer_support", "sales"}
-
+# UPDATE ROLES (admin/super_admin only)
 @router.patch("/admins/{admin_id}/roles")
 async def update_admin_roles(admin_id: str, data: dict, current_admin=Depends(verify_token)):
     current_roles = (current_admin.get("role") or "").split(",")
-    caller_role_set = {r.strip().lower() for r in current_roles if r.strip()}
-
-    is_full_admin = bool(caller_role_set & {"admin", "super_admin"})
-    is_hr_admin   = "hr_admin" in caller_role_set
-
-    if not (is_full_admin or is_hr_admin):
-        raise HTTPException(status_code=403, detail="Only admins or HR admins can update roles")
-
+    if not any(r.strip() in ["admin", "super_admin"] for r in current_roles):
+        raise HTTPException(status_code=403, detail="Admins only")
     if current_admin.get("sub") == admin_id:
         raise HTTPException(status_code=400, detail="Use 'My Profile' to change your own roles")
 
@@ -325,17 +386,6 @@ async def update_admin_roles(admin_id: str, data: dict, current_admin=Depends(ve
 
     if not role:
         raise HTTPException(status_code=400, detail="At least one role is required")
-
-    # HR admins may only assign roles within the permitted set.
-    if is_hr_admin and not is_full_admin:
-        requested_roles = {r.strip().lower() for r in role.split(",") if r.strip()}
-        forbidden = requested_roles - HR_ASSIGNABLE_ROLES
-        if forbidden:
-            raise HTTPException(
-                status_code=403,
-                detail=f"HR can only assign: {', '.join(sorted(HR_ASSIGNABLE_ROLES))}. "
-                       f"Forbidden role(s): {', '.join(sorted(forbidden))}"
-            )
 
     db = get_db()
     target = await db_execute(lambda: db.table("admins").select("id, full_name").eq("id", admin_id).execute())

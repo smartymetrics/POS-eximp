@@ -16,9 +16,7 @@ export async function apiFetch(endpoint, options = {}) {
 
   if (response.status === 401) {
     localStorage.removeItem("ec_token");
-    localStorage.removeItem("admin");
-    alert("Your session has expired. Please log in again.");
-    window.location.href = "/login";
+    window.location.reload();
     return;
   }
 
@@ -40,6 +38,5 @@ export async function apiFetch(endpoint, options = {}) {
     throw new Error(message);
   }
 
-  if (response.status === 204) return null;
   return response.json();
 }

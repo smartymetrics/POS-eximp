@@ -330,20 +330,71 @@ async def get_contract_html_draft(invoice_id: str, current_admin=Depends(resolve
     from fastapi.responses import HTMLResponse
     
     db = get_db()
-    
+    invoice = None
+    client = None
+    witnesses = []
+
     # 1. Fetch Invoice
     inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute())
-    if not inv_res.data: raise HTTPException(status_code=404, detail="Invoice not found")
-    invoice = inv_res.data[0]
+    if inv_res.data:
+        invoice = inv_res.data[0]
+        client_raw = invoice.get("clients", {})
+        client = client_raw[0] if isinstance(client_raw, list) and client_raw else client_raw
+        session_res = await db_execute(lambda: db.table("contract_signing_sessions").select("*, witness_signatures(*)").eq("invoice_id", invoice_id).order("created_at", desc=True).limit(1).execute())
+        witnesses = session_res.data[0].get("witness_signatures", []) if session_res.data else []
+    else:
+        # Check cooperative invoices
+        try:
+            coop_inv_res = await db_execute(lambda: db.table("cooperative_invoices").select("*, cooperatives(*), cooperative_members(*), properties(*)").eq("id", invoice_id).execute())
+            if coop_inv_res.data:
+                cinv = coop_inv_res.data[0]
+                coop = cinv.get("cooperatives") or {}
+                member = cinv.get("cooperative_members") or {}
+                prop = cinv.get("properties") or {}
+                reg_status = coop.get("registration_status", "unregistered")
+                reg_num = coop.get("registration_number", "")
+                entity_label = "Registered Entity" if reg_status == "registered" else "Unregistered Entity"
+                if reg_num:
+                    entity_label += f" (Reg: {reg_num})"
+
+                coop_name = coop.get("name") or "Cooperative Society"
+                member_name = member.get("full_name")
+
+                invoice = {
+                    "id": cinv["id"],
+                    "invoice_number": cinv["invoice_number"],
+                    "amount": float(cinv.get("total_amount") or 0),
+                    "amount_paid": float(cinv.get("amount_paid") or 0),
+                    "balance_due": float(cinv.get("balance_due") or 0),
+                    "property_name": prop.get("title") or "Cooperative Scheme Allotment",
+                    "property_location": prop.get("location") or "Nigeria",
+                    "plot_size_sqm": member.get("plot_size_sqm") or 500,
+                    "created_at": cinv.get("created_at"),
+                    "contract_signature_url": member.get("signature_url") if member else None,
+                }
+
+                if cinv.get("invoice_type") == "master" or not member:
+                    client = {
+                        "full_name": f"{coop_name} [{entity_label}]",
+                        "email": coop.get("official_email") or "",
+                        "address": coop.get("registered_address") or "Cooperative Secretariat",
+                    }
+                else:
+                    client = {
+                        "full_name": f"{member_name} (Allottee under {coop_name} [{entity_label}])",
+                        "email": member.get("email") or "",
+                        "address": member.get("residential_address") or "Nigeria",
+                    }
+        except Exception:
+            pass
+
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice or cooperative contract not found")
     
-    # 2. Fetch Session & Witnesses
-    session_res = await db_execute(lambda: db.table("contract_signing_sessions").select("*, witness_signatures(*)").eq("invoice_id", invoice_id).order("created_at", desc=True).limit(1).execute())
-    witnesses = session_res.data[0].get("witness_signatures", []) if session_res.data else []
-    
-    # 3. Render full contract (Draft mode, Browser-friendly URLs)
+    # 2. Render full contract (Draft mode, Browser-friendly URLs)
     html_content = render_contract_html(
         invoice, 
-        invoice["clients"], 
+        client or {}, 
         witnesses=witnesses, 
         is_draft=True, 
         embed_images=False # Use URLs for faster browser preview
@@ -1658,8 +1709,8 @@ async def list_archived_contracts(current_admin=Depends(verify_token)):
 
 @router.get("/all-contracts")
 async def list_all_contracts(include_voided: bool = Query(False), current_admin=Depends(verify_token)):
-    """Fetch a comprehensive list of all contracts and their real-time signing status."""
-    if not has_any_role(current_admin, "admin", "lawyer", "legal"):
+    """Fetch a comprehensive list of all contracts (Retail and Cooperative Schemes) and their real-time signing status."""
+    if not has_any_role(current_admin, "admin", "lawyer", "legal", "super_admin"):
         raise HTTPException(status_code=403, detail="Unauthorized")
         
     db = get_db()
@@ -1674,12 +1725,12 @@ async def list_all_contracts(include_voided: bool = Query(False), current_admin=
 
     result = await db_execute(lambda: query.execute())
         
-    contracts = result.data
+    contracts = result.data or []
     for c in contracts:
+        c["is_cooperative"] = False
         # Summarize status for the dashboard
         sessions = c.get("contract_signing_sessions", [])
         if isinstance(sessions, list) and sessions:
-             # Pick the latest session
              session = sorted(sessions, key=lambda s: s.get("created_at", ""), reverse=True)[0]
         else:
              session = sessions if isinstance(sessions, dict) else {}
@@ -1698,6 +1749,58 @@ async def list_all_contracts(include_voided: bool = Query(False), current_admin=
             sigs += len(witnesses)
             
         c["signatures_collected"] = sigs
+
+    # Include Cooperative Scheme Contracts
+    try:
+        coop_res = await db_execute(lambda: db.table("cooperative_invoices")
+            .select("id, invoice_number, total_amount, created_at, status, invoice_type, cooperative_id, member_id, cooperatives(name, registration_status, registration_number), cooperative_members(full_name, email, signature_url, plot_size_sqm), properties(title, location)")
+            .order("created_at", desc=True)
+            .limit(100)
+            .execute())
+        if coop_res.data:
+            for ci in coop_res.data:
+                coop = ci.get("cooperatives") or {}
+                member = ci.get("cooperative_members") or {}
+                prop = ci.get("properties") or {}
+                reg_status = coop.get("registration_status", "unregistered")
+                reg_num = coop.get("registration_number", "")
+
+                entity_type = "Registered Entity" if reg_status == "registered" else "Unregistered Entity"
+                if reg_num:
+                    entity_type += f" ({reg_num})"
+
+                member_name = member.get("full_name")
+                coop_name = coop.get("name") or "Cooperative Society"
+
+                formatted_coop_contract = {
+                    "id": ci["id"],
+                    "invoice_number": ci["invoice_number"],
+                    "property_name": prop.get("title") or "Cooperative Scheme Allotment",
+                    "property_location": prop.get("location") or "Nigeria",
+                    "amount": float(ci.get("total_amount") or 0),
+                    "created_at": ci.get("created_at"),
+                    "status": ci.get("status", "pending"),
+                    "pipeline_stage": "closed" if ci.get("status") == "paid" else "contract",
+                    "contract_closed": ci.get("status") == "paid",
+                    "contract_signature_url": member.get("signature_url"),
+                    "plot_size_sqm": member.get("plot_size_sqm") or 500,
+                    "clients": {
+                        "full_name": f"{member_name} ({coop_name})" if member_name else coop_name,
+                        "email": member.get("email") or coop.get("official_email") or ""
+                    },
+                    "is_cooperative": True,
+                    "cooperative_id": ci.get("cooperative_id"),
+                    "cooperative_name": coop_name,
+                    "registration_status": reg_status,
+                    "entity_type": entity_type,
+                    "signing_status": "completed" if member.get("signature_url") else "pending",
+                    "signatures_collected": 1 if member.get("signature_url") else 0,
+                    "expires_at": None,
+                }
+                contracts.append(formatted_coop_contract)
+    except Exception:
+        # Graceful fallback if cooperative tables not yet created
+        pass
 
     return contracts
 

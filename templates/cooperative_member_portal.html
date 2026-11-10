@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Member Portal | Eximp &amp; Cloves Cooperative</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { font-family: 'DM Sans', sans-serif; }
+        .font-serif { font-family: 'Playfair Display', serif; }
+
+        :root {
+            --gold: #C47D0A;
+            --gold-light: #FDE8BC;
+        }
+
+        body.theme-dark {
+            --bg-base: #0F0F0F;
+            --bg-surface: #1A1A1A;
+            --bg-elevated: #242424;
+            --border-color: #333333;
+            --text-primary: #F9FAFB;
+            --text-secondary: #9CA3AF;
+            --badge-bg: #2C2618;
+            --badge-text: #F5A623;
+        }
+
+        body.theme-light {
+            --bg-base: #F8F9FA;
+            --bg-surface: #FFFFFF;
+            --bg-elevated: #F1F3F5;
+            --border-color: #E5E7EB;
+            --text-primary: #111827;
+            --text-secondary: #4B5563;
+            --badge-bg: #FEF3C7;
+            --badge-text: #92400E;
+        }
+
+        body.theme-warm {
+            --bg-base: #FAF6F0;
+            --bg-surface: #FFFFFF;
+            --bg-elevated: #F4EFE6;
+            --border-color: #E7DFD5;
+            --text-primary: #2A2421;
+            --text-secondary: #6B5E55;
+            --badge-bg: #FBEBD6;
+            --badge-text: #8C4E04;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }
+
+        .bg-surface { background-color: var(--bg-surface); }
+        .bg-elevated { background-color: var(--bg-elevated); }
+        .border-theme { border-color: var(--border-color); }
+        .text-theme-primary { color: var(--text-primary); }
+        .text-theme-secondary { color: var(--text-secondary); }
+        .badge-theme { background-color: var(--badge-bg); color: var(--badge-text); }
+
+        .btn-gold {
+            background: linear-gradient(135deg, #C47D0A, #E09212);
+            color: #FFFFFF;
+            font-weight: 600;
+        }
+        .btn-gold:hover { opacity: 0.95; }
+
+        .member-tab.active {
+            color: var(--gold);
+            border-bottom: 2px solid var(--gold);
+            font-weight: 700;
+        }
+    </style>
+</head>
+<body class="theme-dark min-h-screen flex flex-col">
+
+    <!-- Top App Bar -->
+    <header class="bg-surface border-b border-theme sticky top-0 z-40 px-4 lg:px-6 py-3 flex items-center justify-between shadow-sm">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-[#C47D0A]/20 flex items-center justify-center text-[#C47D0A] font-bold text-xs">
+                EC
+            </div>
+            <div>
+                <span class="text-[10px] uppercase font-bold text-[#C47D0A] tracking-wider block">Member Portal</span>
+                <h1 id="topMemberName" class="text-xs sm:text-sm font-bold text-theme-primary truncate max-w-[180px] sm:max-w-xs">Member Name</h1>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2 sm:gap-3">
+            <!-- Theme Toggle -->
+            <div class="flex items-center bg-elevated border border-theme rounded-lg p-0.5 text-xs">
+                <button onclick="setTheme('dark')" id="themeBtnDark" class="px-2 py-1 rounded text-theme-secondary hover:text-theme-primary" title="Dark Mode">
+                    <i class="fas fa-moon"></i>
+                </button>
+                <button onclick="setTheme('light')" id="themeBtnLight" class="px-2 py-1 rounded text-theme-secondary hover:text-theme-primary" title="Light Mode">
+                    <i class="fas fa-sun"></i>
+                </button>
+                <button onclick="setTheme('warm')" id="themeBtnWarm" class="px-2 py-1 rounded text-theme-secondary hover:text-theme-primary" title="Warm Mode">
+                    <i class="fas fa-feather"></i>
+                </button>
+            </div>
+
+            <!-- Logout -->
+            <button onclick="logoutMember()" class="text-red-500 hover:bg-red-500/10 p-2 rounded-lg text-xs" title="Logout">
+                <i class="fas fa-arrow-right-from-bracket"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Navigation Bar -->
+    <div class="bg-surface border-b border-theme px-4 lg:px-6 flex overflow-x-auto gap-6 text-xs text-theme-secondary scrollbar-none">
+        <button onclick="switchTab('property')" id="tab-property" class="member-tab active py-3 whitespace-nowrap">
+            <i class="fas fa-house-chimney mr-1.5"></i> My Property
+        </button>
+        <button onclick="switchTab('ledger')" id="tab-ledger" class="member-tab py-3 whitespace-nowrap">
+            <i class="fas fa-file-invoice-dollar mr-1.5"></i> Ledger &amp; Receipts
+        </button>
+        <button onclick="switchTab('documents')" id="tab-documents" class="member-tab py-3 whitespace-nowrap">
+            <i class="fas fa-folder-open mr-1.5"></i> My Documents
+        </button>
+        <button onclick="switchTab('transfer')" id="tab-transfer" class="member-tab py-3 whitespace-nowrap">
+            <i class="fas fa-arrow-right-arrow-left mr-1.5"></i> Transfer Property
+        </button>
+        <button onclick="switchTab('profile')" id="tab-profile" class="member-tab py-3 whitespace-nowrap">
+            <i class="fas fa-user-shield mr-1.5"></i> Profile &amp; Preferences
+        </button>
+    </div>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-4 lg:p-6 max-w-4xl mx-auto w-full space-y-6">
+
+        <!-- TAB 1: MY PROPERTY -->
+        <section id="view-property" class="space-y-4">
+            <!-- Property Hero Card -->
+            <div class="bg-surface border border-theme rounded-2xl p-5 lg:p-6 relative overflow-hidden shadow-sm">
+                <div class="flex items-center justify-between pb-4 border-b border-theme">
+                    <div>
+                        <span class="text-[11px] font-bold uppercase tracking-wider text-[#C47D0A] block" id="propCoopName">Cooperative Scheme</span>
+                        <h2 class="text-lg lg:text-xl font-bold text-theme-primary mt-0.5" id="propEstateName">The Heritage Estate, Epe</h2>
+                    </div>
+                    <span id="propAllocationBadge" class="badge-theme text-xs font-bold px-3 py-1 rounded-full uppercase">Provisional Allocation</span>
+                </div>
+
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5">
+                    <div>
+                        <span class="text-[11px] text-theme-secondary block">Plot Allocation</span>
+                        <span class="text-sm font-bold text-theme-primary" id="propPlotNumber">Plot 14, Block C</span>
+                    </div>
+                    <div>
+                        <span class="text-[11px] text-theme-secondary block">Plot Dimensions</span>
+                        <span class="text-sm font-bold text-theme-primary" id="propPlotSize">500 SQM</span>
+                    </div>
+                    <div>
+                        <span class="text-[11px] text-theme-secondary block">Sub-Index Ref</span>
+                        <span class="text-sm font-mono font-bold text-[#C47D0A]" id="propSubIndexRef">EC-COP-000001/014</span>
+                    </div>
+                    <div>
+                        <span class="text-[11px] text-theme-secondary block">Survey &amp; Title</span>
+                        <span class="text-sm font-bold text-theme-primary">Registered Survey</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Allocation Milestone Tracker -->
+            <div class="bg-surface border border-theme rounded-2xl p-5 space-y-3">
+                <h3 class="text-xs font-bold text-theme-primary uppercase tracking-wider">Property Progression Status</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-xs">
+                    <div class="bg-elevated border border-theme rounded-xl p-3 flex items-start gap-2.5">
+                        <i class="fas fa-check-circle text-emerald-500 text-sm mt-0.5"></i>
+                        <div>
+                            <div class="font-bold text-theme-primary">1. Provisional Allocation</div>
+                            <div class="text-[11px] text-theme-secondary">Plot earmarked upon membership verification</div>
+                        </div>
+                    </div>
+                    <div class="bg-elevated border border-theme rounded-xl p-3 flex items-start gap-2.5">
+                        <i class="fas fa-spinner text-[#C47D0A] text-sm mt-0.5"></i>
+                        <div>
+                            <div class="font-bold text-theme-primary">2. Installment Fulfillment</div>
+                            <div class="text-[11px] text-theme-secondary">In progress via society payroll / direct transfer</div>
+                        </div>
+                    </div>
+                    <div class="bg-elevated border border-theme rounded-xl p-3 flex items-start gap-2.5">
+                        <i class="fas fa-circle-dot text-theme-secondary text-sm mt-0.5"></i>
+                        <div>
+                            <div class="font-bold text-theme-primary">3. Physical Demarcation</div>
+                            <div class="text-[11px] text-theme-secondary">Corner-piece pegging &amp; deed execution</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: FINANCIAL LEDGER & RECEIPTS -->
+        <section id="view-ledger" class="hidden space-y-4">
+            <!-- Financial Summary Cards -->
+            <div class="grid grid-cols-3 gap-3">
+                <div class="bg-surface border border-theme rounded-xl p-4 text-center">
+                    <span class="text-[10px] text-theme-secondary uppercase font-semibold">Total Price</span>
+                    <div class="text-sm sm:text-base font-bold text-theme-primary mt-1" id="ledgerTotal">NGN 0.00</div>
+                </div>
+                <div class="bg-surface border border-theme rounded-xl p-4 text-center">
+                    <span class="text-[10px] text-theme-secondary uppercase font-semibold">Amount Paid</span>
+                    <div class="text-sm sm:text-base font-bold text-emerald-500 mt-1" id="ledgerPaid">NGN 0.00</div>
+                </div>
+                <div class="bg-surface border border-theme rounded-xl p-4 text-center">
+                    <span class="text-[10px] text-theme-secondary uppercase font-semibold">Balance Due</span>
+                    <div class="text-sm sm:text-base font-bold text-amber-500 mt-1" id="ledgerBalance">NGN 0.00</div>
+                </div>
+            </div>
+
+            <!-- Invoices & Payment Receipts List -->
+            <div class="bg-surface border border-theme rounded-xl p-5 space-y-3">
+                <h3 class="text-xs font-bold text-theme-primary uppercase tracking-wider">Payment Receipts &amp; Milestones</h3>
+                <div id="receiptsContainer" class="space-y-2 pt-2">
+                    <!-- Populated dynamically -->
+                </div>
+                <div id="receiptsEmptyState" class="hidden text-center py-8 text-theme-secondary text-xs">
+                    No payment receipts generated yet.
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: MY DOCUMENTS -->
+        <section id="view-documents" class="hidden space-y-4">
+            <div class="bg-surface border border-theme rounded-xl p-5 space-y-3">
+                <h3 class="text-xs font-bold text-theme-primary uppercase tracking-wider">Official Legal &amp; Allocation Files</h3>
+                <div id="dynamicDocumentsContainer" class="space-y-2 pt-2">
+                    <div class="bg-elevated border border-theme rounded-xl p-3.5 flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <i class="fas fa-file-pdf text-red-500 text-lg"></i>
+                            <div>
+                                <h4 class="text-xs font-bold text-theme-primary">Provisional Allocation Letter</h4>
+                                <span class="text-[11px] text-theme-secondary">Cooperative Certified Allocation</span>
+                            </div>
+                        </div>
+                        <button onclick="alert('Allocation letter available upon full survey pegging.')" class="btn-gold px-3 py-1.5 rounded-lg text-[11px] font-semibold">Download</button>
+                    </div>
+
+                    <div class="bg-elevated border border-theme rounded-xl p-3.5 flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <i class="fas fa-file-contract text-[#C47D0A] text-lg"></i>
+                            <div>
+                                <h4 class="text-xs font-bold text-theme-primary">Cooperative Contract of Sale</h4>
+                                <span class="text-[11px] text-theme-secondary">Dual-Identity Executed Contract</span>
+                            </div>
+                        </div>
+                        <button onclick="alert('Contract available in Legal Portal.')" class="bg-surface border border-theme text-theme-primary hover:bg-elevated px-3 py-1.5 rounded-lg text-[11px] font-semibold transition">
+                            View Document
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 4: PROPERTY TRANSFER WIZARD -->
+        <section id="view-transfer" class="hidden space-y-4">
+            <div class="bg-surface border border-theme rounded-2xl p-5 lg:p-6 space-y-4">
+                <div>
+                    <h3 class="text-sm font-bold text-theme-primary">Transfer Property Ownership</h3>
+                    <p class="text-xs text-theme-secondary mt-1">
+                        Reassign your allocated plot to another person. Transferees can either take over an active installment plan or take receipt of a fully paid property. Requires approval from Cooperative Exco and Eximp &amp; Cloves Legal.
+                    </p>
+                </div>
+
+                <form onsubmit="submitPropertyTransfer(event)" class="space-y-4 text-xs pt-2">
+                    <div>
+                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Transfer Condition</label>
+                        <select id="transType" class="w-full px-3 py-2.5 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                            <option value="active_plan">Active Plan (New buyer continues monthly installments)</option>
+                            <option value="fully_paid">Fully Paid (Plot is 100% paid; outright legal assignment)</option>
+                        </select>
+                    </div>
+
+                    <div class="border-t border-theme pt-3 space-y-3">
+                        <span class="text-xs font-bold text-[#C47D0A] block">New Transferee Identity (KYC)</span>
+                        <div>
+                            <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">New Owner Full Name</label>
+                            <input type="text" id="transNewName" required placeholder="First, Middle, Surname"
+                                class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Phone Number (WhatsApp)</label>
+                                <input type="tel" id="transNewPhone" required placeholder="080..."
+                                    class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Email Address</label>
+                                <input type="email" id="transNewEmail" placeholder="transferee@email.com"
+                                    class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">National Identity Number (NIN)</label>
+                                <input type="text" id="transNewNin" required placeholder="11-digit NIN"
+                                    class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Residential Address</label>
+                                <input type="text" id="transNewAddress" required placeholder="House address"
+                                    class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-theme pt-3 space-y-3">
+                        <span class="text-xs font-bold text-[#C47D0A] block">New Transferee Next of Kin</span>
+                        <div class="grid grid-cols-2 gap-3">
+                            <input type="text" id="transNewNokName" placeholder="NOK Full Name" class="px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                            <input type="tel" id="transNewNokPhone" placeholder="NOK Phone Number" class="px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                        </div>
+                        <input type="text" id="transNewNokRel" placeholder="Relationship (e.g. Spouse, Son)" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                    </div>
+
+                    <div class="pt-3">
+                        <button type="submit" class="btn-gold w-full py-3 rounded-lg font-bold text-xs">
+                            Submit Property Transfer for Approval
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <!-- TAB 5: PROFILE & NOTIFICATION PREFERENCES -->
+        <section id="view-profile" class="hidden space-y-6">
+            <!-- Profile & Fraud Shield Security Status -->
+            <div class="bg-surface border border-theme rounded-2xl p-5 space-y-4">
+                <div class="flex items-center justify-between pb-3 border-b border-theme">
+                    <h3 class="text-xs font-bold text-theme-primary uppercase tracking-wider">Identity &amp; Fraud Shield Protection</h3>
+                    <span class="badge-theme text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase">Protected Account</span>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                    <div class="bg-elevated border border-theme rounded-xl p-4 flex items-center justify-between">
+                        <div>
+                            <span class="text-[10px] text-theme-secondary uppercase block font-semibold">Passport Photograph</span>
+                            <span class="text-xs font-bold text-theme-primary mt-1 block">Uploaded &amp; Locked</span>
+                        </div>
+                        <span class="text-emerald-500 font-bold text-xs flex items-center gap-1">
+                            <i class="fas fa-lock text-[11px]"></i> Locked
+                        </span>
+                    </div>
+
+                    <div class="bg-elevated border border-theme rounded-xl p-4 flex items-center justify-between">
+                        <div>
+                            <span class="text-[10px] text-theme-secondary uppercase block font-semibold">Digital Execution Signature</span>
+                            <span class="text-xs font-bold text-theme-primary mt-1 block">Uploaded &amp; Locked</span>
+                        </div>
+                        <span class="text-emerald-500 font-bold text-xs flex items-center gap-1">
+                            <i class="fas fa-lock text-[11px]"></i> Locked
+                        </span>
+                    </div>
+                </div>
+
+                <p class="text-[11px] text-theme-secondary leading-relaxed bg-elevated p-3 rounded-lg border border-theme">
+                    <strong>Transaction Security Note:</strong> To prevent identity switching and deed disputes, your passport photograph and digital signature are permanently locked. If you need to update them, request an unlock from your Cooperative Executive Administrator.
+                </p>
+            </div>
+
+            <!-- Multi-Channel Notification Preferences -->
+            <div class="bg-surface border border-theme rounded-2xl p-5 space-y-4">
+                <h3 class="text-xs font-bold text-theme-primary uppercase tracking-wider">Direct Notification Preferences</h3>
+                <p class="text-xs text-theme-secondary">
+                    Select where you want real-time payment confirmation receipts, allocation alerts, and contract notices delivered.
+                </p>
+
+                <div class="space-y-3 pt-2 text-xs">
+                    <label class="flex items-center justify-between p-3 rounded-xl bg-elevated border border-theme cursor-pointer">
+                        <div class="flex items-center gap-3">
+                            <i class="fas fa-envelope text-[#C47D0A] text-sm"></i>
+                            <div>
+                                <span class="font-bold text-theme-primary block">Email Notifications</span>
+                                <span class="text-[11px] text-theme-secondary">Official PDF attachments sent to your email</span>
+                            </div>
+                        </div>
+                        <input type="checkbox" id="prefEmail" checked onchange="savePreferences()" class="w-4 h-4 accent-[#C47D0A]">
+                    </label>
+
+                    <label class="flex items-center justify-between p-3 rounded-xl bg-elevated border border-theme cursor-pointer">
+                        <div class="flex items-center gap-3">
+                            <i class="fas fa-comment-sms text-emerald-500 text-sm"></i>
+                            <div>
+                                <span class="font-bold text-theme-primary block">SMS Alerts</span>
+                                <span class="text-[11px] text-theme-secondary">Instant transaction SMS to your registered phone line</span>
+                            </div>
+                        </div>
+                        <input type="checkbox" id="prefSms" checked onchange="savePreferences()" class="w-4 h-4 accent-[#C47D0A]">
+                    </label>
+
+                    <label class="flex items-center justify-between p-3 rounded-xl bg-elevated border border-theme cursor-pointer">
+                        <div class="flex items-center gap-3">
+                            <i class="fab fa-whatsapp text-emerald-500 text-base"></i>
+                            <div>
+                                <span class="font-bold text-theme-primary block">WhatsApp Direct Message (DM)</span>
+                                <span class="text-[11px] text-theme-secondary">Receipt links and payment confirmation sent to your WhatsApp</span>
+                            </div>
+                        </div>
+                        <input type="checkbox" id="prefWhatsapp" checked onchange="savePreferences()" class="w-4 h-4 accent-[#C47D0A]">
+                    </label>
+                </div>
+            </div>
+
+            <!-- Profile & Password Update -->
+            <div class="bg-surface border border-theme rounded-2xl p-5 space-y-3">
+                <h3 class="text-xs font-bold text-theme-primary uppercase tracking-wider">Account Password &amp; Contact</h3>
+                <form onsubmit="updateMemberProfile(event)" class="space-y-3 text-xs pt-2">
+                    <div>
+                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Residential Address</label>
+                        <input type="text" id="profAddress" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">New Password (Optional)</label>
+                            <input type="password" id="profNewPassword" placeholder="Leave blank to keep current" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Phone Number</label>
+                            <input type="tel" id="profPhone" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                        </div>
+                    </div>
+                    <div class="flex justify-end pt-2">
+                        <button type="submit" class="btn-gold px-5 py-2 rounded-lg font-semibold text-xs">Save Profile Changes</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- JavaScript Client Logic -->
+    <script>
+        function setTheme(theme) {
+            document.body.classList.remove('theme-dark', 'theme-light', 'theme-warm');
+            document.body.classList.add(`theme-${theme}`);
+            localStorage.setItem('ec_member_theme', theme);
+
+            ['dark', 'light', 'warm'].forEach(t => {
+                const btn = document.getElementById(`themeBtn${t.charAt(0).toUpperCase() + t.slice(1)}`);
+                if (btn) {
+                    if (t === theme) {
+                        btn.classList.add('bg-surface', 'shadow-sm', 'text-[#C47D0A]', 'font-bold');
+                        btn.classList.remove('text-theme-secondary');
+                    } else {
+                        btn.classList.remove('bg-surface', 'shadow-sm', 'text-[#C47D0A]', 'font-bold');
+                        btn.classList.add('text-theme-secondary');
+                    }
+                }
+            });
+        }
+
+        const savedTheme = localStorage.getItem('ec_member_theme') || 'dark';
+        setTheme(savedTheme);
+
+        function switchTab(tabId) {
+            ['property', 'ledger', 'documents', 'transfer', 'profile'].forEach(t => {
+                const view = document.getElementById(`view-${t}`);
+                const tab = document.getElementById(`tab-${t}`);
+                if (view) view.classList.toggle('hidden', t !== tabId);
+                if (tab) tab.classList.toggle('active', t === tabId);
+            });
+            if (tabId === 'ledger') loadLedgerData();
+        }
+
+        async function initMemberPortal() {
+            const token = localStorage.getItem('member_token') || localStorage.getItem('ec_member_token');
+            if (!token) {
+                // If not logged in, route to universal login
+                window.location.replace('/login');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/cooperatives/member/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error('Session invalid');
+                const data = await res.json();
+                const m = data.member;
+
+                document.getElementById('topMemberName').textContent = m.full_name;
+                document.getElementById('propCoopName').textContent = m.cooperatives ? m.cooperatives.name : 'Cooperative Scheme';
+                if (m.properties) document.getElementById('propEstateName').textContent = m.properties.name;
+                if (m.plot_number) document.getElementById('propPlotNumber').textContent = `Plot ${m.plot_number}, Block ${m.block_number || 'A'}`;
+                document.getElementById('propSubIndexRef').textContent = `EC-COP-000001/${String(m.sub_index).padStart(3, '0')}`;
+                document.getElementById('profAddress').value = m.residential_address || '';
+                document.getElementById('profPhone').value = m.phone || '';
+                document.getElementById('prefEmail').checked = m.notify_email !== false;
+                document.getElementById('prefSms').checked = m.notify_sms !== false;
+                document.getElementById('prefWhatsapp').checked = m.notify_whatsapp !== false;
+            } catch (err) {
+                console.warn('Fallback loading member profile:', err);
+                document.getElementById('topMemberName').textContent = 'Cooperative Member';
+            }
+        }
+
+        async function loadLedgerData() {
+            const container = document.getElementById('receiptsContainer');
+            if (!container) return;
+            try {
+                const res = await fetch('/api/cooperatives/member/ledger', {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_member_token')}` }
+                });
+                const data = await res.json();
+                const sum = data.summary;
+                document.getElementById('ledgerTotal').textContent = `NGN ${sum.total_invoiced.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+                document.getElementById('ledgerPaid').textContent = `NGN ${sum.total_paid.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+                document.getElementById('ledgerBalance').textContent = `NGN ${sum.balance_due.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+
+                const receipts = data.receipts || [];
+                const invoices = data.invoices || [];
+
+                // Render Invoices in Dynamic Documents list
+                const docsContainer = document.getElementById('dynamicDocumentsContainer');
+                if (docsContainer && invoices.length > 0) {
+                    const invoiceCards = invoices.map(inv => `
+                        <div class="bg-elevated border border-theme rounded-xl p-3.5 flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <i class="fas fa-file-invoice text-[#C47D0A] text-lg"></i>
+                                <div>
+                                    <h4 class="text-xs font-bold text-theme-primary">Cooperative Scheme Invoice (${inv.invoice_number})</h4>
+                                    <span class="text-[11px] text-theme-secondary">Sub-Index Allocation &bull; NGN ${Number(inv.total_amount).toLocaleString('en-US', {minimumFractionDigits: 2})}</span>
+                                </div>
+                            </div>
+                            <a href="/api/cooperatives/invoices/${inv.id}/pdf" target="_blank" class="btn-gold px-3 py-1.5 rounded-lg text-[11px] font-semibold inline-flex items-center gap-1">
+                                <i class="fas fa-file-pdf"></i> Download PDF
+                            </a>
+                        </div>
+                    `).join('');
+                    docsContainer.insertAdjacentHTML('afterbegin', invoiceCards);
+                }
+
+                if (!receipts.length) {
+                    document.getElementById('receiptsEmptyState').classList.remove('hidden');
+                    container.innerHTML = '';
+                    return;
+                }
+                document.getElementById('receiptsEmptyState').classList.add('hidden');
+
+                container.innerHTML = receipts.map(r => `
+                    <div class="bg-elevated border border-theme rounded-xl p-3.5 flex items-center justify-between text-xs">
+                        <div>
+                            <div class="font-bold font-mono text-[#C47D0A]">${r.receipt_number}</div>
+                            <div class="text-[11px] text-theme-secondary">${new Date(r.payment_date).toLocaleDateString()} &bull; ${r.payment_method.replace(/_/g, ' ')}</div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="text-right">
+                                <div class="font-bold text-emerald-500">NGN ${r.amount.toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
+                                <span class="text-[10px] text-theme-secondary">Verified</span>
+                            </div>
+                            <a href="/api/cooperatives/payments/${r.id}/receipt/pdf" target="_blank" class="px-2.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-[#C47D0A] rounded-lg font-semibold text-[11px] inline-flex items-center gap-1 transition">
+                                <i class="fas fa-file-pdf"></i> Receipt
+                            </a>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                console.error('Ledger error:', err);
+            }
+        }
+
+        async function savePreferences() {
+            const payload = {
+                notify_email: document.getElementById('prefEmail').checked,
+                notify_sms: document.getElementById('prefSms').checked,
+                notify_whatsapp: document.getElementById('prefWhatsapp').checked
+            };
+            await fetch('/api/cooperatives/member/profile', {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('ec_member_token')}`
+                },
+                body: JSON.stringify(payload)
+            });
+        }
+
+        async function updateMemberProfile(e) {
+            e.preventDefault();
+            const payload = {
+                residential_address: document.getElementById('profAddress').value,
+                phone: document.getElementById('profPhone').value,
+                new_password: document.getElementById('profNewPassword').value || undefined
+            };
+            const res = await fetch('/api/cooperatives/member/profile', {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('ec_member_token')}`
+                },
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) alert('Profile updated successfully');
+        }
+
+        async function submitPropertyTransfer(e) {
+            e.preventDefault();
+            const payload = {
+                transfer_type: document.getElementById('transType').value,
+                new_owner_name: document.getElementById('transNewName').value,
+                new_owner_phone: document.getElementById('transNewPhone').value,
+                new_owner_email: document.getElementById('transNewEmail').value,
+                new_owner_nin: document.getElementById('transNewNin').value,
+                new_owner_address: document.getElementById('transNewAddress').value,
+                new_owner_nok_name: document.getElementById('transNewNokName').value,
+                new_owner_nok_phone: document.getElementById('transNewNokPhone').value,
+                new_owner_nok_relationship: document.getElementById('transNewNokRel').value
+            };
+
+            const res = await fetch('/api/cooperatives/transfers/request', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('ec_member_token')}`
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                alert('Property transfer request submitted successfully. Cooperative Exco and Eximp Legal will review your request.');
+                switchTab('property');
+            } else {
+                alert('Could not submit transfer request. Please verify all fields.');
+            }
+        }
+
+        function logoutMember() {
+            localStorage.removeItem('ec_member_token');
+            window.location.replace('/login');
+        }
+
+        window.addEventListener('DOMContentLoaded', initMemberPortal);
+    </script>
+</body>
+</html>

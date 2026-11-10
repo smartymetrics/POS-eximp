@@ -1,4 +1,3 @@
-from weasyprint import HTML as WeasyprintHTML
 from xhtml2pdf import pisa
 from datetime import datetime
 from jinja2 import Environment, FileSystemLoader
@@ -225,6 +224,7 @@ def naira_in_words(amount):
 
 def _render_with_weasyprint(html_content: str) -> bytes:
     """Convert HTML string to PDF bytes using WeasyPrint."""
+    from weasyprint import HTML as WeasyprintHTML
     return WeasyprintHTML(string=html_content).write_pdf()
 
 
@@ -478,6 +478,69 @@ def render_receipt_html(invoice: dict) -> str:
 def generate_receipt_pdf(invoice: dict) -> bytes:
     html_content = render_receipt_html(invoice)
     return _render_with_xhtml2pdf(html_content)
+
+
+def render_cooperative_invoice_html(invoice: dict, cooperative: dict = None, member: dict = None, property_info: dict = None) -> str:
+    template = env.get_template("cooperative_invoice.html")
+    comp_ctx = get_company_context()
+    
+    coop = cooperative or invoice.get("cooperatives") or {}
+    mem = member or invoice.get("cooperative_members") or {}
+    prop = property_info or invoice.get("properties") or {}
+    
+    html_content = template.render(
+        company=comp_ctx,
+        invoice=invoice,
+        cooperative=coop,
+        member=mem,
+        property=prop,
+        format_currency=format_currency,
+        generated_at=datetime.now().strftime("%d %b %Y")
+    )
+    return html_content
+
+
+def generate_cooperative_invoice_pdf(invoice: dict, cooperative: dict = None, member: dict = None, property_info: dict = None) -> bytes:
+    html_content = render_cooperative_invoice_html(invoice, cooperative, member, property_info)
+    try:
+        return _render_with_xhtml2pdf(html_content)
+    except Exception:
+        return _render_with_weasyprint(html_content)
+
+
+def render_cooperative_receipt_html(payment: dict, invoice: dict = None, cooperative: dict = None, member: dict = None, property_info: dict = None) -> str:
+    template = env.get_template("cooperative_receipt.html")
+    comp_ctx = get_company_context()
+    
+    inv = invoice or payment.get("cooperative_invoices") or {}
+    coop = cooperative or inv.get("cooperatives") or {}
+    mem = member or inv.get("cooperative_members") or {}
+    prop = property_info or inv.get("properties") or {}
+    
+    amount = payment.get("amount", 0)
+    words = naira_in_words(amount)
+    
+    html_content = template.render(
+        company=comp_ctx,
+        payment=payment,
+        invoice=inv,
+        cooperative=coop,
+        member=mem,
+        property=prop,
+        amount_in_words=words,
+        format_currency=format_currency,
+        generated_at=datetime.now().strftime("%d %b %Y")
+    )
+    return html_content
+
+
+def generate_cooperative_receipt_pdf(payment: dict, invoice: dict = None, cooperative: dict = None, member: dict = None, property_info: dict = None) -> bytes:
+    html_content = render_cooperative_receipt_html(payment, invoice, cooperative, member, property_info)
+    try:
+        return _render_with_xhtml2pdf(html_content)
+    except Exception:
+        return _render_with_weasyprint(html_content)
+
 
 
 

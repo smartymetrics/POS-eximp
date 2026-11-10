@@ -1274,6 +1274,17 @@
                     <p class="text-gray-500">Live orchestration of contract signing sessions.</p>
                 </div>
                 <div class="flex items-center gap-3">
+                    <!-- Contract Type Filter (Retail vs Cooperative) -->
+                    <div class="flex items-center bg-[#1E2128] border border-[#2D2F36] rounded-xl p-1 text-xs">
+                        <button type="button" onclick="setContractTypeFilter('all')" id="filterBtnAll"
+                            class="px-3 py-1 rounded-lg font-bold bg-brand-gold text-white transition">All
+                            Deals</button>
+                        <button type="button" onclick="setContractTypeFilter('retail')" id="filterBtnRetail"
+                            class="px-3 py-1 rounded-lg text-gray-400 hover:text-white transition">Retail Deals</button>
+                        <button type="button" onclick="setContractTypeFilter('coop')" id="filterBtnCoop"
+                            class="px-3 py-1 rounded-lg text-gray-400 hover:text-white transition">Cooperative
+                            Schemes</button>
+                    </div>
                     <!-- Show Voided Toggle -->
                     <label class="flex items-center gap-2 cursor-pointer text-sm text-gray-400 select-none">
                         <div class="relative">
@@ -2375,22 +2386,45 @@
                 } catch (err) { console.error('Contracts fetch error:', err); }
             }
 
+            let contractTypeFilter = 'all';
+
+            function setContractTypeFilter(type) {
+                contractTypeFilter = type;
+                ['All', 'Retail', 'Coop'].forEach(t => {
+                    const btn = document.getElementById(`filterBtn${t}`);
+                    if (!btn) return;
+                    if (t.toLowerCase() === type) {
+                        btn.className = 'px-3 py-1 rounded-lg font-bold bg-brand-gold text-white transition';
+                    } else {
+                        btn.className = 'px-3 py-1 rounded-lg text-gray-400 hover:text-white transition';
+                    }
+                });
+                filterContracts();
+            }
+
             function filterContracts() {
                 const query = (document.getElementById('searchInput')?.value || '').trim().toLowerCase();
-                if (!query) {
-                    return renderContracts(allContracts);
+                let filtered = allContracts;
+
+                // Category filter: Retail vs Cooperative
+                if (contractTypeFilter === 'retail') {
+                    filtered = filtered.filter(c => !(c.invoice_number || '').includes('-COP-') && !c.cooperative_id);
+                } else if (contractTypeFilter === 'coop') {
+                    filtered = filtered.filter(c => (c.invoice_number || '').includes('-COP-') || Boolean(c.cooperative_id));
                 }
 
-                const filtered = allContracts.filter(c => {
-                    const invoiceId = (c.id || '').toLowerCase();
-                    const invoiceNumber = (c.invoice_number || '').toLowerCase();
-                    const clientName = (c.clients?.full_name || '').toLowerCase();
-                    const clientEmail = (c.clients?.email || '').toLowerCase();
-                    return invoiceId.includes(query)
-                        || invoiceNumber.includes(query)
-                        || clientName.includes(query)
-                        || clientEmail.includes(query);
-                });
+                if (query) {
+                    filtered = filtered.filter(c => {
+                        const invoiceId = (c.id || '').toLowerCase();
+                        const invoiceNumber = (c.invoice_number || '').toLowerCase();
+                        const clientName = (c.clients?.full_name || '').toLowerCase();
+                        const clientEmail = (c.clients?.email || '').toLowerCase();
+                        return invoiceId.includes(query)
+                            || invoiceNumber.includes(query)
+                            || clientName.includes(query)
+                            || clientEmail.includes(query);
+                    });
+                }
                 renderContracts(filtered);
             }
 
@@ -2406,6 +2440,16 @@
                     const statusClass = isClosed ? 'status-completed' : `status-${c.signing_status}`;
                     const statusLabel = isVoided ? 'VOIDED' : (isClosed ? 'CLOSED' : c.signing_status);
                     const progressWidth = (c.signatures_collected / 3) * 100;
+                    const isCoop = (c.invoice_number || '').includes('-COP-') || Boolean(c.cooperative_id) || Boolean(c.cooperative_name);
+                    const regStatus = c.registration_status || (c.cooperatives ? c.cooperatives.registration_status : null);
+                    let entityBadge = '';
+                    if (isCoop) {
+                        if (regStatus === 'registered') {
+                            entityBadge = '<span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Registered Entity</span>';
+                        } else {
+                            entityBadge = '<span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">Unregistered Entity</span>';
+                        }
+                    }
                     let actionHtml = '';
 
                     if (isClosed) {
@@ -2420,12 +2464,18 @@
                     <tr class="border-b border-[#2D2F36] hover:bg-white/5 transition ${isVoided ? 'opacity-40 grayscale' : ''}" 
                         onclick="if(event.target.tagName !== 'BUTTON' && '${c.status}' !== 'voided') openStatusModal('${c.id}')">
                         <td class="px-6 py-4">
+                            <div class="flex items-center flex-wrap gap-1.5 mb-1.5">
+                                <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold ${isCoop ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'}">
+                                    ${isCoop ? 'Cooperative Scheme' : 'Direct Retail Deal'}
+                                </span>
+                                ${entityBadge}
+                            </div>
                             <p class="font-bold ${isVoided ? 'text-gray-500 line-through' : 'text-brand-gold'}">${c.invoice_number}</p>
                             <p class="text-[10px] text-gray-500 uppercase">${new Date(c.created_at).toLocaleDateString()}</p>
                         </td>
                         <td class="px-6 py-4">
                             <p class="text-sm font-bold text-white">${c.clients?.full_name || 'N/A'}</p>
-                            <p class="text-xs text-gray-500 text-truncate max-w-[150px]">${c.clients?.email || ''}</p>
+                            <p class="text-xs text-gray-500 text-truncate max-w-[150px]">${isCoop ? (c.cooperative_name || 'Cooperative Member') : (c.clients?.email || '')}</p>
                         </td>
                         <td class="px-6 py-4">
                             <p class="text-sm text-gray-300 font-bold">${c.property_name}</p>

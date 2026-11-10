@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cooperative Portal | Eximp &amp; Cloves</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { font-family: 'DM Sans', sans-serif; }
+        .font-serif { font-family: 'Playfair Display', serif; }
+
+        :root {
+            --gold: #C47D0A;
+            --gold-light: #FDE8BC;
+            --gold-dark: #9A6005;
+        }
+
+        /* ── Theme Palettes ── */
+        body.theme-dark {
+            --bg-base: #0F0F0F;
+            --bg-surface: #1A1A1A;
+            --bg-elevated: #242424;
+            --border-color: #333333;
+            --text-primary: #F9FAFB;
+            --text-secondary: #9CA3AF;
+            --badge-bg: #2C2618;
+            --badge-text: #F5A623;
+        }
+
+        body.theme-light {
+            --bg-base: #F8F9FA;
+            --bg-surface: #FFFFFF;
+            --bg-elevated: #F1F3F5;
+            --border-color: #E5E7EB;
+            --text-primary: #111827;
+            --text-secondary: #4B5563;
+            --badge-bg: #FEF3C7;
+            --badge-text: #92400E;
+        }
+
+        body.theme-warm {
+            --bg-base: #FAF6F0;
+            --bg-surface: #FFFFFF;
+            --bg-elevated: #F4EFE6;
+            --border-color: #E7DFD5;
+            --text-primary: #2A2421;
+            --text-secondary: #6B5E55;
+            --badge-bg: #FBEBD6;
+            --badge-text: #8C4E04;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }
+
+        .bg-surface { background-color: var(--bg-surface); }
+        .bg-elevated { background-color: var(--bg-elevated); }
+        .border-theme { border-color: var(--border-color); }
+        .text-theme-primary { color: var(--text-primary); }
+        .text-theme-secondary { color: var(--text-secondary); }
+        .badge-theme { background-color: var(--badge-bg); color: var(--badge-text); }
+
+        .btn-gold {
+            background: linear-gradient(135deg, #C47D0A, #E09212);
+            color: #FFFFFF;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+        .btn-gold:hover {
+            opacity: 0.95;
+            transform: translateY(-1px);
+        }
+
+        .tab-btn.active {
+            border-bottom: 2px solid var(--gold);
+            color: var(--gold);
+            font-weight: 700;
+        }
+    </style>
+</head>
+<body class="theme-dark min-h-screen flex flex-col">
+
+    <!-- Top Navigation Header -->
+    <header class="bg-surface border-b border-theme sticky top-0 z-40 px-4 lg:px-8 py-3.5 flex items-center justify-between shadow-sm">
+        <div class="flex items-center gap-3">
+            <button onclick="toggleMobileMenu()" class="lg:hidden text-theme-secondary p-1.5 focus:outline-none">
+                <i class="fas fa-bars text-lg"></i>
+            </button>
+            <div class="flex flex-col">
+                <span class="text-xs font-bold uppercase tracking-wider text-[#C47D0A]">Cooperative Administration</span>
+                <div class="flex items-center gap-2 mt-0.5">
+                    <h1 id="coopNameHeader" class="text-base lg:text-lg font-bold text-theme-primary truncate max-w-[200px] sm:max-w-xs">
+                        Loading Cooperative...
+                    </h1>
+                    <select id="coopSelectDropdown" onchange="onCooperativeSelected(this.value)" class="text-xs font-semibold bg-elevated border border-theme rounded-lg px-2.5 py-1 text-theme-primary focus:outline-none focus:border-[#C47D0A] max-w-[200px] sm:max-w-xs">
+                        <option value="">Select Cooperative...</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3 lg:gap-4">
+            <!-- Back to Main ERP -->
+            <a href="/dashboard" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-theme-secondary hover:text-theme-primary bg-elevated border border-theme flex items-center gap-1.5 transition">
+                <i class="fas fa-arrow-left"></i>
+                <span class="hidden sm:inline">Main ERP</span>
+            </a>
+
+            <!-- Onboard Society Button -->
+            <button onclick="openOnboardModal()" class="btn-gold px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+                <i class="fas fa-plus"></i>
+                <span class="hidden sm:inline">Onboard Society</span>
+            </button>
+
+            <!-- Admin Identity Badge -->
+            <div class="hidden sm:flex flex-col text-right">
+                <span id="adminNameHeader" class="text-xs font-semibold text-theme-primary truncate max-w-[180px]">Admin Name</span>
+                <span id="adminRoleHeader" class="text-[11px] text-theme-secondary capitalize">President</span>
+            </div>
+
+            <!-- Theme Mode Switcher (Dark, Light, Warm) -->
+            <div class="flex items-center bg-elevated border border-theme rounded-lg p-0.5 text-xs">
+                <button onclick="setTheme('dark')" id="themeBtnDark" class="px-2 py-1 rounded text-theme-secondary hover:text-theme-primary" title="Dark Theme">
+                    <i class="fas fa-moon"></i>
+                </button>
+                <button onclick="setTheme('light')" id="themeBtnLight" class="px-2 py-1 rounded text-theme-secondary hover:text-theme-primary" title="Light Theme">
+                    <i class="fas fa-sun"></i>
+                </button>
+                <button onclick="setTheme('warm')" id="themeBtnWarm" class="px-2 py-1 rounded text-theme-secondary hover:text-theme-primary" title="Warm Theme">
+                    <i class="fas fa-feather"></i>
+                </button>
+            </div>
+
+            <!-- Logout -->
+            <button onclick="logoutCoopAdmin()" class="px-3 py-1.5 text-xs font-semibold text-red-500 hover:bg-red-500/10 rounded-lg transition" title="Logout">
+                <i class="fas fa-arrow-right-from-bracket"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Sub Header: Tabs Navigation -->
+    <div class="bg-surface border-b border-theme px-4 lg:px-8 flex overflow-x-auto gap-6 text-sm text-theme-secondary scrollbar-none">
+        <button onclick="switchTab('overview')" id="tab-overview" class="tab-btn active py-3 whitespace-nowrap">
+            <i class="fas fa-chart-pie mr-1.5"></i> Overview &amp; Plots
+        </button>
+        <button onclick="switchTab('members')" id="tab-members" class="tab-btn py-3 whitespace-nowrap">
+            <i class="fas fa-users mr-1.5"></i> Members Roster (<span id="memberCountBadge">0</span>)
+        </button>
+        <button onclick="switchTab('kyc')" id="tab-kyc" class="tab-btn py-3 whitespace-nowrap">
+            <i class="fas fa-id-card-clip mr-1.5"></i> Corporate KYC &amp; Locks
+        </button>
+        <button onclick="switchTab('transfers')" id="tab-transfers" class="tab-btn py-3 whitespace-nowrap">
+            <i class="fas fa-repeat mr-1.5"></i> Property Transfers
+        </button>
+        <button onclick="switchTab('history')" id="tab-history" class="tab-btn py-3 whitespace-nowrap">
+            <i class="fas fa-clock-rotate-left mr-1.5"></i> Admin Action Log
+        </button>
+    </div>
+
+    <!-- Main Container -->
+    <main class="flex-1 p-4 lg:p-8 max-w-7xl mx-auto w-full">
+
+        <!-- TAB 1: OVERVIEW -->
+        <section id="view-overview" class="space-y-6">
+            <!-- Quick Stat Cards -->
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-surface border border-theme rounded-xl p-4 lg:p-5">
+                    <span class="text-xs text-theme-secondary font-medium">Allocated Plots</span>
+                    <h3 id="statAllocatedPlots" class="text-xl lg:text-2xl font-bold text-theme-primary mt-1">0</h3>
+                    <span id="statAllocatedSubtext" class="text-[11px] text-theme-secondary mt-1 block">Active Member Allotments</span>
+                </div>
+                <div class="bg-surface border border-theme rounded-xl p-4 lg:p-5">
+                    <span class="text-xs text-theme-secondary font-medium">Total Invoiced</span>
+                    <h3 id="statTotalInvoiced" class="text-xl lg:text-2xl font-bold text-theme-primary mt-1">NGN 0.00</h3>
+                    <span class="text-[11px] text-theme-secondary mt-1 block">Sub-indexed Contracts</span>
+                </div>
+                <div class="bg-surface border border-theme rounded-xl p-4 lg:p-5">
+                    <span class="text-xs text-theme-secondary font-medium">Total Remitted</span>
+                    <h3 id="statTotalRemitted" class="text-xl lg:text-2xl font-bold text-emerald-500 mt-1">NGN 0.00</h3>
+                    <span class="text-[11px] text-theme-secondary mt-1 block">Verified Receipts</span>
+                </div>
+                <div class="bg-surface border border-theme rounded-xl p-4 lg:p-5">
+                    <span class="text-xs text-theme-secondary font-medium">Outstanding Balance</span>
+                    <h3 id="statOutstandingBalance" class="text-xl lg:text-2xl font-bold text-amber-500 mt-1">NGN 0.00</h3>
+                    <span class="text-[11px] text-theme-secondary mt-1 block">Across All Members</span>
+                </div>
+            </div>
+
+            <!-- KYC Status Notification Banner -->
+            <div id="kycAlertBanner" class="hidden bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                    <i class="fas fa-shield-halved text-amber-500 text-lg"></i>
+                    <div>
+                        <h4 class="text-sm font-bold text-theme-primary">Corporate KYC Pending</h4>
+                        <p class="text-xs text-theme-secondary">Complete registration by submitting your Cooperative Certificate and Bye-Laws.</p>
+                    </div>
+                </div>
+                <button onclick="switchTab('kyc')" class="btn-gold px-4 py-2 rounded-lg text-xs">Complete Corporate KYC</button>
+            </div>
+
+            <!-- 3 Designated Admins Card -->
+            <div class="bg-surface border border-theme rounded-xl p-5">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 class="text-sm font-bold text-theme-primary">Cooperative Executive Administrators</h3>
+                        <p class="text-xs text-theme-secondary">Accountability registry for the maximum 3 designated administrators.</p>
+                    </div>
+                    <button onclick="openAddAdminModal()" class="text-xs font-semibold text-[#C47D0A] hover:underline">
+                        <i class="fas fa-user-plus mr-1"></i> Add Admin
+                    </button>
+                </div>
+                <div id="adminListContainer" class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: MEMBERS ROSTER -->
+        <section id="view-members" class="hidden space-y-4">
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                <!-- Search -->
+                <div class="relative flex-1 max-w-md">
+                    <i class="fas fa-search absolute left-3 top-3 text-xs text-theme-secondary"></i>
+                    <input type="text" id="memberSearchInput" onkeyup="handleMemberSearch()" placeholder="Search name, phone, NIN, or plot index..."
+                        class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-surface border border-theme text-theme-primary placeholder-theme-secondary focus:outline-none focus:border-[#C47D0A]">
+                </div>
+                <!-- Action Buttons -->
+                <div class="flex items-center gap-2">
+                    <button onclick="openAddMemberModal()" class="btn-gold px-3.5 py-2 rounded-lg text-xs flex items-center gap-1.5">
+                        <i class="fas fa-user-plus"></i> Add Member
+                    </button>
+                    <button onclick="openBulkUploadModal()" class="bg-elevated border border-theme hover:bg-surface text-theme-primary px-3.5 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5 transition">
+                        <i class="fas fa-file-csv text-[#C47D0A]"></i> Bulk CSV Import
+                    </button>
+                </div>
+            </div>
+
+            <!-- Members Table Card -->
+            <div class="bg-surface border border-theme rounded-xl overflow-hidden shadow-sm">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs text-theme-primary">
+                        <thead class="bg-elevated border-b border-theme text-theme-secondary font-medium uppercase tracking-wider text-[11px]">
+                            <tr>
+                                <th class="py-3 px-4">Sub-Index</th>
+                                <th class="py-3 px-4">Member Name</th>
+                                <th class="py-3 px-4">Phone / Email</th>
+                                <th class="py-3 px-4">NIN</th>
+                                <th class="py-3 px-4">Plot Allocation</th>
+                                <th class="py-3 px-4">Identity Security</th>
+                                <th class="py-3 px-4 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="membersTableBody" class="divide-y divide-theme">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="membersEmptyState" class="hidden text-center py-12 text-theme-secondary text-xs">
+                    No members registered yet. Click "Add Member" or "Bulk CSV Import" to begin.
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: CORPORATE KYC & DOCUMENT LOCKS -->
+        <section id="view-kyc" class="hidden space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Corporate KYC Card -->
+                <div class="bg-surface border border-theme rounded-xl p-5 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-sm font-bold text-theme-primary">Corporate Society Verification</h3>
+                        <span id="kycStatusBadge" class="badge-theme text-[11px] font-bold px-2.5 py-1 rounded-full uppercase">Unregistered</span>
+                    </div>
+                    <p class="text-xs text-theme-secondary leading-relaxed">
+                        Transition from an Unregistered Entity to a Verified Registered Corporate Body by submitting official documentation.
+                    </p>
+
+                    <form id="corporateKycForm" onsubmit="submitCorporateKyc(event)" class="space-y-3 pt-2">
+                        <div>
+                            <label class="block text-[11px] font-semibold text-theme-secondary uppercase mb-1">Registration Body</label>
+                            <select id="kycRegType" class="w-full px-3 py-2 text-xs rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                                <option value="Ministry of Cooperatives">State Ministry of Commerce &amp; Cooperatives</option>
+                                <option value="Corporate Affairs Commission">Corporate Affairs Commission (CAC)</option>
+                                <option value="Trade Union Registry">Trade Union / Labour Organization</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-semibold text-theme-secondary uppercase mb-1">Official Registration Number</label>
+                            <input type="text" id="kycRegNum" required placeholder="e.g. LSCS/10482/COOP"
+                                class="w-full px-3 py-2 text-xs rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-semibold text-theme-secondary uppercase mb-1">Certificate Document URL</label>
+                            <input type="url" id="kycCertUrl" required placeholder="https://res.cloudinary.com/.../certificate.pdf"
+                                class="w-full px-3 py-2 text-xs rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-semibold text-theme-secondary uppercase mb-1">Cooperative Bye-Laws URL</label>
+                            <input type="url" id="kycByeLawsUrl" placeholder="https://res.cloudinary.com/.../bye-laws.pdf"
+                                class="w-full px-3 py-2 text-xs rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                        </div>
+                        <button type="submit" class="btn-gold w-full py-2.5 rounded-lg text-xs mt-3">Submit Corporate KYC for Audit</button>
+                    </form>
+                </div>
+
+                <!-- Member Fraud Shield / Security Lock Information -->
+                <div class="bg-surface border border-theme rounded-xl p-5 space-y-4">
+                    <h3 class="text-sm font-bold text-theme-primary">Member Identity Lock Governance</h3>
+                    <p class="text-xs text-theme-secondary leading-relaxed">
+                        To protect transaction integrity, members cannot modify or delete their passport photo or signature once submitted. Administrators must verify and unlock these records individually when legitimate updates are required.
+                    </p>
+                    <div class="bg-elevated border border-theme rounded-lg p-4 text-xs space-y-2 text-theme-secondary">
+                        <div class="flex items-start gap-2">
+                            <i class="fas fa-lock text-[#C47D0A] mt-0.5"></i>
+                            <span><strong>Passport Lock:</strong> Prevents unauthorized swapping of the beneficiary identity.</span>
+                        </div>
+                        <div class="flex items-start gap-2">
+                            <i class="fas fa-lock text-[#C47D0A] mt-0.5"></i>
+                            <span><strong>Signature Lock:</strong> Safeguards digital execution validity on contracts of sale.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 4: PROPERTY TRANSFERS -->
+        <section id="view-transfers" class="hidden space-y-4">
+            <div class="bg-surface border border-theme rounded-xl p-5">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 class="text-sm font-bold text-theme-primary">Property Transfer Requests</h3>
+                        <p class="text-xs text-theme-secondary">Member requests to transfer ownership (Active installment plans or Fully paid plots).</p>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs text-theme-primary">
+                        <thead class="bg-elevated border-b border-theme text-theme-secondary uppercase text-[11px]">
+                            <tr>
+                                <th class="py-3 px-4">Transfer Type</th>
+                                <th class="py-3 px-4">Original Member</th>
+                                <th class="py-3 px-4">New Transferee</th>
+                                <th class="py-3 px-4">Outstanding Balance</th>
+                                <th class="py-3 px-4">Status</th>
+                                <th class="py-3 px-4 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="transfersTableBody" class="divide-y divide-theme">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="transfersEmptyState" class="text-center py-12 text-theme-secondary text-xs">
+                    No property transfer requests logged.
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 5: ADMIN ACTION LOG (AUDIT HISTORY) -->
+        <section id="view-history" class="hidden space-y-4">
+            <div class="bg-surface border border-theme rounded-xl p-5">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 class="text-sm font-bold text-theme-primary">Administrator Accountability History</h3>
+                        <p class="text-xs text-theme-secondary">Immutable chronological audit log identifying which of the 3 administrators executed each action.</p>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs text-theme-primary">
+                        <thead class="bg-elevated border-b border-theme text-theme-secondary uppercase text-[11px]">
+                            <tr>
+                                <th class="py-3 px-4">Timestamp</th>
+                                <th class="py-3 px-4">Acting Administrator</th>
+                                <th class="py-3 px-4">Action Executed</th>
+                                <th class="py-3 px-4">Target Entity</th>
+                                <th class="py-3 px-4">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="auditTableBody" class="divide-y divide-theme">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Modal: Add Single Member -->
+    <div id="addMemberModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-surface border border-theme rounded-xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between pb-3 border-b border-theme">
+                <h3 class="text-sm font-bold text-theme-primary">Add Member to Cooperative Roster</h3>
+                <button onclick="closeModal('addMemberModal')" class="text-theme-secondary hover:text-theme-primary"><i class="fas fa-times"></i></button>
+            </div>
+            <form onsubmit="submitAddMember(event)" class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Full Name (First, Middle, Surname)</label>
+                    <input type="text" id="mFullName" required class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Phone Number (WhatsApp)</label>
+                        <input type="tel" id="mPhone" required placeholder="080..." class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Email Address</label>
+                        <input type="email" id="mEmail" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">National Identity Number (NIN)</label>
+                        <input type="text" id="mNin" placeholder="11-digit NIN" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Society Member ID</label>
+                        <input type="text" id="mNumber" placeholder="Optional internal ID" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Residential House Address</label>
+                    <input type="text" id="mAddress" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                </div>
+                <div class="border-t border-theme pt-3">
+                    <span class="text-[11px] font-bold text-[#C47D0A] block mb-2">Next of Kin Details</span>
+                    <div class="grid grid-cols-2 gap-3">
+                        <input type="text" id="mNokName" placeholder="Next of Kin Full Name" class="px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                        <input type="tel" id="mNokPhone" placeholder="Next of Kin Phone" class="px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                    </div>
+                    <input type="text" id="mNokRel" placeholder="Relationship (e.g. Spouse, Brother, Daughter)" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none mt-2">
+                </div>
+                <div class="flex justify-end gap-2 pt-3">
+                    <button type="button" onclick="closeModal('addMemberModal')" class="px-4 py-2 rounded-lg text-theme-secondary hover:bg-elevated">Cancel</button>
+                    <button type="submit" class="btn-gold px-5 py-2 rounded-lg font-semibold">Save Member</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Bulk CSV Upload -->
+    <div id="bulkUploadModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-surface border border-theme rounded-xl max-w-md w-full p-6 space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-theme">
+                <h3 class="text-sm font-bold text-theme-primary">Bulk Roster CSV Upload</h3>
+                <button onclick="closeModal('bulkUploadModal')" class="text-theme-secondary hover:text-theme-primary"><i class="fas fa-times"></i></button>
+            </div>
+            <p class="text-xs text-theme-secondary">
+                Upload your member schedule CSV file (up to 1,000 members). Columns supported: Full Name, Phone, Email, Residential Address, NIN, NOK Name, NOK Phone, NOK Relationship, Password (optional).
+            </p>
+            <div class="p-3 bg-elevated rounded-lg text-[11px] text-theme-secondary border border-theme">
+                <strong class="text-theme-primary">Password Policy:</strong> If a <code>Password</code> column is provided in your CSV, it will be securely hashed and set. If omitted, each member's initial temporary password defaults to their registered <strong>Phone Number</strong>. Members can modify their password upon first logging in to their portal.
+            </div>
+            <form onsubmit="submitBulkCsv(event)" class="space-y-4 text-xs">
+                <div class="border-2 border-dashed border-theme rounded-xl p-6 text-center hover:border-[#C47D0A] transition cursor-pointer">
+                    <input type="file" id="bulkCsvFile" accept=".csv" required class="w-full text-xs text-theme-secondary">
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" onclick="closeModal('bulkUploadModal')" class="px-4 py-2 rounded-lg text-theme-secondary hover:bg-elevated">Cancel</button>
+                    <button type="submit" class="btn-gold px-5 py-2 rounded-lg font-semibold">Upload Roster</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Unlock Identity / Document Lock -->
+    <div id="unlockModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-surface border border-theme rounded-xl max-w-md w-full p-6 space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-theme">
+                <h3 class="text-sm font-bold text-theme-primary">Unlock Member Document</h3>
+                <button onclick="closeModal('unlockModal')" class="text-theme-secondary hover:text-theme-primary"><i class="fas fa-times"></i></button>
+            </div>
+            <p class="text-xs text-theme-secondary">
+                Unlocking permits the member to resubmit their locked passport photo or signature. State the audit reason below.
+            </p>
+            <form onsubmit="submitUnlockDocument(event)" class="space-y-3 text-xs">
+                <input type="hidden" id="unlockMemberId">
+                <div>
+                    <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Document Field</label>
+                    <select id="unlockField" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                        <option value="passport">Passport Photograph Only</option>
+                        <option value="signature">Digital Signature Only</option>
+                        <option value="both">Both Passport &amp; Signature</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Reason for Unlock</label>
+                    <textarea id="unlockReason" required placeholder="e.g. Blurry photo uploaded, requested clear white-background headshot" rows="3"
+                        class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none"></textarea>
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeModal('unlockModal')" class="px-4 py-2 rounded-lg text-theme-secondary hover:bg-elevated">Cancel</button>
+                    <button type="submit" class="btn-gold px-5 py-2 rounded-lg font-semibold">Confirm &amp; Unlock</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Add Cooperative Executive Admin -->
+    <div id="addAdminModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-surface border border-theme rounded-xl max-w-md w-full p-6 space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-theme">
+                <h3 class="text-sm font-bold text-theme-primary">Add Executive Administrator</h3>
+                <button onclick="closeModal('addAdminModal')" class="text-theme-secondary hover:text-theme-primary"><i class="fas fa-times"></i></button>
+            </div>
+            <p class="text-xs text-theme-secondary">
+                Add an executive administrator (Max 3 per cooperative). Designated roles: President, Secretary, or Treasurer.
+            </p>
+            <form onsubmit="submitAddAdmin(event)" class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Full Name</label>
+                    <input type="text" id="adminFullName" required placeholder="Dr. John Doe" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Official Email</label>
+                        <input type="email" id="adminEmail" required placeholder="admin@coop.org" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Phone Number</label>
+                        <input type="tel" id="adminPhone" required placeholder="08012345678" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Designated Role</label>
+                        <select id="adminRole" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                            <option value="president">President / Chairman</option>
+                            <option value="secretary">General Secretary</option>
+                            <option value="treasurer">Treasurer / Financial Sec</option>
+                            <option value="admin">Executive Trustee</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Initial Password</label>
+                        <input type="text" id="adminPassword" value="CoopAdmin@2026" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeModal('addAdminModal')" class="px-4 py-2 rounded-lg text-theme-secondary hover:bg-elevated">Cancel</button>
+                    <button type="submit" class="btn-gold px-5 py-2 rounded-lg font-semibold">Create Admin</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Onboard New Cooperative Society -->
+    <div id="onboardModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-surface border border-theme rounded-xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between pb-3 border-b border-theme">
+                <h3 class="text-sm font-bold text-theme-primary">Onboard New Cooperative Society</h3>
+                <button onclick="closeModal('onboardModal')" class="text-theme-secondary hover:text-theme-primary"><i class="fas fa-times"></i></button>
+            </div>
+            <p class="text-xs text-theme-secondary">
+                Register a new corporate body or cooperative society. First 10 onboarded cooperatives are free; N50,000 onboarding fee applies from the 11th onward.
+            </p>
+            <form onsubmit="submitOnboardCoop(event)" class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Cooperative Society Name</label>
+                    <input type="text" id="onbCoopName" required placeholder="e.g. God is Good Cooperative Society" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Official Email</label>
+                        <input type="email" id="onbOfficialEmail" placeholder="info@society.org" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Official Phone</label>
+                        <input type="tel" id="onbOfficialPhone" placeholder="080..." class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">State</label>
+                        <input type="text" id="onbState" value="Lagos" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">L.G.A.</label>
+                        <input type="text" id="onbLga" placeholder="Ikeja" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Registered Secretariat Address</label>
+                    <input type="text" id="onbAddress" placeholder="Physical office or headquarters" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                </div>
+                <div class="border-t border-theme pt-3">
+                    <span class="text-[11px] font-bold text-[#C47D0A] block mb-2">Designated Primary Administrator</span>
+                    <div class="grid grid-cols-2 gap-3">
+                        <input type="text" id="onbAdminName" required placeholder="Admin Full Name" class="px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                        <input type="tel" id="onbAdminPhone" required placeholder="Admin Phone" class="px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mt-2">
+                        <input type="email" id="onbAdminEmail" required placeholder="admin@society.org" class="px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                        <input type="text" id="onbAdminPassword" value="CoopAdmin@2026" class="px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2 pt-3">
+                    <button type="button" onclick="closeModal('onboardModal')" class="px-4 py-2 rounded-lg text-theme-secondary hover:bg-elevated">Cancel</button>
+                    <button type="submit" class="btn-gold px-5 py-2 rounded-lg font-semibold">Complete Onboarding</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        let currentCoopId = '';
+        let currentAdmin = null;
+
+        // Theme Switcher Logic
+        function setTheme(theme) {
+            document.body.classList.remove('theme-dark', 'theme-light', 'theme-warm');
+            document.body.classList.add(`theme-${theme}`);
+            localStorage.setItem('ec_coop_theme', theme);
+
+            // Update button highlights
+            ['dark', 'light', 'warm'].forEach(t => {
+                const btn = document.getElementById(`themeBtn${t.charAt(0).toUpperCase() + t.slice(1)}`);
+                if (btn) {
+                    if (t === theme) {
+                        btn.classList.add('bg-surface', 'shadow-sm', 'text-[#C47D0A]', 'font-bold');
+                        btn.classList.remove('text-theme-secondary');
+                    } else {
+                        btn.classList.remove('bg-surface', 'shadow-sm', 'text-[#C47D0A]', 'font-bold');
+                        btn.classList.add('text-theme-secondary');
+                    }
+                }
+            });
+        }
+
+        // Initialize Theme from localStorage
+        const savedTheme = localStorage.getItem('ec_coop_theme') || 'dark';
+        setTheme(savedTheme);
+
+        // Tab Switcher Logic
+        function switchTab(tabId) {
+            ['overview', 'members', 'kyc', 'transfers', 'history'].forEach(t => {
+                const view = document.getElementById(`view-${t}`);
+                const tab = document.getElementById(`tab-${t}`);
+                if (view) view.classList.toggle('hidden', t !== tabId);
+                if (tab) tab.classList.toggle('active', t === tabId);
+            });
+
+            if (tabId === 'members') loadMembers();
+            if (tabId === 'history') loadAuditHistory();
+            if (tabId === 'transfers') loadTransfers();
+        }
+
+        function getAuthToken() {
+            return localStorage.getItem('ec_token') ||
+                   localStorage.getItem('token') || 
+                   localStorage.getItem('admin_token') || 
+                   localStorage.getItem('coop_token') || 
+                   localStorage.getItem('ec_coop_token') || 
+                   '';
+        }
+
+        function onCooperativeSelected(coopId) {
+            if (!coopId) return;
+            currentCoopId = coopId;
+            localStorage.setItem('ec_coop_id', coopId);
+            window.location.search = `?coop=${coopId}`;
+        }
+
+        // Auth & Bootstrap
+        async function initCoopPortal() {
+            const token = getAuthToken();
+            if (!token) {
+                window.location.replace('/login');
+                return;
+            }
+
+            const urlParams = new URLSearchParams(window.location.search);
+            currentCoopId = urlParams.get('coop') || localStorage.getItem('ec_coop_id');
+
+            // 1. Fetch available cooperatives for dropdown
+            try {
+                const resList = await fetch('/api/cooperatives/', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (resList.ok) {
+                    const listData = await resList.json();
+                    const coops = listData.cooperatives || [];
+                    const dropdown = document.getElementById('coopSelectDropdown');
+                    if (dropdown && coops.length > 0) {
+                        dropdown.innerHTML = '<option value="">-- Switch Cooperative --</option>' + coops.map(c => 
+                            `<option value="${c.id}" ${c.id === currentCoopId ? 'selected' : ''}>${c.name} (${c.status})</option>`
+                        ).join('');
+                        if (!currentCoopId && coops.length > 0) {
+                            currentCoopId = coops[0].id;
+                            localStorage.setItem('ec_coop_id', currentCoopId);
+                            dropdown.value = currentCoopId;
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('Could not populate cooperatives dropdown:', e);
+            }
+
+            if (!currentCoopId) {
+                document.getElementById('coopNameHeader').textContent = 'No Cooperative Selected';
+                return;
+            }
+
+            // 2. Fetch specific cooperative metadata
+            try {
+                const coopRes = await fetch(`/api/cooperatives/${currentCoopId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (coopRes.ok) {
+                    const coopData = await coopRes.json();
+                    document.getElementById('coopNameHeader').textContent = coopData.name || 'Cooperative Society';
+                }
+            } catch (e) {
+                console.warn('Could not fetch cooperative details:', e);
+            }
+
+            // 3. Fetch Cooperative Admins (Max 3)
+            try {
+                const res = await fetch(`/api/cooperatives/${currentCoopId}/admins`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    renderAdmins(data.admins || []);
+                }
+            } catch (err) {
+                console.warn('Fallback loading cooperative admin profile');
+            }
+
+            loadOverviewStats();
+        }
+
+        function renderAdmins(admins) {
+            const container = document.getElementById('adminListContainer');
+            if (!container) return;
+            const activeAdmins = (admins || []).filter(a => a.is_active);
+            let html = activeAdmins.map(a => `
+                <div class="bg-elevated border border-theme rounded-xl p-4 text-xs flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="badge-theme text-[10px] font-bold px-2 py-0.5 rounded capitalize bg-amber-500/10 text-[#C47D0A] border border-amber-500/20">${a.role}</span>
+                            <button onclick="deactivateCoopAdmin('${a.id}', '${a.full_name}')" class="text-red-400 hover:text-red-300 text-xs transition" title="Deactivate Admin">
+                                <i class="fas fa-user-minus mr-1"></i> Deactivate
+                            </button>
+                        </div>
+                        <div class="font-bold text-sm text-theme-primary">${a.full_name}</div>
+                        <div class="text-[11px] text-theme-secondary mt-1"><i class="fas fa-envelope mr-1 text-[#C47D0A]"></i> ${a.email}</div>
+                        <div class="text-[11px] text-theme-secondary mt-0.5"><i class="fas fa-phone mr-1 text-[#C47D0A]"></i> ${a.phone}</div>
+                    </div>
+                    <div class="text-[10px] text-theme-secondary mt-3 pt-2 border-t border-theme/50">
+                        Last Active: ${a.last_login_at ? new Date(a.last_login_at).toLocaleDateString() : 'Never logged in'}
+                    </div>
+                </div>
+            `).join('');
+
+            // If fewer than 3 admins, show empty slot cards to fill
+            const remainingSlots = 3 - activeAdmins.length;
+            for (let i = 0; i < remainingSlots; i++) {
+                const slotNumber = activeAdmins.length + i + 1;
+                html += `
+                    <div onclick="openAddAdminModal()" class="border-2 border-dashed border-theme hover:border-[#C47D0A] rounded-xl p-4 text-xs flex flex-col items-center justify-center text-center cursor-pointer transition min-h-[120px] bg-surface/50 group">
+                        <div class="w-8 h-8 rounded-full bg-elevated group-hover:bg-amber-500/10 flex items-center justify-center text-theme-secondary group-hover:text-[#C47D0A] mb-2 transition">
+                            <i class="fas fa-plus"></i>
+                        </div>
+                        <span class="font-semibold text-theme-primary text-xs">Add Executive Admin</span>
+                        <span class="text-[10px] text-theme-secondary mt-0.5">Administrator Slot ${slotNumber} of 3</span>
+                    </div>
+                `;
+            }
+
+            container.innerHTML = html;
+        }
+
+        async function deactivateCoopAdmin(adminId, adminName) {
+            if (!confirm(`Are you sure you want to deactivate ${adminName}? This will revoke their portal credentials and free up an administrator slot.`)) return;
+            try {
+                const res = await fetch(`/api/cooperatives/${currentCoopId}/admins/${adminId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to deactivate admin');
+                alert(data.message || 'Admin deactivated');
+                initCoopPortal();
+            } catch (e) {
+                alert(e.message);
+            }
+        }
+
+        async function loadOverviewStats() {
+            if (!currentCoopId) return;
+            const token = getAuthToken();
+
+            try {
+                // Fetch members count & allocated plot count
+                const memRes = await fetch(`/api/cooperatives/${currentCoopId}/members?limit=1000`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (memRes.ok) {
+                    const memData = await memRes.json();
+                    const members = memData.members || [];
+                    const allocated = members.filter(m => m.allocation_status && m.allocation_status !== 'unallocated').length;
+                    document.getElementById('statAllocatedPlots').textContent = `${allocated} Plot${allocated === 1 ? '' : 's'}`;
+                    const subtext = document.getElementById('statAllocatedSubtext');
+                    if (subtext) subtext.textContent = `${members.length} Enrolled Member${members.length === 1 ? '' : 's'}`;
+                }
+
+                // Fetch cooperative invoices for total invoiced / remitted
+                const invRes = await fetch(`/api/cooperatives/${currentCoopId}/invoices`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (invRes.ok) {
+                    const invData = await invRes.json();
+                    const invoices = invData.invoices || [];
+                    let totalInv = 0;
+                    let totalPaid = 0;
+                    invoices.forEach(inv => {
+                        totalInv += Number(inv.total_amount || 0);
+                        totalPaid += Number(inv.amount_paid || 0);
+                    });
+                    const balance = Math.max(0, totalInv - totalPaid);
+                    document.getElementById('statTotalInvoiced').textContent = `NGN ${totalInv.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+                    document.getElementById('statTotalRemitted').textContent = `NGN ${totalPaid.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+                    document.getElementById('statOutstandingBalance').textContent = `NGN ${balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+                }
+            } catch (e) {
+                console.warn('Overview stats loading fallback:', e);
+            }
+        }
+
+        async function loadMembers() {
+            const tbody = document.getElementById('membersTableBody');
+            if (!tbody) return;
+            try {
+                const res = await fetch(`/api/cooperatives/${currentCoopId}/members?limit=100`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                const data = await res.json();
+                const members = data.members || [];
+                document.getElementById('memberCountBadge').textContent = members.length;
+
+                if (!members.length) {
+                    document.getElementById('membersEmptyState').classList.remove('hidden');
+                    tbody.innerHTML = '';
+                    return;
+                }
+                document.getElementById('membersEmptyState').classList.add('hidden');
+
+                tbody.innerHTML = members.map(m => `
+                    <tr class="hover:bg-elevated/50 transition">
+                        <td class="py-3 px-4 font-mono font-bold text-[#C47D0A]">EC-COP-000001/${String(m.sub_index).padStart(3, '0')}</td>
+                        <td class="py-3 px-4 font-medium text-theme-primary">${m.full_name}</td>
+                        <td class="py-3 px-4 text-theme-secondary">${m.phone}<br><span class="text-[10px]">${m.email || 'No email'}</span></td>
+                        <td class="py-3 px-4 font-mono text-[11px] text-theme-secondary">${m.nin || 'Not provided'}</td>
+                        <td class="py-3 px-4">
+                            <span class="badge-theme text-[10px] font-bold px-2 py-0.5 rounded">${m.allocation_status}</span>
+                            <div class="text-[10px] text-theme-secondary mt-0.5">${m.plot_number ? `Plot ${m.plot_number}` : 'Pending allocation'}</div>
+                        </td>
+                        <td class="py-3 px-4">
+                            <div class="flex items-center gap-1.5">
+                                <span title="Passport photo status" class="${m.passport_locked ? 'text-emerald-500' : 'text-amber-500'} text-[11px]">
+                                    <i class="fas ${m.passport_locked ? 'fa-lock' : 'fa-lock-open'}"></i> Photo
+                                </span>
+                                <span title="Signature status" class="${m.signature_locked ? 'text-emerald-500' : 'text-amber-500'} text-[11px] ml-1.5">
+                                    <i class="fas ${m.signature_locked ? 'fa-lock' : 'fa-lock-open'}"></i> Sig
+                                </span>
+                            </div>
+                        </td>
+                        <td class="py-3 px-4 text-right">
+                            <button onclick="openUnlockModal('${m.id}')" class="px-2 py-1 text-[11px] font-semibold text-[#C47D0A] hover:bg-[#C47D0A]/10 rounded transition">
+                                Unlock Doc
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error('Failed to load members:', err);
+            }
+        }
+
+        async function submitAddMember(e) {
+            e.preventDefault();
+            const payload = {
+                full_name: document.getElementById('mFullName').value,
+                phone: document.getElementById('mPhone').value,
+                email: document.getElementById('mEmail').value,
+                nin: document.getElementById('mNin').value,
+                member_number: document.getElementById('mNumber').value,
+                residential_address: document.getElementById('mAddress').value,
+                nok_name: document.getElementById('mNokName').value,
+                nok_phone: document.getElementById('mNokPhone').value,
+                nok_relationship: document.getElementById('mNokRel').value
+            };
+
+            const res = await fetch(`/api/cooperatives/${currentCoopId}/members`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${getAuthToken()}`
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                closeModal('addMemberModal');
+                loadMembers();
+            } else {
+                alert('Could not save member. Please check details.');
+            }
+        }
+
+        async function submitBulkCsv(e) {
+            e.preventDefault();
+            const fileInput = document.getElementById('bulkCsvFile');
+            if (!fileInput.files.length) return;
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            const res = await fetch(`/api/cooperatives/${currentCoopId}/members/bulk`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${getAuthToken()}` },
+                body: formData
+            });
+
+            const data = await res.json();
+            alert(data.message || 'Roster imported');
+            closeModal('bulkUploadModal');
+            loadMembers();
+        }
+
+        function openUnlockModal(memberId) {
+            document.getElementById('unlockMemberId').value = memberId;
+            document.getElementById('unlockModal').classList.remove('hidden');
+        }
+
+        async function submitUnlockDocument(e) {
+            e.preventDefault();
+            const memberId = document.getElementById('unlockMemberId').value;
+            const field = document.getElementById('unlockField').value;
+            const reason = document.getElementById('unlockReason').value;
+
+            const res = await fetch(`/api/cooperatives/${currentCoopId}/members/${memberId}/unlock`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${getAuthToken()}`
+                },
+                body: JSON.stringify({ field, reason })
+            });
+
+            if (res.ok) {
+                closeModal('unlockModal');
+                loadMembers();
+            } else {
+                alert('Failed to unlock document.');
+            }
+        }
+
+        async function loadAuditHistory() {
+            const tbody = document.getElementById('auditTableBody');
+            if (!tbody) return;
+            const res = await fetch(`/api/cooperatives/${currentCoopId}/activity-log?limit=50`, {
+                headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+            });
+            const data = await res.json();
+            const logs = data.logs || [];
+
+            tbody.innerHTML = logs.map(l => `
+                <tr class="hover:bg-elevated/50 transition">
+                    <td class="py-3 px-4 font-mono text-[11px] text-theme-secondary">${new Date(l.created_at).toLocaleString()}</td>
+                    <td class="py-3 px-4 font-bold text-theme-primary">${l.admin_name}</td>
+                    <td class="py-3 px-4"><span class="badge-theme text-[10px] font-bold px-2 py-0.5 rounded capitalize">${l.action.replace(/_/g, ' ')}</span></td>
+                    <td class="py-3 px-4 text-theme-secondary capitalize">${l.target_entity || 'N/A'}</td>
+                    <td class="py-3 px-4 font-mono text-[11px] text-theme-secondary truncate max-w-xs">${JSON.stringify(l.details || {})}</td>
+                </tr>
+            `).join('');
+        }
+
+        function openAddMemberModal() { document.getElementById('addMemberModal').classList.remove('hidden'); }
+        function openBulkUploadModal() { document.getElementById('bulkUploadModal').classList.remove('hidden'); }
+        function openAddAdminModal() { document.getElementById('addAdminModal').classList.remove('hidden'); }
+        function openOnboardModal() { document.getElementById('onboardModal').classList.remove('hidden'); }
+        function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+        async function submitAddAdmin(e) {
+            e.preventDefault();
+            const payload = {
+                full_name: document.getElementById('adminFullName').value.trim(),
+                email: document.getElementById('adminEmail').value.trim(),
+                phone: document.getElementById('adminPhone').value.trim(),
+                role: document.getElementById('adminRole').value,
+                password: document.getElementById('adminPassword').value
+            };
+            try {
+                const res = await fetch(`/api/cooperatives/${currentCoopId}/admins`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to add administrator');
+                alert(data.message || 'Administrator successfully added');
+                closeModal('addAdminModal');
+                initCoopPortal();
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+
+        async function submitOnboardCoop(e) {
+            e.preventDefault();
+            const payload = {
+                name: document.getElementById('onbCoopName').value.trim(),
+                official_email: document.getElementById('onbOfficialEmail').value.trim(),
+                official_phone: document.getElementById('onbOfficialPhone').value.trim(),
+                state: document.getElementById('onbState').value.trim(),
+                lga: document.getElementById('onbLga').value.trim(),
+                registered_address: document.getElementById('onbAddress').value.trim(),
+                admin_name: document.getElementById('onbAdminName').value.trim(),
+                admin_phone: document.getElementById('onbAdminPhone').value.trim(),
+                admin_email: document.getElementById('onbAdminEmail').value.trim(),
+                admin_password: document.getElementById('onbAdminPassword').value
+            };
+            try {
+                const res = await fetch('/api/cooperatives/onboard', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Onboarding failed');
+                alert(`Cooperative society successfully onboarded! Code: ${data.code}`);
+                closeModal('onboardModal');
+                if (data.id) {
+                    window.location.href = `/cooperative/dashboard?coop=${data.id}`;
+                }
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+        function logoutCoopAdmin() {
+            localStorage.removeItem('ec_coop_token');
+            localStorage.removeItem('ec_coop_id');
+            window.location.replace('/login');
+        }
+
+        window.addEventListener('DOMContentLoaded', initCoopPortal);
+    </script>
+</body>
+</html>
+

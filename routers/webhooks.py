@@ -8,8 +8,9 @@ import io
 from PIL import Image
 try:
     import pillow_heif
-    pillow_heif.register_heif_opener()
-except ImportError:
+    if hasattr(pillow_heif, "register_heif_opener"):
+        pillow_heif.register_heif_opener()
+except Exception:
     pass
 from datetime import date, timedelta
 from email_service import send_invoice_email, send_admin_alert_email, send_welcome_email

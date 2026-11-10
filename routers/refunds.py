@@ -1,248 +1,155 @@
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, UploadFile, File, Form, Request
-from typing import List, Optional
-from pydantic import EmailStr
+import os
+import uuid
+import logging
+from datetime import datetime
+from typing import Optional, List
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request, BackgroundTasks
 from database import get_db, db_execute
 from routers.auth import verify_token, has_any_role
-from datetime import datetime
-import uuid
-from email_service import async_resend, FROM_EMAIL, send_refund_request_admin_email, send_refund_request_confirmation_email, send_refund_status_update_email
-import asyncio
-import logging
-import os
+from storage_service import upload_portal_file, generate_signed_url
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-REFUND_BUCKET = "refund_receipts"
-
-
-async def _upload_file_to_bucket_bytes(file_bytes: bytes, filename: str, content_type: str, prefix: str) -> str:
-    unique_id = str(uuid.uuid4())[:8]
-    safe_name = "".join(c if c.isalnum() or c in "._-" else "_" for c in filename)
-    stored_path = f"{prefix}/{unique_id}_{safe_name}"
-    from database import supabase
-    supabase.storage.from_(REFUND_BUCKET).upload(path=stored_path, file=file_bytes, file_options={"content-type": content_type})
-    return stored_path
+REFUND_BUCKET = "refund-documents"
 
 
 @router.post("/public/submit")
 async def submit_refund_request(
     request: Request,
     background_tasks: BackgroundTasks,
-    name: str = Form(...),
-    email: EmailStr = Form(...),
+    client_name: str = Form(...),
+    email: str = Form(...),
     phone: str = Form(...),
+    invoice_number: str = Form(...),
     estate_bought: str = Form(...),
-    invoice_number: Optional[str] = Form(None),
-    comment: Optional[str] = Form(None),
-    accept_policy: bool = Form(...),
-    # files will be read from the raw form to avoid single/multiple validation issues
+    amount_paid: float = Form(...),
+    refund_reason: str = Form(...),
+    bank_name: str = Form(...),
+    account_number: str = Form(...),
+    account_name: str = Form(...),
+    files: List[UploadFile] = File(default=[])
 ):
-    """Public endpoint used by the marketing website to submit refund requests."""
-    if not accept_policy:
-        raise HTTPException(status_code=400, detail="You must accept the refund policy before submitting.")
-
+    """Public endpoint for clients to submit formal refund applications."""
     db = get_db()
-    now = datetime.utcnow().isoformat()
-
-    # Server-side validation
-    if not phone or not phone.strip():
-        raise HTTPException(status_code=400, detail="Phone number is required")
-    digits = ''.join([c for c in phone if c.isdigit()])
-    if len(digits) < 7 or len(digits) > 15:
-        raise HTTPException(status_code=400, detail="Invalid phone number format")
-
-    ALLOWED_MIME = {"application/pdf", "image/png", "image/jpeg"}
-    MAX_BYTES = 10 * 1024 * 1024
-
+    
     stored_paths = []
-    # Read files from form (works for single or multiple uploads)
-    form = await request.form()
-    form_files = form.getlist('files') if hasattr(form, 'getlist') else []
-    for f in form_files:
-        # f is UploadFile
-        contents = await f.read()
-        if not contents:
-            continue
-        if f.content_type not in ALLOWED_MIME:
-            raise HTTPException(status_code=400, detail=f"Invalid file type: {f.filename}")
-        if len(contents) > MAX_BYTES:
-            raise HTTPException(status_code=400, detail=f"File too large: {f.filename}")
-        path = await _upload_file_to_bucket_bytes(contents, f.filename, f.content_type, "requests")
-        stored_paths.append(path)
-    # Enforce at least one uploaded receipt
-    if not stored_paths:
-        raise HTTPException(status_code=400, detail="At least one receipt must be uploaded")
+    for f in files:
+        if f.filename:
+            content = await f.read()
+            if content:
+                ext = f.filename.split(".")[-1].lower() if "." in f.filename else "pdf"
+                path = f"refunds/{uuid.uuid4().hex[:12]}_{f.filename}"
+                try:
+                    await db_execute(lambda: db.storage.from_(REFUND_BUCKET).upload(path, content, {"content-type": f.content_type or "application/octet-stream"}))
+                    stored_paths.append(path)
+                except Exception as e:
+                    logger.warning(f"Failed to store refund file {f.filename}: {e}")
 
     payload = {
-        "name": name,
-        "email": email,
-        "phone": phone,
-        "estate_bought": estate_bought,
-        "invoice_number": invoice_number,
-        "comment": comment,
-        "files": stored_paths,
-        "status": "submitted",
-        "created_at": now,
-        "updated_at": now
+        "client_name": client_name.strip(),
+        "email": email.strip().lower(),
+        "phone": phone.strip(),
+        "invoice_number": invoice_number.strip(),
+        "estate_bought": estate_bought.strip(),
+        "amount_paid": float(amount_paid),
+        "refund_reason": refund_reason.strip(),
+        "bank_name": bank_name.strip(),
+        "account_number": account_number.strip(),
+        "account_name": account_name.strip(),
+        "status": "pending",
+        "file_paths": stored_paths,
+        "created_at": datetime.utcnow().isoformat(),
+        "updated_at": datetime.utcnow().isoformat()
     }
 
     res = await db_execute(lambda: db.table("refund_requests").insert(payload).execute())
     if not res.data:
         raise HTTPException(status_code=500, detail="Failed to record refund request")
 
-    request_id = res.data[0]["id"]
-
-    # Prepare admin notification (background)
-    async def _notify_admins():
-        try:
-            logger.info("Starting refund notification task for request %s", request_id)
-            # Build simple HTML
-            file_links = []
-            from database import supabase
-            for p in stored_paths:
-                try:
-                    url_res = supabase.storage.from_(REFUND_BUCKET).create_signed_url(p, 60 * 60)
-                    file_links.append(url_res.get("signedURL") or url_res.get("signed_url") or p)
-                except Exception:
-                    file_links.append(p)
-
-            # Use branded email service helpers
-            try:
-                await send_refund_request_admin_email({
-                    "id": request_id,
-                    "name": name,
-                    "email": email,
-                    "phone": phone,
-                    "estate_bought": estate_bought,
-                    "invoice_number": invoice_number,
-                    "comment": comment
-                }, file_links)
-            except Exception:
-                logger.exception("Failed sending refund admin notification for %s", request_id)
-            # Send confirmation to requester
-            try:
-                await send_refund_request_confirmation_email({
-                    "id": request_id,
-                    "name": name,
-                    "email": email,
-                    "estate_bought": estate_bought,
-                    "invoice_number": invoice_number,
-                })
-            except Exception:
-                logger.exception("Failed sending refund confirmation to requester %s", email)
-            logger.info("Completed refund notification task for request %s", request_id)
-        except Exception as e:
-            logger.exception("Error in refund notification task for request %s", request_id)
-            # Persist failure to DB so admins can see failed email attempts
-            try:
-                await db_execute(lambda: db.table("refund_requests").update({
-                    "status": "email_failed",
-                    "email_error": str(e),
-                    "updated_at": datetime.utcnow().isoformat()
-                }).eq("id", request_id).execute())
-            except Exception as ee:
-                logger.exception("Failed to update refund_requests with email failure for %s: %s", request_id, ee)
-
-    # Schedule notifier in background so it runs after response without blocking.
-    try:
-        asyncio.create_task(_notify_admins())
-    except Exception as e:
-        logger.exception("Failed to schedule refund notification task: %s", e)
-
-    return {"message": "Refund request submitted", "id": request_id}
-
-
-
-@router.patch("/{request_id}/status")
-async def update_refund_status(request_id: str, request: Request, current_admin=Depends(verify_token)):
-    """Admin endpoint to update refund request status (approved/rejected/processing)."""
-    if not has_any_role(current_admin, ["admin", "super_admin"]):
-        raise HTTPException(status_code=403, detail="Admins only")
-    # Accept either JSON body or form-encoded body
-    body = {}
-    try:
-        body = await request.json()
-    except Exception:
-        form = await request.form()
-        body = {k: v for k, v in form.items()}
-
-    status = (body.get('status') or '').lower()
-    reason = body.get('reason') or None
-    if status not in ("approved", "rejected", "processing", "submitted"):
-        raise HTTPException(status_code=400, detail="Invalid status")
-    db = get_db()
-    now = datetime.utcnow().isoformat()
-    payload = {"status": status, "updated_at": now}
-    if reason:
-        payload["status_reason"] = reason
-    try:
-        res = await db_execute(lambda: db.table("refund_requests").update(payload).eq("id", request_id).execute())
-    except Exception as e:
-        logger.exception("Failed to update refund status for %s: %s", request_id, e)
-        # Surface the exception message to aid debugging in local/dev environments
-        raise HTTPException(status_code=500, detail=f"Failed to update status: {str(e)}")
-    if not res.data:
-        raise HTTPException(status_code=404, detail="Not found")
-
-    # Fetch updated row to send email
-    try:
-        row_res = await db_execute(lambda: db.table("refund_requests").select("*").eq("id", request_id).execute())
-        row = row_res.data[0] if row_res.data else None
-        if row:
-            # Notify requester of status change
-            try:
-                await send_refund_status_update_email(row, status, reason)
-            except Exception:
-                logger.exception("Failed to send status update email for %s", request_id)
-    except Exception:
-        logger.exception("Failed to load refund row after status update %s", request_id)
-
-    return {"message": "Status updated", "id": request_id, "status": status}
+    return {
+        "status": "success",
+        "message": "Refund application submitted successfully. An administrator will review your submission.",
+        "request_id": res.data[0]["id"]
+    }
 
 
 @router.get("/")
 async def list_refund_requests(current_admin=Depends(verify_token)):
-    # Only admin and super_admin
-    if not has_any_role(current_admin, ["admin", "super_admin"]):
-        raise HTTPException(status_code=403, detail="Admins only")
+    """Admin endpoint to list all client refund applications."""
+    if not has_any_role(current_admin, "admin", "super_admin", "finance", "legal"):
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
     db = get_db()
     res = await db_execute(lambda: db.table("refund_requests").select("*").order("created_at", desc=True).execute())
-    return res.data
+    return res.data or []
 
 
 @router.get("/{request_id}")
 async def get_refund_request(request_id: str, current_admin=Depends(verify_token)):
-    if not has_any_role(current_admin, ["admin", "super_admin"]):
-        raise HTTPException(status_code=403, detail="Admins only")
+    """Admin endpoint to retrieve a specific refund application."""
+    if not has_any_role(current_admin, "admin", "super_admin", "finance", "legal"):
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
     db = get_db()
-    res = await db_execute(lambda: db.table("refund_requests").select("*").eq("id", request_id).execute())
+    res = await db_execute(lambda: db.table("refund_requests").select("*").eq("id", request_id).limit(1).execute())
     if not res.data:
-        raise HTTPException(status_code=404, detail="Not found")
+        raise HTTPException(status_code=404, detail="Refund application not found")
     return res.data[0]
 
 
 @router.get("/{request_id}/files")
 async def get_refund_files(request_id: str, current_admin=Depends(verify_token)):
-    """Return signed URLs for files attached to a refund request (admin-only)."""
-    if not has_any_role(current_admin, ["admin", "super_admin"]):
-        raise HTTPException(status_code=403, detail="Admins only")
+    """Generates signed URLs for files attached to a refund application."""
+    if not has_any_role(current_admin, "admin", "super_admin", "finance", "legal"):
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
     db = get_db()
-    res = await db_execute(lambda: db.table("refund_requests").select("files").eq("id", request_id).execute())
+    res = await db_execute(lambda: db.table("refund_requests").select("file_paths").eq("id", request_id).limit(1).execute())
     if not res.data:
-        raise HTTPException(status_code=404, detail="Not found")
-    files = res.data[0].get("files") or []
-    signed = []
-    from database import supabase
-    for p in files:
+        raise HTTPException(status_code=404, detail="Refund application not found")
+
+    paths = res.data[0].get("file_paths") or []
+    signed_links = []
+    for p in paths:
         try:
-            url_res = supabase.storage.from_(REFUND_BUCKET).create_signed_url(p, 60 * 60)
-            signed_url = url_res.get("signedURL") or url_res.get("signed_url") or None
-            if signed_url:
-                signed.append(signed_url)
-            else:
-                signed.append(p)
+            url_res = await db_execute(lambda: db.storage.from_(REFUND_BUCKET).create_signed_url(p, 3600))
+            if url_res and "signedURL" in url_res:
+                signed_links.append({"path": p, "url": url_res["signedURL"]})
         except Exception:
-            signed.append(p)
-    return {"files": signed}
+            signed_links.append({"path": p, "url": f"https://scsdnstqtrqjsosbmxyf.supabase.co/storage/v1/object/public/{REFUND_BUCKET}/{p}"})
+
+    return {"files": signed_links}
+
+
+@router.patch("/{request_id}/status")
+async def update_refund_status(
+    request_id: str,
+    payload: dict,
+    current_admin=Depends(verify_token)
+):
+    """Admin endpoint to approve, reject, or mark a refund application as processing."""
+    if not has_any_role(current_admin, "admin", "super_admin", "finance", "legal"):
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    new_status = payload.get("status", "").lower()
+    reason = payload.get("reason", "").strip()
+
+    if new_status not in ("pending", "processing", "approved", "rejected"):
+        raise HTTPException(status_code=400, detail="Invalid refund status")
+
+    db = get_db()
+    update_data = {
+        "status": new_status,
+        "status_reason": reason,
+        "reviewed_by": current_admin.get("sub"),
+        "updated_at": datetime.utcnow().isoformat()
+    }
+
+    res = await db_execute(lambda: db.table("refund_requests").update(update_data).eq("id", request_id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Refund request not found")
+
+    return {"status": "success", "message": f"Refund status updated to {new_status}"}
+

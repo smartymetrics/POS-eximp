@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page {
+            size: A4;
+            margin: 25mm 20mm 25mm 20mm;
+            @bottom-right {
+                content: "Page " counter(page) " of " counter(pages);
+                font-size: 9px;
+                color: #888888;
+            }
+        }
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            color: #222222;
+            font-size: 11px;
+            line-height: 1.5;
+            margin: 0;
+            padding: 0;
+        }
+        .header {
+            border-bottom: 3px solid #C47D0A;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+        .header-table {
+            width: 100%;
+        }
+        .logo-text {
+            font-size: 20px;
+            font-weight: bold;
+            color: #111111;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .logo-sub {
+            font-size: 9px;
+            color: #C47D0A;
+            font-weight: bold;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+        .doc-title {
+            text-align: right;
+            font-size: 16px;
+            font-weight: bold;
+            color: #C47D0A;
+            text-transform: uppercase;
+        }
+        .doc-number {
+            text-align: right;
+            font-size: 12px;
+            font-weight: bold;
+            color: #111111;
+            font-family: monospace;
+        }
+        .section-box {
+            background-color: #FAF6F0;
+            border: 1px solid #E5DCCE;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 18px;
+        }
+        .info-table {
+            width: 100%;
+        }
+        .info-table td {
+            vertical-align: top;
+            padding: 4px 6px;
+        }
+        .label {
+            font-size: 9px;
+            text-transform: uppercase;
+            color: #777777;
+            font-weight: bold;
+        }
+        .value {
+            font-size: 11px;
+            font-weight: bold;
+            color: #111111;
+        }
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            margin-bottom: 20px;
+        }
+        .items-table th {
+            background-color: #1A1A1A;
+            color: #FFFFFF;
+            text-align: left;
+            padding: 8px 10px;
+            font-size: 10px;
+            text-transform: uppercase;
+        }
+        .items-table td {
+            padding: 10px;
+            border-bottom: 1px solid #EEEEEE;
+        }
+        .totals-table {
+            width: 100%;
+            margin-top: 10px;
+        }
+        .totals-table td {
+            padding: 4px 8px;
+            text-align: right;
+        }
+        .total-due {
+            font-size: 14px;
+            font-weight: bold;
+            color: #C47D0A;
+            border-top: 2px solid #C47D0A;
+            padding-top: 6px;
+        }
+        .legal-note {
+            font-size: 9px;
+            color: #666666;
+            margin-top: 25px;
+            padding-top: 12px;
+            border-top: 1px solid #E5E7EB;
+            line-height: 1.4;
+        }
+        .stamp-area {
+            margin-top: 20px;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <table class="header-table">
+            <tr>
+                <td>
+                    <div class="logo-text">Eximp &amp; Cloves</div>
+                    <div class="logo-sub">Infrastructure Limited &bull; RC 8311800</div>
+                </td>
+                <td>
+                    <div class="doc-title">Cooperative Scheme Invoice</div>
+                    <div class="doc-number">{{ invoice.invoice_number }}</div>
+                    <div style="text-align: right; font-size: 9px; color: #666; margin-top: 3px;">Date: {{ generated_at }}</div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- Dual Identity Box -->
+    <div class="section-box">
+        <table class="info-table">
+            <tr>
+                <td style="width: 50%;">
+                    <div class="label">Cooperative Society Body</div>
+                    <div class="value" style="font-size: 12px; color: #C47D0A;">{{ cooperative.name }}</div>
+                    <div style="font-size: 10px; color: #555; margin-top: 2px;">Code: {{ cooperative.code }}</div>
+                    <div style="font-size: 10px; color: #555;">{{ cooperative.registered_address or 'Official Registry' }}</div>
+                </td>
+                <td style="width: 50%;">
+                    <div class="label">Beneficiary Member Allottee</div>
+                    <div class="value" style="font-size: 12px;">{{ member.full_name }}</div>
+                    <div style="font-size: 10px; color: #555; margin-top: 2px;">Member Sub-Index: #{{ member.sub_index }} &bull; ID: {{ member.member_number }}</div>
+                    <div style="font-size: 10px; color: #555;">NIN: {{ member.nin or 'On File' }} &bull; Phone: {{ member.phone }}</div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- Allocation & Scheme Table -->
+    <table class="items-table">
+        <thead>
+            <tr>
+                <th>Description &amp; Scheme Details</th>
+                <th style="text-align: center; width: 15%;">Plot Number</th>
+                <th style="text-align: center; width: 15%;">Size (SQM)</th>
+                <th style="text-align: right; width: 25%;">Total Amount (NGN)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>
+                    <strong>{{ property.name or 'Prime Residential Layout' }}</strong>
+                    <div style="font-size: 10px; color: #666; margin-top: 2px;">
+                        Cooperative Land Scheme Allocation &bull; Sub-Index Ref: {{ invoice.invoice_number }}
+                    </div>
+                </td>
+                <td style="text-align: center; font-weight: bold;">
+                    {{ member.plot_number or 'Assigned on Pegging' }}
+                </td>
+                <td style="text-align: center;">
+                    {{ member.plot_size_sqm or '500' }} SQM
+                </td>
+                <td style="text-align: right; font-weight: bold;">
+                    {{ format_currency(invoice.total_amount) }}
+                </td>
+            </tr>
+        </tbody>
+    </table>
+
+    <!-- Totals Table -->
+    <table class="totals-table">
+        <tr>
+            <td style="width: 70%; font-weight: bold; color: #555;">Gross Allocation Value:</td>
+            <td style="width: 30%; font-weight: bold;">{{ format_currency(invoice.total_amount) }}</td>
+        </tr>
+        <tr>
+            <td style="color: #2e7d32; font-weight: bold;">Amount Paid to Date:</td>
+            <td style="color: #2e7d32; font-weight: bold;">{{ format_currency(invoice.amount_paid) }}</td>
+        </tr>
+        <tr>
+            <td class="total-due">Net Balance Due:</td>
+            <td class="total-due">{{ format_currency(invoice.balance_due) }}</td>
+        </tr>
+    </table>
+
+    <div class="legal-note">
+        <strong>Legal Certification:</strong> This invoice is issued pursuant to the Master Cooperative Agreement between Eximp &amp; Cloves Infrastructure Limited and {{ cooperative.name }}. All payments are non-transferable without written consent from the Cooperative Executive Committee and Eximp &amp; Cloves Legal Department. Title deeds and physical possession are governed by the Nigerian Evidence Act 2011 and State Land Registry regulations.
+    </div>
+
+</body>
+</html>
+

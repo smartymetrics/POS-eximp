@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional, List
+from typing import Optional
 from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
@@ -7,7 +7,7 @@ from uuid import UUID
 
 # ─── AUTH ────────────────────────────────────────────────────
 class AdminLogin(BaseModel):
-    email: EmailStr
+    email: str  # Email address or phone number
     password: str
 
 
@@ -26,6 +26,8 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     admin: dict # {id, name, email, role, primary_role}
+    redirect_url: Optional[str] = None
+    user_type: Optional[str] = "staff"
 
 
 class ChangePasswordRequest(BaseModel):
@@ -44,7 +46,7 @@ class UpdateProfileRequest(BaseModel):
 # ─── CLIENTS ─────────────────────────────────────────────────
 class ClientCreate(BaseModel):
     full_name: str
-    email: Optional[EmailStr] = None
+    email: EmailStr
     phone: Optional[str] = None
     address: Optional[str] = None
     city: Optional[str] = None
@@ -53,7 +55,6 @@ class ClientCreate(BaseModel):
     middle_name: Optional[str] = None
     gender: Optional[str] = None
     dob: Optional[str] = None
-    client_type: Optional[str] = "lead" # lead or client
 
 
 class ClientUpdate(BaseModel):
@@ -80,7 +81,6 @@ class ClientUpdate(BaseModel):
     id_number: Optional[str] = None
     passport_photo_url: Optional[str] = None
     id_document_url: Optional[str] = None
-    client_type: Optional[str] = None
 
 
 # ─── PROPERTIES ──────────────────────────────────────────────
@@ -94,8 +94,6 @@ class PropertyCreate(BaseModel):
     description: Optional[str] = None
     available_plot_sizes: Optional[str] = None
     is_active: bool = True
-    acquisition_cost: Optional[Decimal] = 0
-    total_plots: Optional[int] = 0
 
 
 class PropertyUpdate(BaseModel):
@@ -109,13 +107,6 @@ class PropertyUpdate(BaseModel):
     available_plot_sizes: Optional[str] = None
     is_active: Optional[bool] = None
     is_archived: Optional[bool] = None
-    acquisition_cost: Optional[Decimal] = None
-    total_plots: Optional[int] = None
-
-
-class EstateVisibilityToggle(BaseModel):
-    estate_name: str
-    is_active: bool
 
 
 # ─── INVOICES ────────────────────────────────────────────────
@@ -146,9 +137,6 @@ class InvoiceCreate(BaseModel):
     marketing_campaign_id: Optional[str] = None
     sales_rep_id: Optional[str] = None
     sales_rep_name: Optional[str] = None
-    purchase_purpose: Optional[str] = None
-    purchase_for: Optional[str] = None
-    discount_code: Optional[str] = None
 
 class InvoiceUpdate(BaseModel):
     due_date: Optional[date] = None
@@ -163,9 +151,6 @@ class InvoiceUpdate(BaseModel):
     reason: Optional[str] = None # For due date changes
     co_owner_name: Optional[str] = None
     co_owner_email: Optional[str] = None
-    purchase_purpose: Optional[str] = None
-    purchase_for: Optional[str] = None
-    discount_code: Optional[str] = None
 
 class SendDocumentRequest(BaseModel):
     invoice_id: str
@@ -241,7 +226,6 @@ class WebhookFormPayload(BaseModel):
     # Other
     source_of_income: Optional[str] = None
     referral_source: Optional[str] = None
-    purchase_for: Optional[str] = None
     purchase_purpose: Optional[str] = None
     sales_rep_name: Optional[str] = None
     sales_rep_phone: Optional[str] = None
@@ -255,16 +239,14 @@ class WebhookFormPayload(BaseModel):
     utm_campaign: Optional[str] = None
     utm_content: Optional[str] = None
     utm_term: Optional[str] = None
-    discount_code: Optional[str] = None
 
 
 class VerificationConfirm(BaseModel):
-    send_email: bool = True
+    pass  # No body needed — invoice_id is in the URL
 
 
 class VerificationReject(BaseModel):
     reason: str
-    send_email: bool = True
 
 class VerificationUpdate(BaseModel):
     payment_proof_url: Optional[str] = None
@@ -344,16 +326,12 @@ class SalesRepCreate(BaseModel):
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     commission_rate: Decimal = Decimal("5.0")
-    gross_commission_rate: Optional[Decimal] = None
-    wht_rate: Decimal = Decimal("5.0")
 
 class SalesRepUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     commission_rate: Optional[Decimal] = None
-    gross_commission_rate: Optional[Decimal] = None
-    wht_rate: Optional[Decimal] = None
     is_active: Optional[bool] = None
 
 class ResolveUnmatchedRequest(BaseModel):
@@ -386,7 +364,6 @@ class CommissionRateCreate(BaseModel):
     sales_rep_id: str
     estate_name: str
     rate: Decimal
-    wht_rate: Optional[Decimal] = Decimal("5.0")
     effective_from: date
     reason: Optional[str] = None
 
@@ -395,19 +372,16 @@ class CommissionAdjustment(BaseModel):
     adjustment_reason: str
 
 class CommissionPayout(BaseModel):
-    sales_rep_id: Optional[str] = None
-    vendor_id: Optional[str] = None
+    sales_rep_id: str
     earning_ids: list[str]
     reference: Optional[str] = None
     notes: Optional[str] = None
     total_amount: Optional[Decimal] = None  # If set, distribute as partial payment; else pay all in full
 
-
 class DefaultRateUpdate(BaseModel):
-    rate: Decimal                                    # Staff / sales-rep default commission %
-    partner_rate: Optional[Decimal] = None           # Partner (vendor) default commission %  ← NEW
-    wht_rate: Optional[Decimal] = Decimal("5.0")    # Withholding Tax % (applies to both)
+    rate: Decimal
     reason: Optional[str] = None
+
 
 class CommissionVoidRequest(BaseModel):
     reason: str
@@ -459,14 +433,11 @@ class CompanySignatureUpload(BaseModel):
 class WitnessRemovalRequest(BaseModel):
     note: str
 
-class SignatureReject(BaseModel):
-    reason: str
-
 class ExtendSigningLink(BaseModel):
     days: int = 7
 
 class CustomContractHTMLUpdate(BaseModel):
-    html_content: Optional[str] = None
+    html_content: str
     cover_html: Optional[str] = None
     execution_html: Optional[str] = None
     lawfirm_name: Optional[str] = None
@@ -479,6 +450,10 @@ class ExecuteContractRequest(BaseModel):
 
 class SendSealedRequest(BaseModel):
     send_certificate: bool = True
+
+
+class SignatureReject(BaseModel):
+    reason: str
 
 
 # ─── PROFESSIONAL CRM: PROPERTIES ────────────────────────────
@@ -551,11 +526,6 @@ class VendorCreate(BaseModel):
     id_document_url: Optional[str] = None
     admin_id: Optional[str] = None
 
-class VendorPartnerUpdate(BaseModel):
-    is_commission_partner: bool
-    gross_commission_rate: Decimal
-    wht_rate: Decimal = Decimal("5.0")
-
 class ExpenditureRequestCreate(BaseModel):
     title: str
     description: Optional[str] = None
@@ -564,14 +534,11 @@ class ExpenditureRequestCreate(BaseModel):
     due_date: Optional[date] = None
     vendor_data: Optional[VendorCreate] = None # For inline creation
     amount_gross: Decimal
-    category: Optional[str] = "General"
     payout_method: str # 'direct_pay', 'reimbursement'
     is_wht_applicable: bool = True
     wht_exemption_reason: Optional[str] = None
     proforma_url: Optional[str] = None
     receipt_url: Optional[str] = None
-    property_id: Optional[str] = None
-    development_category: Optional[str] = None # Clearing, Fencing, Acquisition, etc.
 
 class PayoutPaymentData(BaseModel):
     amount: Decimal
@@ -594,7 +561,6 @@ class AssetCreate(BaseModel):
     purchase_date: Optional[date] = None
     procurement_id: Optional[str] = None
     assigned_to: Optional[str] = None
-    auto_expense: Optional[bool] = False
 
 class VoidExpenditureRequest(BaseModel):
     reason: str
@@ -695,44 +661,13 @@ class IncidentCreate(BaseModel):
     incident_date: Optional[date] = None
 
 
-class ProcurementExpenseCreate(BaseModel):
-    property_id: Optional[str] = None
-    estate_draft_id: Optional[str] = None
-    title: str
-    category: str
-    amount: Decimal
-    amount_paid: Optional[Decimal] = 0
-    status: Optional[str] = "paid"
-    vendor_name: Optional[str] = None
-    vendor_id: Optional[str] = None
-    expense_date: Optional[date] = None
-    budget: Optional[Decimal] = 0
-    metadata: Optional[dict] = None
-    notes: Optional[str] = None
-
-
-class EstateVariation(BaseModel):
-    size_sqm: Decimal
-    outright_price: Decimal
-    installment_price: Optional[Decimal] = None
-    total_plots: int
-    acquisition_cost: Optional[Decimal] = 0
-
-class EstateDraftCreate(BaseModel):
-    name: str
-    location: str
-    description: Optional[str] = None
-    total_budget: Optional[Decimal] = 0
-    variations: List[EstateVariation] = []
-
-
 # ─── DISCOUNT CODES ──────────────────────────────────────────
 class DiscountCodeCreate(BaseModel):
     code: Optional[str] = None
-    discount_type: str  # 'percentage' or 'flat'
+    discount_type: str = "percentage"  # "percentage" or "flat"
     discount_value: Decimal
-    is_active: Optional[bool] = True
-    max_uses: Optional[int] = 1
+    is_active: bool = True
+    max_uses: Optional[int] = None
     expires_at: Optional[datetime] = None
 
 
@@ -742,10 +677,10 @@ class DiscountCodeResponse(BaseModel):
     discount_type: str
     discount_value: Decimal
     is_active: bool
-    max_uses: int
-    uses_count: int
-    expires_at: Optional[datetime] = None
-    created_at: datetime
+    max_uses: Optional[int] = None
+    uses_count: int = 0
+    expires_at: Optional[str] = None
+    created_at: Optional[str] = None
     created_by: Optional[str] = None
 
 
@@ -757,25 +692,8 @@ class DiscountCodeValidateResponse(BaseModel):
     discount_amount: Optional[Decimal] = None
 
 
-# ─── CLIENT FEEDBACK ──────────────────────────────────────────
-class ClientFeedbackCreate(BaseModel):
-    contact_id: Optional[str] = None
-    client_id: Optional[str] = None
-    name: Optional[str] = None
-    email: Optional[EmailStr] = None
-    phone: Optional[str] = None
-    user_type: str = "other"  # 'client', 'lead', 'other'
-    feedback_type: str = "general"  # 'satisfaction', 'complaint', 'suggestion', 'inquiry', 'general'
-    experience_rating: int  # 1 to 5
-    nps_score: int  # 0 to 10
-    communication_rating: int  # 1 to 5
-    comments: str
-    property_interest_id: Optional[str] = None
-    contact_consent: bool = False
-    attachment_urls: Optional[List[str]] = []
-
-
 class ClientFeedbackReview(BaseModel):
-    status: str  # 'new', 'reviewed', 'contacted', 'resolved'
+    status: str
     admin_notes: Optional[str] = None
+
 

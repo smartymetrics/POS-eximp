@@ -1,13 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi.encoders import jsonable_encoder
 from database import get_db, db_execute
-from routers.auth import verify_token, has_any_role
+from routers.auth import verify_token
 from routers.analytics import log_activity
 from models import PaymentCreate, PaymentUpdate
 from pdf_service import generate_refund_receipt_pdf
 from fastapi.responses import StreamingResponse
 import io
 
+from commission_service import get_commission_rate
 from email_service import send_commission_earned_email
 from datetime import date
 
@@ -25,24 +26,7 @@ async def record_payment(
     inv = await db_execute(lambda: db.table("invoices").select("*").eq("id", data.invoice_id).execute())
     if not inv.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
-
-    # Guard: block duplicate reference on the same invoice to prevent double-logging
-    # when Finance manually records a payment that the portal already created.
-    if data.reference:
-        dup_check = await db_execute(lambda: db.table("payments")
-            .select("id")
-            .eq("invoice_id", data.invoice_id)
-            .eq("reference", data.reference)
-            .eq("is_voided", False)
-            .execute()
-        )
-        if dup_check.data:
-            raise HTTPException(
-                status_code=409,
-                detail=f"A payment with reference '{data.reference}' already exists for this invoice. "
-                       "If this is a legitimate new payment, use a unique reference."
-            )
-
+    
     payment_data = {
         "invoice_id": data.invoice_id,
         "client_id": data.client_id,
@@ -78,25 +62,21 @@ async def record_payment(
                 rep_id = rep_res.data[0]["id"]
                 
         if rep_id:
-            # Calculate commission configuration
-            from commission_service import get_commission_config
-            config = await db_execute(lambda: get_commission_config(
+            # Calculate commission rate
+            rate = await db_execute(lambda: get_commission_rate(
                 sales_rep_id=rep_id,
                 estate_name=invoice.get("property_name", ""),
                 verification_date=date.today(),
                 db=db
             ))
-            
             deposit = float(data.amount)
-            gross_comm = round(deposit * config["gross_rate"] / 100, 2)
-            wht_amt = round(gross_comm * config["wht_rate"] / 100, 2)
-            net_comm = gross_comm - wht_amt
+            commission_amount = round(deposit * rate / 100, 2)
             
             # Fetch client for email payload
             client_res = await db_execute(lambda: db.table("clients").select("*").eq("id", data.client_id).execute())
             client_data = client_res.data[0] if client_res.data else {}
             
-            # Insert professional commission earning record
+            # Insert standard commission earning
             earning_res = await db_execute(lambda: db.table("commission_earnings").insert({
                 "sales_rep_id": rep_id,
                 "invoice_id": invoice["id"],
@@ -104,38 +84,21 @@ async def record_payment(
                 "client_id": data.client_id,
                 "estate_name": invoice.get("property_name", ""),
                 "payment_amount": deposit,
-                "commission_rate": config["gross_rate"],
-                "commission_amount": net_comm, # Compatibility field
-                "gross_commission": gross_comm,
-                "wht_amount": wht_amt,
-                "net_commission": net_comm
+                "commission_rate": rate,
+                "commission_amount": commission_amount,
             }).execute())
             earning = earning_res.data[0]
             
-            # Notify rep
+            # Send email
             rep_res = await db_execute(lambda: db.table("sales_reps").select("*").eq("id", rep_id).execute())
             if rep_res.data:
-                rep_data = rep_res.data[0]
                 background_tasks.add_task(
                     send_commission_earned_email,
-                    rep=rep_data,
+                    rep=rep_res.data[0],
                     client=client_data,
                     invoice=invoice,
                     earning=earning
                 )
-                
-                # --- NEW: Bell Notification for Portal ---
-                from routers.hr import send_notification
-                if rep_data.get("email"):
-                    admin_check = await db_execute(lambda: db.table("admins").select("id").eq("email", rep_data["email"]).execute())
-                    if admin_check.data:
-                        staff_id = admin_check.data[0]["id"]
-                        await send_notification(
-                            staff_id,
-                            "Commission Earned",
-                            f"✨ You've earned a commission of ₦{net_comm:,.2f} for {client_data.get('full_name')} (Invoice #{invoice.get('invoice_number')}). It is now awaiting payout processing.",
-                            "commission_earned"
-                        )
     # -----------------------------------------------------
 
     background_tasks.add_task(
@@ -154,10 +117,8 @@ async def record_payment(
         new_status = fresh_inv.data[0]["status"]
         if new_status == "paid":
             await db_execute(lambda: db.table("clients").update({"pipeline_stage": "closed"}).eq("id", data.client_id).execute())
-        elif new_status == "partial":
-            # Has paid something but balance remains — move to "paid" (partial-paid) stage
-            await db_execute(lambda: db.table("clients").update({"pipeline_stage": "paid"}).eq("id", data.client_id).execute())
-        # "unpaid" — payment voided/reversed — do not advance the pipeline stage
+        elif new_status in ["partial", "unpaid"]:
+            await db_execute(lambda: db.table("clients").update({"pipeline_stage": "contract"}).eq("id", data.client_id).execute())
 
     inv_num = inv.data[0].get('invoice_number', 'N/A')
     return {"message": "Payment recorded", "payment": result.data[0], "invoice_number": inv_num}
@@ -180,7 +141,7 @@ async def update_payment(
     current_admin=Depends(verify_token)
 ):
     db = get_db()
-    if not has_any_role(current_admin, "admin"):
+    if current_admin.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Only administrators can edit payments")
     
     # 1. Fetch current payment to get invoice_id
