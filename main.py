@@ -46,7 +46,8 @@ from routers import (
     kyc_links,
     discount_codes,
     blog,
-    cooperatives
+    cooperatives,
+    whatsapp
 )
 from routers import refunds
 from routers import feedback
@@ -212,6 +213,7 @@ app.include_router(feedback.router, prefix="/api/feedback", tags=["feedback"])
 
 app.include_router(blog.router, prefix="/api/blog", tags=["blog"])
 app.include_router(cooperatives.router, prefix="/api/cooperatives", tags=["cooperatives"])
+app.include_router(whatsapp.router, prefix="/api/whatsapp", tags=["whatsapp"])
 
 
 

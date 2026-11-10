@@ -259,9 +259,16 @@ async def dispatch_member_notification(
     if member.get("notify_sms") and member.get("phone"):
         logger.info(f"[SMS Gateway Trigger] Sending SMS to {member['phone']}: {title} - {message}")
 
-    # 4. WhatsApp DM Notification
+    # 4. WhatsApp DM Notification (Dispatched from Linked Support Line)
     if member.get("notify_whatsapp") and member.get("phone"):
-        logger.info(f"[WhatsApp Business Trigger] Sending WhatsApp DM to {member['phone']}: {title} - {message}")
+        try:
+            from routers.whatsapp import send_whatsapp_message
+            coop_name = member.get("cooperatives", {}).get("name") if isinstance(member.get("cooperatives"), dict) else "Cooperative Scheme"
+            wa_text = f"*{title}*\n\n{message}\n\nMember: *{member.get('full_name')}*\nSub-Index: *#{member.get('sub_index', '')}*\nScheme: *{coop_name}*\n\n- Eximp & Cloves Infrastructure Limited"
+            await send_whatsapp_message(member["phone"], wa_text)
+            logger.info(f"[WhatsApp Gateway Trigger] Dispatched to {member['phone']}")
+        except Exception as wa_err:
+            logger.warning(f"[WhatsApp Gateway Trigger] Error sending to {member.get('phone')}: {wa_err}")
 
 
 # ── Public / Shared Login Endpoint ───────────────────────────────────────────
@@ -533,7 +540,7 @@ async def upload_cooperative_document(
     db = get_db()
     content_type = file.content_type or mimetypes.guess_type(original_filename)[0] or "application/octet-stream"
 
-    bucket_name = "marketing" if ext in {"png", "jpg", "jpeg", "webp"} else "legal-vault"
+    bucket_name = "marketing" if ext in {"png", "jpg", "jpeg", "webp"} else "signatures"
 
     try:
         await db_execute(lambda: db.storage.from_(bucket_name).upload(
@@ -543,7 +550,7 @@ async def upload_cooperative_document(
         ))
         public_url = db.storage.from_(bucket_name).get_public_url(storage_path)
     except Exception as e:
-        logger.error(f"Failed to upload document to storage: {e}")
+        logger.warning(f"Storage upload to {bucket_name} failed: {e}, falling back to signatures bucket")
         try:
             await db_execute(lambda: db.storage.from_("signatures").upload(
                 path=storage_path,

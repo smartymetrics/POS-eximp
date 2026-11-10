@@ -1,5 +1,36 @@
+# Environment & Secrets
 .env
-.venv
-__pycache__
+.env.*
+!.env.example
+
+# Python
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
 pos-eximp/Lib/site-packages
+.pytest_cache/
+
+# Node.js & WhatsApp Gateway
+node_modules/
+whatsapp-service/node_modules/
+.wa_auth/
+whatsapp-service/.wa_auth/
+**/.wa_auth/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Logs & Scratch files
+*.log
+*.tmp
 .aider*
+scratch/
+
+# Operating System & IDEs
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

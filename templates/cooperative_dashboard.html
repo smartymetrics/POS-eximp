@@ -159,6 +159,9 @@
         <button onclick="switchTab('history')" id="tab-history" class="tab-btn py-3 whitespace-nowrap">
             <i class="fas fa-clock-rotate-left mr-1.5"></i> Admin Action Log
         </button>
+        <button onclick="switchTab('whatsapp')" id="tab-whatsapp" class="tab-btn py-3 whitespace-nowrap">
+            <i class="fab fa-whatsapp mr-1.5 text-emerald-500"></i> WhatsApp Support Line
+        </button>
     </div>
 
     <!-- Main Container -->
@@ -187,27 +190,6 @@
                     <span class="text-xs text-theme-secondary font-medium">Outstanding Balance</span>
                     <h3 id="statOutstandingBalance" class="text-xl lg:text-2xl font-bold text-amber-500 mt-1">NGN 0.00</h3>
                     <span class="text-[11px] text-theme-secondary mt-1 block">Across All Members</span>
-                </div>
-            </div>
-
-            <!-- Society Statement of Account Card -->
-            <div class="bg-surface border border-theme rounded-xl p-4 lg:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-lg bg-[#C47D0A]/10 flex items-center justify-center text-[#C47D0A]">
-                        <i class="fas fa-file-invoice-dollar text-lg"></i>
-                    </div>
-                    <div>
-                        <h4 class="text-sm font-bold text-theme-primary">Official Society Statement of Account</h4>
-                        <p class="text-xs text-theme-secondary">Comprehensive financial ledger, land remittances, and transaction audit trail.</p>
-                    </div>
-                </div>
-                <div class="flex items-center gap-2">
-                    <button onclick="viewSocietyStatement('html')" class="bg-elevated border border-theme hover:bg-surface text-theme-primary px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition">
-                        <i class="fas fa-eye text-[#C47D0A]"></i> View HTML
-                    </button>
-                    <button onclick="viewSocietyStatement('pdf')" class="btn-gold px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm">
-                        <i class="fas fa-download"></i> Download PDF Statement
-                    </button>
                 </div>
             </div>
 
@@ -315,16 +297,27 @@
                         </div>
                         <!-- Certificate Document Upload Zone -->
                         <div>
-                            <label class="block text-[11px] font-semibold text-theme-secondary uppercase mb-1">Cooperative Registration Certificate</label>
-                            <div id="certUploadZone" onclick="document.getElementById('certFileInput').click()" class="border-2 border-dashed border-theme hover:border-[#C47D0A] rounded-xl p-4 text-center cursor-pointer transition bg-elevated/40 hover:bg-elevated/80 group">
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="block text-[11px] font-semibold text-theme-secondary uppercase">Cooperative Registration Certificate</label>
+                                <button type="button" onclick="toggleManualUrl('certManualBox', this)" class="text-[10px] text-[#C47D0A] hover:underline transition">Or paste URL</button>
+                            </div>
+                            <div id="certUploadZone" onclick="document.getElementById('certFileInput').click()"
+                                ondragover="event.preventDefault(); this.classList.add('border-[#C47D0A]', 'bg-amber-500/10');"
+                                ondragleave="this.classList.remove('border-[#C47D0A]', 'bg-amber-500/10');"
+                                ondrop="handleDropUpload(event, 'certificate', 'kycCertUrl', 'certStatus', 'certUploadZone', 'certFileInput')"
+                                class="border-2 border-dashed border-theme hover:border-[#C47D0A] rounded-xl p-4 text-center cursor-pointer transition bg-elevated/40 hover:bg-elevated/80 group">
                                 <input type="file" id="certFileInput" accept=".pdf,.png,.jpg,.jpeg" class="hidden" onchange="handleKycFileUpload(this, 'certificate', 'kycCertUrl', 'certStatus', 'certUploadZone')">
                                 <div class="flex flex-col items-center justify-center gap-1.5">
                                     <div class="w-9 h-9 rounded-full bg-surface group-hover:bg-[#C47D0A]/10 flex items-center justify-center text-theme-secondary group-hover:text-[#C47D0A] transition">
                                         <i class="fas fa-cloud-arrow-up text-sm"></i>
                                     </div>
-                                    <span class="text-xs font-semibold text-theme-primary">Click to Upload Certificate</span>
-                                    <span class="text-[10px] text-theme-secondary">PDF, PNG, JPG (Max 15MB) - Stores directly to Cloudinary</span>
+                                    <span class="text-xs font-semibold text-theme-primary">Click or Drag &amp; Drop Certificate</span>
+                                    <span class="text-[10px] text-theme-secondary">PDF, PNG, JPG (Max 15MB) - Stores directly to Cloud Storage</span>
                                 </div>
+                            </div>
+                            <div id="certManualBox" class="hidden mt-1.5">
+                                <input type="url" placeholder="https://res.cloudinary.com/.../certificate.pdf" oninput="applyManualUrl(this.value, 'kycCertUrl', 'certStatus', 'certFilename', 'certPreviewLink', 'certUploadZone')"
+                                    class="w-full px-3 py-1.5 text-xs rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
                             </div>
                             <div id="certStatus" class="hidden mt-2 text-xs flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
                                 <div class="flex items-center gap-2 truncate">
@@ -341,16 +334,27 @@
 
                         <!-- Cooperative Bye-Laws Upload Zone -->
                         <div>
-                            <label class="block text-[11px] font-semibold text-theme-secondary uppercase mb-1">Certified Cooperative Bye-Laws</label>
-                            <div id="byeLawsUploadZone" onclick="document.getElementById('byeLawsFileInput').click()" class="border-2 border-dashed border-theme hover:border-[#C47D0A] rounded-xl p-4 text-center cursor-pointer transition bg-elevated/40 hover:bg-elevated/80 group">
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="block text-[11px] font-semibold text-theme-secondary uppercase">Certified Cooperative Bye-Laws</label>
+                                <button type="button" onclick="toggleManualUrl('byeLawsManualBox', this)" class="text-[10px] text-[#C47D0A] hover:underline transition">Or paste URL</button>
+                            </div>
+                            <div id="byeLawsUploadZone" onclick="document.getElementById('byeLawsFileInput').click()"
+                                ondragover="event.preventDefault(); this.classList.add('border-[#C47D0A]', 'bg-amber-500/10');"
+                                ondragleave="this.classList.remove('border-[#C47D0A]', 'bg-amber-500/10');"
+                                ondrop="handleDropUpload(event, 'bye_laws', 'kycByeLawsUrl', 'byeLawsStatus', 'byeLawsUploadZone', 'byeLawsFileInput')"
+                                class="border-2 border-dashed border-theme hover:border-[#C47D0A] rounded-xl p-4 text-center cursor-pointer transition bg-elevated/40 hover:bg-elevated/80 group">
                                 <input type="file" id="byeLawsFileInput" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" class="hidden" onchange="handleKycFileUpload(this, 'bye_laws', 'kycByeLawsUrl', 'byeLawsStatus', 'byeLawsUploadZone')">
                                 <div class="flex flex-col items-center justify-center gap-1.5">
                                     <div class="w-9 h-9 rounded-full bg-surface group-hover:bg-[#C47D0A]/10 flex items-center justify-center text-theme-secondary group-hover:text-[#C47D0A] transition">
                                         <i class="fas fa-file-shield text-sm"></i>
                                     </div>
-                                    <span class="text-xs font-semibold text-theme-primary">Click to Upload Certified Bye-Laws</span>
-                                    <span class="text-[10px] text-theme-secondary">PDF, DOCX, Images (Max 15MB) - Stores directly to Cloudinary</span>
+                                    <span class="text-xs font-semibold text-theme-primary">Click or Drag &amp; Drop Certified Bye-Laws</span>
+                                    <span class="text-[10px] text-theme-secondary">PDF, DOCX, Images (Max 15MB) - Stores directly to Cloud Storage</span>
                                 </div>
+                            </div>
+                            <div id="byeLawsManualBox" class="hidden mt-1.5">
+                                <input type="url" placeholder="https://res.cloudinary.com/.../bye-laws.pdf" oninput="applyManualUrl(this.value, 'kycByeLawsUrl', 'byeLawsStatus', 'byeLawsFilename', 'byeLawsPreviewLink', 'byeLawsUploadZone')"
+                                    class="w-full px-3 py-1.5 text-xs rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
                             </div>
                             <div id="byeLawsStatus" class="hidden mt-2 text-xs flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
                                 <div class="flex items-center gap-2 truncate">
@@ -367,13 +371,24 @@
 
                         <!-- Optional Board Resolution Upload Zone -->
                         <div>
-                            <label class="block text-[11px] font-semibold text-theme-secondary uppercase mb-1">Board Resolution / Trustees Minutes (Optional)</label>
-                            <div id="resolutionUploadZone" onclick="document.getElementById('resolutionFileInput').click()" class="border-2 border-dashed border-theme hover:border-[#C47D0A] rounded-xl p-3 text-center cursor-pointer transition bg-elevated/40 hover:bg-elevated/80 group">
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="block text-[11px] font-semibold text-theme-secondary uppercase">Board Resolution / Trustees Minutes (Optional)</label>
+                                <button type="button" onclick="toggleManualUrl('resolutionManualBox', this)" class="text-[10px] text-[#C47D0A] hover:underline transition">Or paste URL</button>
+                            </div>
+                            <div id="resolutionUploadZone" onclick="document.getElementById('resolutionFileInput').click()"
+                                ondragover="event.preventDefault(); this.classList.add('border-[#C47D0A]', 'bg-amber-500/10');"
+                                ondragleave="this.classList.remove('border-[#C47D0A]', 'bg-amber-500/10');"
+                                ondrop="handleDropUpload(event, 'resolution', 'kycResolutionUrl', 'resolutionStatus', 'resolutionUploadZone', 'resolutionFileInput')"
+                                class="border-2 border-dashed border-theme hover:border-[#C47D0A] rounded-xl p-3 text-center cursor-pointer transition bg-elevated/40 hover:bg-elevated/80 group">
                                 <input type="file" id="resolutionFileInput" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" class="hidden" onchange="handleKycFileUpload(this, 'resolution', 'kycResolutionUrl', 'resolutionStatus', 'resolutionUploadZone')">
                                 <div class="flex flex-col items-center justify-center gap-1">
-                                    <span class="text-xs font-semibold text-theme-primary">Upload Board Resolution / Minutes</span>
+                                    <span class="text-xs font-semibold text-theme-primary">Click or Drag &amp; Drop Resolution / Minutes</span>
                                     <span class="text-[10px] text-theme-secondary">PDF, DOCX, Images (Max 15MB)</span>
                                 </div>
+                            </div>
+                            <div id="resolutionManualBox" class="hidden mt-1.5">
+                                <input type="url" placeholder="https://res.cloudinary.com/.../resolution.pdf" oninput="applyManualUrl(this.value, 'kycResolutionUrl', 'resolutionStatus', 'resolutionFilename', 'resolutionPreviewLink', 'resolutionUploadZone')"
+                                    class="w-full px-3 py-1.5 text-xs rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
                             </div>
                             <div id="resolutionStatus" class="hidden mt-2 text-xs flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
                                 <div class="flex items-center gap-2 truncate">
@@ -472,6 +487,114 @@
                         </tbody>
                     </table>
                 </div>
+            </div>
+        </section>
+
+        <!-- TAB 6: WHATSAPP SUPPORT LINE GATEWAY -->
+        <section id="view-whatsapp" class="hidden space-y-6">
+            <div class="bg-surface border border-theme rounded-xl p-5 lg:p-7 space-y-6">
+                <!-- Header -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-theme">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 text-2xl">
+                            <i class="fab fa-whatsapp"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-base font-bold text-theme-primary">Official WhatsApp Support Line Gateway</h3>
+                            <p class="text-xs text-theme-secondary">
+                                Link an official company WhatsApp phone line to automatically send payment receipts, statements, and alerts to members.
+                            </p>
+                        </div>
+                    </div>
+                    <div>
+                        <span id="waStatusBadge" class="text-[11px] font-bold px-2.5 py-1 rounded-full uppercase bg-gray-500/10 text-theme-secondary border border-theme">
+                            Checking Status...
+                        </span>
+                    </div>
+                </div>
+
+                <!-- STATE 1: DISCONNECTED -->
+                <div id="waDisconnectedView" class="text-center py-10 space-y-4">
+                    <div class="w-16 h-16 rounded-2xl bg-amber-500/10 mx-auto flex items-center justify-center text-[#C47D0A] text-3xl">
+                        <i class="fas fa-qrcode"></i>
+                    </div>
+                    <div class="max-w-md mx-auto">
+                        <h4 class="text-sm font-bold text-theme-primary">No Support Line Linked</h4>
+                        <p class="text-xs text-theme-secondary mt-1 leading-relaxed">
+                            Connect your official Eximp &amp; Cloves support phone via QR code. The session will be encrypted and saved to Cloudinary so it automatically stays connected even after server updates.
+                        </p>
+                    </div>
+                    <div>
+                        <button id="btnConnectWa" onclick="connectWhatsAppSupportLine()" class="btn-gold px-6 py-2.5 rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-2">
+                            <i class="fab fa-whatsapp text-sm"></i> Connect WhatsApp Support Line
+                        </button>
+                    </div>
+                </div>
+
+                <!-- STATE 2: CONNECTING / WAITING FOR QR SCAN -->
+                <div id="waConnectingView" class="hidden text-center py-8 space-y-5">
+                    <div class="max-w-md mx-auto">
+                        <h4 class="text-sm font-bold text-theme-primary">Scan QR Code with WhatsApp</h4>
+                        <p class="text-xs text-theme-secondary mt-1">
+                            1. Open WhatsApp on your official support phone.<br>
+                            2. Go to <strong>Settings</strong> or <strong>Menu</strong> &gt; <strong>Linked Devices</strong>.<br>
+                            3. Tap <strong>Link a Device</strong> and point your camera at this QR code.
+                        </p>
+                    </div>
+                    <div class="inline-block p-4 bg-white rounded-2xl shadow-lg border border-gray-200">
+                        <img id="waQrImage" src="" alt="Pairing QR Code" class="w-64 h-64 mx-auto object-contain">
+                    </div>
+                    <div class="flex items-center justify-center gap-2 text-xs text-theme-secondary">
+                        <i class="fas fa-spinner fa-spin text-[#C47D0A]"></i>
+                        <span>Waiting for device scan... This screen refreshes automatically.</span>
+                    </div>
+                    <div>
+                        <button onclick="loadWhatsAppStatus()" class="px-4 py-1.5 rounded-lg text-xs bg-elevated border border-theme text-theme-secondary hover:text-theme-primary">
+                            <i class="fas fa-arrows-rotate mr-1"></i> Refresh QR Code
+                        </button>
+                    </div>
+                </div>
+
+                <!-- STATE 3: CONNECTED -->
+                <div id="waConnectedView" class="hidden space-y-6">
+                    <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-500 text-lg">
+                                <i class="fas fa-circle-check"></i>
+                            </div>
+                            <div>
+                                <div class="text-[11px] font-bold text-emerald-500 uppercase tracking-wider">Active Gateway Line</div>
+                                <h4 id="waConnectedPhone" class="text-base font-bold text-theme-primary font-mono mt-0.5">+234 (Connected Phone)</h4>
+                                <span class="text-[11px] text-theme-secondary">Multi-device session backed up to Cloudinary &bull; Ready for automated dispatches</span>
+                            </div>
+                        </div>
+                        <button onclick="disconnectWhatsAppSupportLine()" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition">
+                            <i class="fas fa-link-slash mr-1"></i> Unlink Phone
+                        </button>
+                    </div>
+
+                    <!-- Test Message Card -->
+                    <div class="bg-elevated border border-theme rounded-xl p-5 space-y-3">
+                        <h4 class="text-xs font-bold text-theme-primary uppercase tracking-wider">Send Test WhatsApp Message</h4>
+                        <p class="text-xs text-theme-secondary">Verify that your linked support phone can deliver messages properly.</p>
+                        <form onsubmit="sendWhatsAppTestMessage(event)" class="space-y-3 max-w-lg">
+                            <div>
+                                <label class="block text-[11px] font-semibold text-theme-secondary uppercase mb-1">Destination Phone Number</label>
+                                <input type="text" id="waTestPhone" required placeholder="e.g. 08012345678 or +234..."
+                                    class="w-full px-3 py-2 text-xs rounded-lg bg-surface border border-theme text-theme-primary focus:outline-none focus:border-[#C47D0A]">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-semibold text-theme-secondary uppercase mb-1">Message Content</label>
+                                <textarea id="waTestMsg" rows="2" class="w-full px-3 py-2 text-xs rounded-lg bg-surface border border-theme text-theme-primary focus:outline-none focus:border-[#C47D0A]">Hello! This is a verified test message from Eximp &amp; Cloves Infrastructure Limited support line.</textarea>
+                            </div>
+                            <button type="submit" class="btn-gold px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5">
+                                <i class="fas fa-paper-plane"></i> Send Test Message
+                            </button>
+                            <div id="waTestFeedback"></div>
+                        </form>
+                    </div>
+                </div>
+
             </div>
         </section>
 
@@ -725,7 +848,7 @@
 
         // Tab Switcher Logic
         function switchTab(tabId) {
-            ['overview', 'members', 'kyc', 'transfers', 'history'].forEach(t => {
+            ['overview', 'members', 'kyc', 'transfers', 'history', 'whatsapp'].forEach(t => {
                 const view = document.getElementById(`view-${t}`);
                 const tab = document.getElementById(`tab-${t}`);
                 if (view) view.classList.toggle('hidden', t !== tabId);
@@ -735,6 +858,147 @@
             if (tabId === 'members') loadMembers();
             if (tabId === 'history') loadAuditHistory();
             if (tabId === 'transfers') loadTransfers();
+            if (tabId === 'whatsapp') loadWhatsAppStatus();
+        }
+
+        let waPollInterval = null;
+
+        async function loadWhatsAppStatus() {
+            try {
+                const res = await fetch('/api/whatsapp/status', {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                const data = await res.json();
+                renderWhatsAppGatewayUi(data);
+            } catch (err) {
+                console.warn('Could not load WhatsApp status:', err);
+            }
+        }
+
+        function renderWhatsAppGatewayUi(data) {
+            const status = data.status || 'disconnected';
+            const badge = document.getElementById('waStatusBadge');
+            const disconnectedView = document.getElementById('waDisconnectedView');
+            const connectingView = document.getElementById('waConnectingView');
+            const connectedView = document.getElementById('waConnectedView');
+
+            if (status === 'connected') {
+                if (waPollInterval) { clearInterval(waPollInterval); waPollInterval = null; }
+                if (badge) {
+                    badge.textContent = 'CONNECTED & VERIFIED';
+                    badge.className = 'text-[11px] font-bold px-2.5 py-1 rounded-full uppercase bg-emerald-500/10 text-emerald-500 border border-emerald-500/20';
+                }
+                if (disconnectedView) disconnectedView.classList.add('hidden');
+                if (connectingView) connectingView.classList.add('hidden');
+                if (connectedView) connectedView.classList.remove('hidden');
+
+                const phoneDisplay = document.getElementById('waConnectedPhone');
+                if (phoneDisplay && data.user) {
+                    phoneDisplay.textContent = `+${data.user.phone || data.user.id || 'Linked Support Line'}`;
+                }
+            } else if (status === 'connecting') {
+                if (badge) {
+                    badge.textContent = 'WAITING FOR QR SCAN';
+                    badge.className = 'text-[11px] font-bold px-2.5 py-1 rounded-full uppercase bg-amber-500/10 text-[#C47D0A] border border-amber-500/20';
+                }
+                if (disconnectedView) disconnectedView.classList.add('hidden');
+                if (connectingView) connectingView.classList.remove('hidden');
+                if (connectedView) connectedView.classList.add('hidden');
+
+                const qrImg = document.getElementById('waQrImage');
+                if (qrImg && data.qrCode) {
+                    qrImg.src = data.qrCode;
+                }
+
+                if (!waPollInterval) {
+                    waPollInterval = setInterval(loadWhatsAppStatus, 3000);
+                }
+            } else {
+                if (waPollInterval) { clearInterval(waPollInterval); waPollInterval = null; }
+                if (badge) {
+                    badge.textContent = 'DISCONNECTED';
+                    badge.className = 'text-[11px] font-bold px-2.5 py-1 rounded-full uppercase bg-gray-500/10 text-theme-secondary border border-theme';
+                }
+                if (disconnectedView) disconnectedView.classList.remove('hidden');
+                if (connectingView) connectingView.classList.add('hidden');
+                if (connectedView) connectedView.classList.add('hidden');
+            }
+        }
+
+        async function connectWhatsAppSupportLine() {
+            const btn = document.getElementById('btnConnectWa');
+            if (btn) btn.disabled = true;
+            try {
+                const res = await fetch('/api/whatsapp/connect', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                const data = await res.json();
+                renderWhatsAppGatewayUi(data);
+                if (!waPollInterval) {
+                    waPollInterval = setInterval(loadWhatsAppStatus, 3000);
+                }
+            } catch (err) {
+                alert('Could not start WhatsApp connection: ' + err.message);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        async function disconnectWhatsAppSupportLine() {
+            if (!confirm('Are you sure you want to unlink the WhatsApp support line? Automated messages will be paused until a phone is re-linked.')) {
+                return;
+            }
+            try {
+                const res = await fetch('/api/whatsapp/disconnect', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                const data = await res.json();
+                renderWhatsAppGatewayUi(data);
+            } catch (err) {
+                alert('Error unlinking WhatsApp line: ' + err.message);
+            }
+        }
+
+        async function sendWhatsAppTestMessage(e) {
+            e.preventDefault();
+            const phone = document.getElementById('waTestPhone').value;
+            const message = document.getElementById('waTestMsg').value;
+            const statusBox = document.getElementById('waTestFeedback');
+
+            if (statusBox) {
+                statusBox.textContent = 'Sending test WhatsApp message...';
+                statusBox.className = 'text-xs text-[#C47D0A] font-semibold mt-2';
+            }
+
+            try {
+                const res = await fetch('/api/whatsapp/send-test', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    },
+                    body: JSON.stringify({ phone, message })
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    if (statusBox) {
+                        statusBox.textContent = 'Test WhatsApp message sent successfully!';
+                        statusBox.className = 'text-xs text-emerald-500 font-semibold mt-2';
+                    }
+                } else {
+                    if (statusBox) {
+                        statusBox.textContent = 'Failed: ' + (data.detail || data.error || 'Message not delivered');
+                        statusBox.className = 'text-xs text-red-500 font-semibold mt-2';
+                    }
+                }
+            } catch (err) {
+                if (statusBox) {
+                    statusBox.textContent = 'Network error: ' + err.message;
+                    statusBox.className = 'text-xs text-red-500 font-semibold mt-2';
+                }
+            }
         }
 
         function getAuthToken() {
@@ -921,13 +1185,6 @@
             }
         }
 
-        function viewSocietyStatement(format) {
-            if (!currentCoopId) return;
-            const token = getAuthToken();
-            const url = `/api/cooperatives/${currentCoopId}/statement/${format}?token=${token}`;
-            window.open(url, '_blank');
-        }
-
         async function loadMembers() {
             const tbody = document.getElementById('membersTableBody');
             if (!tbody) return;
@@ -967,14 +1224,9 @@
                             </div>
                         </td>
                         <td class="py-3 px-4 text-right">
-                            <div class="flex items-center justify-end gap-1.5">
-                                <a href="/api/cooperatives/members/${m.id}/statement/pdf?token=${getAuthToken()}" target="_blank" title="Download Member Statement of Account" class="px-2 py-1 text-[11px] font-semibold text-emerald-500 hover:bg-emerald-500/10 rounded transition inline-flex items-center gap-1">
-                                    <i class="fas fa-file-invoice"></i> Statement
-                                </a>
-                                <button onclick="openUnlockModal('${m.id}')" class="px-2 py-1 text-[11px] font-semibold text-[#C47D0A] hover:bg-[#C47D0A]/10 rounded transition">
-                                    Unlock Doc
-                                </button>
-                            </div>
+                            <button onclick="openUnlockModal('${m.id}')" class="px-2 py-1 text-[11px] font-semibold text-[#C47D0A] hover:bg-[#C47D0A]/10 rounded transition">
+                                Unlock Doc
+                            </button>
                         </td>
                     </tr>
                 `).join('');
@@ -1147,13 +1399,54 @@
                 alert(err.message);
             }
         }
-        async function handleKycFileUpload(inputEl, docType, urlInputId, statusContainerId, dropzoneId) {
-            const file = inputEl.files[0];
+        function toggleManualUrl(boxId, btn) {
+            const box = document.getElementById(boxId);
+            if (!box) return;
+            box.classList.toggle('hidden');
+            if (box.classList.contains('hidden')) {
+                btn.textContent = 'Or paste URL';
+            } else {
+                btn.textContent = 'Hide URL field';
+                const inp = box.querySelector('input');
+                if (inp) inp.focus();
+            }
+        }
+
+        function applyManualUrl(val, hiddenUrlId, statusContainerId, filenameId, previewLinkId, dropzoneId) {
+            const trimmed = (val || '').trim();
+            document.getElementById(hiddenUrlId).value = trimmed;
+            if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+                const dropzone = document.getElementById(dropzoneId);
+                const statusBox = document.getElementById(statusContainerId);
+                if (dropzone) dropzone.classList.add('hidden');
+                if (statusBox) {
+                    statusBox.classList.remove('hidden');
+                    const filenameEl = document.getElementById(filenameId);
+                    if (filenameEl) filenameEl.textContent = trimmed.split('/').pop().split('?')[0] || 'Linked Document';
+                    const prevLink = document.getElementById(previewLinkId);
+                    if (prevLink) prevLink.href = trimmed;
+                }
+            }
+        }
+
+        function handleDropUpload(event, docType, urlInputId, statusContainerId, dropzoneId, fileInputId) {
+            event.preventDefault();
+            const dropzone = document.getElementById(dropzoneId);
+            if (dropzone) dropzone.classList.remove('border-[#C47D0A]', 'bg-amber-500/10');
+            const files = event.dataTransfer ? event.dataTransfer.files : null;
+            if (files && files.length > 0) {
+                const fileInput = document.getElementById(fileInputId);
+                if (fileInput) fileInput.files = files;
+                handleKycFileUpload(files[0], docType, urlInputId, statusContainerId, dropzoneId);
+            }
+        }
+
+        async function handleKycFileUpload(inputOrFile, docType, urlInputId, statusContainerId, dropzoneId) {
+            const file = (inputOrFile && inputOrFile.files) ? inputOrFile.files[0] : inputOrFile;
             if (!file) return;
 
             if (file.size > 15 * 1024 * 1024) {
                 alert('File size exceeds the 15MB limit. Please upload a smaller document.');
-                inputEl.value = '';
                 return;
             }
 
@@ -1162,7 +1455,7 @@
             dropzone.innerHTML = `
                 <div class="flex items-center justify-center gap-2 py-4 text-xs text-[#C47D0A]">
                     <i class="fas fa-spinner fa-spin text-base"></i>
-                    <span>Uploading ${file.name} to Cloudinary...</span>
+                    <span>Uploading ${file.name} to Cloud Storage...</span>
                 </div>
             `;
 
@@ -1319,7 +1612,14 @@
             window.location.replace('/login');
         }
 
-        window.addEventListener('DOMContentLoaded', initCoopPortal);
+        window.addEventListener('DOMContentLoaded', () => {
+            initCoopPortal();
+            loadWhatsAppStatus();
+            if (localStorage.getItem('open_wa_tab') === '1') {
+                localStorage.removeItem('open_wa_tab');
+                switchTab('whatsapp');
+            }
+        });
     </script>
 </body>
 </html>
