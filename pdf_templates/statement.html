@@ -76,7 +76,7 @@
     <tr>
       <td><h1>Statement of Accounts</h1></td>
       <td class="period-cell">
-        Period: {{ period_start }} — {{ period_end }}<br>
+        Period: {{ period_start }} - {{ period_end }}<br>
         Generated: {{ generated_at }}
       </td>
     </tr>
@@ -155,8 +155,8 @@
           <span class="badge badge-{{ tx.type | lower }}">{{ tx.type }}</span>
         </td>
         <td>{{ tx.ref }}</td>
-        <td class="text-right" style="padding: 10px 15px;">{% if tx.amount %}{{ format_currency(tx.amount) }}{% else %}—{% endif %}</td>
-        <td class="text-right" style="padding: 10px 15px;">{% if tx.payment %}{{ format_currency(tx.payment) }}{% else %}—{% endif %}</td>
+        <td class="text-right" style="padding: 10px 15px;">{% if tx.amount %}{{ format_currency(tx.amount) }}{% else %}-{% endif %}</td>
+        <td class="text-right" style="padding: 10px 15px;">{% if tx.payment %}{{ format_currency(tx.payment) }}{% else %}-{% endif %}</td>
         <td class="text-right" style="padding: 10px 15px;"><strong>{{ format_currency(tx.balance) }}</strong></td>
       </tr>
       {% endfor %}

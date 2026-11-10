@@ -54,7 +54,7 @@ cloudinary.config(
 # Everything else is treated as private and uploaded as "authenticated",
 # which requires a signed URL to view — matching Supabase's signed-URL
 # buckets (NIN, CAC, contracts, payroll docs, refund receipts, etc.)
-PUBLIC_BUCKETS = {"marketing", "chat-media", "signatures"}
+PUBLIC_BUCKETS = {"marketing", "chat-media", "signatures", "cooperatives", "documents", "legal-vault"}
 
 
 def resource_type_for(path: str, content_type: str = None) -> str:

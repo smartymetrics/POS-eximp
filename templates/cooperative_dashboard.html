@@ -190,6 +190,27 @@
                 </div>
             </div>
 
+            <!-- Society Statement of Account Card -->
+            <div class="bg-surface border border-theme rounded-xl p-4 lg:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-[#C47D0A]/10 flex items-center justify-center text-[#C47D0A]">
+                        <i class="fas fa-file-invoice-dollar text-lg"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-bold text-theme-primary">Official Society Statement of Account</h4>
+                        <p class="text-xs text-theme-secondary">Comprehensive financial ledger, land remittances, and transaction audit trail.</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="viewSocietyStatement('html')" class="bg-elevated border border-theme hover:bg-surface text-theme-primary px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition">
+                        <i class="fas fa-eye text-[#C47D0A]"></i> View HTML
+                    </button>
+                    <button onclick="viewSocietyStatement('pdf')" class="btn-gold px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+                        <i class="fas fa-download"></i> Download PDF Statement
+                    </button>
+                </div>
+            </div>
+
             <!-- KYC Status Notification Banner -->
             <div id="kycAlertBanner" class="hidden bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div class="flex items-center gap-3">
@@ -292,17 +313,85 @@
                             <input type="text" id="kycRegNum" required placeholder="e.g. LSCS/10482/COOP"
                                 class="w-full px-3 py-2 text-xs rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
                         </div>
+                        <!-- Certificate Document Upload Zone -->
                         <div>
-                            <label class="block text-[11px] font-semibold text-theme-secondary uppercase mb-1">Certificate Document URL</label>
-                            <input type="url" id="kycCertUrl" required placeholder="https://res.cloudinary.com/.../certificate.pdf"
-                                class="w-full px-3 py-2 text-xs rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                            <label class="block text-[11px] font-semibold text-theme-secondary uppercase mb-1">Cooperative Registration Certificate</label>
+                            <div id="certUploadZone" onclick="document.getElementById('certFileInput').click()" class="border-2 border-dashed border-theme hover:border-[#C47D0A] rounded-xl p-4 text-center cursor-pointer transition bg-elevated/40 hover:bg-elevated/80 group">
+                                <input type="file" id="certFileInput" accept=".pdf,.png,.jpg,.jpeg" class="hidden" onchange="handleKycFileUpload(this, 'certificate', 'kycCertUrl', 'certStatus', 'certUploadZone')">
+                                <div class="flex flex-col items-center justify-center gap-1.5">
+                                    <div class="w-9 h-9 rounded-full bg-surface group-hover:bg-[#C47D0A]/10 flex items-center justify-center text-theme-secondary group-hover:text-[#C47D0A] transition">
+                                        <i class="fas fa-cloud-arrow-up text-sm"></i>
+                                    </div>
+                                    <span class="text-xs font-semibold text-theme-primary">Click to Upload Certificate</span>
+                                    <span class="text-[10px] text-theme-secondary">PDF, PNG, JPG (Max 15MB) - Stores directly to Cloudinary</span>
+                                </div>
+                            </div>
+                            <div id="certStatus" class="hidden mt-2 text-xs flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                                <div class="flex items-center gap-2 truncate">
+                                    <i class="fas fa-file-circle-check text-emerald-500"></i>
+                                    <span id="certFilename" class="truncate font-medium">certificate.pdf</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <a id="certPreviewLink" href="#" target="_blank" class="text-[11px] font-bold underline hover:text-emerald-300">View File</a>
+                                    <button type="button" onclick="resetFileUpload('certFileInput', 'kycCertUrl', 'certStatus', 'certUploadZone')" class="text-[11px] text-red-400 hover:text-red-300 ml-1">Change</button>
+                                </div>
+                            </div>
+                            <input type="hidden" id="kycCertUrl" required>
                         </div>
+
+                        <!-- Cooperative Bye-Laws Upload Zone -->
                         <div>
-                            <label class="block text-[11px] font-semibold text-theme-secondary uppercase mb-1">Cooperative Bye-Laws URL</label>
-                            <input type="url" id="kycByeLawsUrl" placeholder="https://res.cloudinary.com/.../bye-laws.pdf"
-                                class="w-full px-3 py-2 text-xs rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                            <label class="block text-[11px] font-semibold text-theme-secondary uppercase mb-1">Certified Cooperative Bye-Laws</label>
+                            <div id="byeLawsUploadZone" onclick="document.getElementById('byeLawsFileInput').click()" class="border-2 border-dashed border-theme hover:border-[#C47D0A] rounded-xl p-4 text-center cursor-pointer transition bg-elevated/40 hover:bg-elevated/80 group">
+                                <input type="file" id="byeLawsFileInput" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" class="hidden" onchange="handleKycFileUpload(this, 'bye_laws', 'kycByeLawsUrl', 'byeLawsStatus', 'byeLawsUploadZone')">
+                                <div class="flex flex-col items-center justify-center gap-1.5">
+                                    <div class="w-9 h-9 rounded-full bg-surface group-hover:bg-[#C47D0A]/10 flex items-center justify-center text-theme-secondary group-hover:text-[#C47D0A] transition">
+                                        <i class="fas fa-file-shield text-sm"></i>
+                                    </div>
+                                    <span class="text-xs font-semibold text-theme-primary">Click to Upload Certified Bye-Laws</span>
+                                    <span class="text-[10px] text-theme-secondary">PDF, DOCX, Images (Max 15MB) - Stores directly to Cloudinary</span>
+                                </div>
+                            </div>
+                            <div id="byeLawsStatus" class="hidden mt-2 text-xs flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                                <div class="flex items-center gap-2 truncate">
+                                    <i class="fas fa-file-circle-check text-emerald-500"></i>
+                                    <span id="byeLawsFilename" class="truncate font-medium">bye_laws.pdf</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <a id="byeLawsPreviewLink" href="#" target="_blank" class="text-[11px] font-bold underline hover:text-emerald-300">View File</a>
+                                    <button type="button" onclick="resetFileUpload('byeLawsFileInput', 'kycByeLawsUrl', 'byeLawsStatus', 'byeLawsUploadZone')" class="text-[11px] text-red-400 hover:text-red-300 ml-1">Change</button>
+                                </div>
+                            </div>
+                            <input type="hidden" id="kycByeLawsUrl">
                         </div>
-                        <button type="submit" class="btn-gold w-full py-2.5 rounded-lg text-xs mt-3">Submit Corporate KYC for Audit</button>
+
+                        <!-- Optional Board Resolution Upload Zone -->
+                        <div>
+                            <label class="block text-[11px] font-semibold text-theme-secondary uppercase mb-1">Board Resolution / Trustees Minutes (Optional)</label>
+                            <div id="resolutionUploadZone" onclick="document.getElementById('resolutionFileInput').click()" class="border-2 border-dashed border-theme hover:border-[#C47D0A] rounded-xl p-3 text-center cursor-pointer transition bg-elevated/40 hover:bg-elevated/80 group">
+                                <input type="file" id="resolutionFileInput" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" class="hidden" onchange="handleKycFileUpload(this, 'resolution', 'kycResolutionUrl', 'resolutionStatus', 'resolutionUploadZone')">
+                                <div class="flex flex-col items-center justify-center gap-1">
+                                    <span class="text-xs font-semibold text-theme-primary">Upload Board Resolution / Minutes</span>
+                                    <span class="text-[10px] text-theme-secondary">PDF, DOCX, Images (Max 15MB)</span>
+                                </div>
+                            </div>
+                            <div id="resolutionStatus" class="hidden mt-2 text-xs flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                                <div class="flex items-center gap-2 truncate">
+                                    <i class="fas fa-file-circle-check text-emerald-500"></i>
+                                    <span id="resolutionFilename" class="truncate font-medium">resolution.pdf</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <a id="resolutionPreviewLink" href="#" target="_blank" class="text-[11px] font-bold underline hover:text-emerald-300">View File</a>
+                                    <button type="button" onclick="resetFileUpload('resolutionFileInput', 'kycResolutionUrl', 'resolutionStatus', 'resolutionUploadZone')" class="text-[11px] text-red-400 hover:text-red-300 ml-1">Change</button>
+                                </div>
+                            </div>
+                            <input type="hidden" id="kycResolutionUrl">
+                        </div>
+
+                        <button type="submit" id="submitKycBtn" class="btn-gold w-full py-2.5 rounded-lg text-xs font-semibold mt-4 shadow-sm flex items-center justify-center gap-2">
+                            <i class="fas fa-shield-halved"></i>
+                            <span>Submit Corporate KYC for Audit</span>
+                        </button>
                     </form>
                 </div>
 
@@ -712,6 +801,7 @@
                 if (coopRes.ok) {
                     const coopData = await coopRes.json();
                     document.getElementById('coopNameHeader').textContent = coopData.name || 'Cooperative Society';
+                    updateKycUi(coopData);
                 }
             } catch (e) {
                 console.warn('Could not fetch cooperative details:', e);
@@ -831,6 +921,13 @@
             }
         }
 
+        function viewSocietyStatement(format) {
+            if (!currentCoopId) return;
+            const token = getAuthToken();
+            const url = `/api/cooperatives/${currentCoopId}/statement/${format}?token=${token}`;
+            window.open(url, '_blank');
+        }
+
         async function loadMembers() {
             const tbody = document.getElementById('membersTableBody');
             if (!tbody) return;
@@ -870,9 +967,14 @@
                             </div>
                         </td>
                         <td class="py-3 px-4 text-right">
-                            <button onclick="openUnlockModal('${m.id}')" class="px-2 py-1 text-[11px] font-semibold text-[#C47D0A] hover:bg-[#C47D0A]/10 rounded transition">
-                                Unlock Doc
-                            </button>
+                            <div class="flex items-center justify-end gap-1.5">
+                                <a href="/api/cooperatives/members/${m.id}/statement/pdf?token=${getAuthToken()}" target="_blank" title="Download Member Statement of Account" class="px-2 py-1 text-[11px] font-semibold text-emerald-500 hover:bg-emerald-500/10 rounded transition inline-flex items-center gap-1">
+                                    <i class="fas fa-file-invoice"></i> Statement
+                                </a>
+                                <button onclick="openUnlockModal('${m.id}')" class="px-2 py-1 text-[11px] font-semibold text-[#C47D0A] hover:bg-[#C47D0A]/10 rounded transition">
+                                    Unlock Doc
+                                </button>
+                            </div>
                         </td>
                     </tr>
                 `).join('');
@@ -1045,6 +1147,172 @@
                 alert(err.message);
             }
         }
+        async function handleKycFileUpload(inputEl, docType, urlInputId, statusContainerId, dropzoneId) {
+            const file = inputEl.files[0];
+            if (!file) return;
+
+            if (file.size > 15 * 1024 * 1024) {
+                alert('File size exceeds the 15MB limit. Please upload a smaller document.');
+                inputEl.value = '';
+                return;
+            }
+
+            const dropzone = document.getElementById(dropzoneId);
+            const originalHtml = dropzone.innerHTML;
+            dropzone.innerHTML = `
+                <div class="flex items-center justify-center gap-2 py-4 text-xs text-[#C47D0A]">
+                    <i class="fas fa-spinner fa-spin text-base"></i>
+                    <span>Uploading ${file.name} to Cloudinary...</span>
+                </div>
+            `;
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('document_type', docType);
+
+            try {
+                const coopParam = currentCoopId ? `/${currentCoopId}` : '';
+                const res = await fetch(`/api/cooperatives${coopParam}/upload-document`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` },
+                    body: formData
+                });
+
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Upload failed');
+
+                // Save URL into hidden input
+                document.getElementById(urlInputId).value = data.url;
+
+                // Show success view
+                dropzone.classList.add('hidden');
+                dropzone.innerHTML = originalHtml;
+                const statusBox = document.getElementById(statusContainerId);
+                statusBox.classList.remove('hidden');
+
+                if (docType === 'certificate') {
+                    document.getElementById('certFilename').textContent = `${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`;
+                    document.getElementById('certPreviewLink').href = data.url;
+                } else if (docType === 'bye_laws') {
+                    document.getElementById('byeLawsFilename').textContent = `${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`;
+                    document.getElementById('byeLawsPreviewLink').href = data.url;
+                } else if (docType === 'resolution') {
+                    document.getElementById('resolutionFilename').textContent = `${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`;
+                    document.getElementById('resolutionPreviewLink').href = data.url;
+                }
+            } catch (err) {
+                alert('File upload failed: ' + err.message);
+                dropzone.innerHTML = originalHtml;
+            }
+        }
+
+        function resetFileUpload(fileInputId, urlInputId, statusContainerId, dropzoneId) {
+            document.getElementById(fileInputId).value = '';
+            document.getElementById(urlInputId).value = '';
+            document.getElementById(statusContainerId).classList.add('hidden');
+            document.getElementById(dropzoneId).classList.remove('hidden');
+        }
+
+        function updateKycUi(coop) {
+            if (!coop) return;
+            const badge = document.getElementById('kycStatusBadge');
+            const alertBanner = document.getElementById('kycAlertBanner');
+            const regStatus = coop.registration_status || 'unregistered';
+
+            if (badge) {
+                if (regStatus === 'registered') {
+                    badge.className = 'badge-theme text-[11px] font-bold px-2.5 py-1 rounded-full uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+                    badge.textContent = 'REGISTERED CORPORATE ENTITY';
+                    if (alertBanner) alertBanner.classList.add('hidden');
+                } else if (regStatus === 'pending_kyc') {
+                    badge.className = 'badge-theme text-[11px] font-bold px-2.5 py-1 rounded-full uppercase bg-blue-500/10 text-blue-400 border border-blue-500/20';
+                    badge.textContent = 'UNDER COMPLIANCE AUDIT';
+                    if (alertBanner) alertBanner.classList.add('hidden');
+                } else {
+                    badge.className = 'badge-theme text-[11px] font-bold px-2.5 py-1 rounded-full uppercase bg-amber-500/10 text-amber-400 border border-amber-500/20';
+                    badge.textContent = 'UNREGISTERED ENTITY';
+                    if (alertBanner) alertBanner.classList.remove('hidden');
+                }
+            }
+
+            if (coop.registration_number) document.getElementById('kycRegNum').value = coop.registration_number;
+            if (coop.registration_type) document.getElementById('kycRegType').value = coop.registration_type;
+
+            if (coop.certificate_url) {
+                document.getElementById('kycCertUrl').value = coop.certificate_url;
+                document.getElementById('certUploadZone').classList.add('hidden');
+                const certStatus = document.getElementById('certStatus');
+                certStatus.classList.remove('hidden');
+                document.getElementById('certFilename').textContent = 'Registration Certificate on Storage';
+                document.getElementById('certPreviewLink').href = coop.certificate_url;
+            }
+
+            if (coop.bye_laws_url) {
+                document.getElementById('kycByeLawsUrl').value = coop.bye_laws_url;
+                document.getElementById('byeLawsUploadZone').classList.add('hidden');
+                const byeStatus = document.getElementById('byeLawsStatus');
+                byeStatus.classList.remove('hidden');
+                document.getElementById('byeLawsFilename').textContent = 'Certified Bye-Laws on Storage';
+                document.getElementById('byeLawsPreviewLink').href = coop.bye_laws_url;
+            }
+
+            if (coop.resolution_url) {
+                document.getElementById('kycResolutionUrl').value = coop.resolution_url;
+                document.getElementById('resolutionUploadZone').classList.add('hidden');
+                const resStatus = document.getElementById('resolutionStatus');
+                resStatus.classList.remove('hidden');
+                document.getElementById('resolutionFilename').textContent = 'Board Resolution on Storage';
+                document.getElementById('resolutionPreviewLink').href = coop.resolution_url;
+            }
+        }
+
+        async function submitCorporateKyc(e) {
+            e.preventDefault();
+            if (!currentCoopId) {
+                alert('Please select a cooperative society first.');
+                return;
+            }
+
+            const certUrl = document.getElementById('kycCertUrl').value.trim();
+            if (!certUrl) {
+                alert('Please upload your Cooperative Registration Certificate to continue.');
+                return;
+            }
+
+            const payload = {
+                registration_type: document.getElementById('kycRegType').value,
+                registration_number: document.getElementById('kycRegNum').value.trim(),
+                certificate_url: certUrl,
+                bye_laws_url: document.getElementById('kycByeLawsUrl').value.trim(),
+                resolution_url: document.getElementById('kycResolutionUrl').value.trim(),
+            };
+
+            const btn = document.getElementById('submitKycBtn');
+            const originalBtnText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Submitting to Compliance...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`/api/cooperatives/${currentCoopId}/kyc`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to submit corporate KYC');
+                alert('Corporate KYC successfully submitted! Legal & Compliance will review and verify your documents.');
+                initCoopPortal();
+            } catch (err) {
+                alert(err.message);
+            } finally {
+                btn.innerHTML = originalBtnText;
+                btn.disabled = false;
+            }
+        }
+
         function logoutCoopAdmin() {
             localStorage.removeItem('ec_coop_token');
             localStorage.removeItem('ec_coop_id');

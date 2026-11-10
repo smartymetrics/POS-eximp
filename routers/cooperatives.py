@@ -3,6 +3,8 @@ import csv
 import io
 import json
 import logging
+import uuid
+import mimetypes
 from datetime import datetime, date
 from decimal import Decimal
 from typing import Optional, List, Dict, Any
@@ -18,6 +20,8 @@ from pdf_service import (
     render_cooperative_invoice_html,
     generate_cooperative_receipt_pdf,
     render_cooperative_receipt_html,
+    render_statement_html,
+    generate_statement_pdf,
 )
 
 logger = logging.getLogger(__name__)
@@ -491,6 +495,72 @@ async def get_cooperative_details(
     if not res.data:
         raise HTTPException(status_code=404, detail="Cooperative not found")
     return res.data
+
+
+@router.post("/upload-document")
+@router.post("/{coop_id}/upload-document")
+async def upload_cooperative_document(
+    coop_id: Optional[str] = None,
+    file: UploadFile = File(...),
+    document_type: str = Form("kyc"),
+    current_user=Depends(resolve_coop_viewer),
+):
+    """
+    Direct document and media upload endpoint.
+    Uploads to Cloudinary (or configured storage backend) and returns the public CDN URL.
+    Supports PDF documents, Word documents, PNG, JPG, and JPEG files up to 15MB.
+    """
+    if not file:
+        raise HTTPException(status_code=400, detail="No file provided")
+
+    content = await file.read()
+    if not content or len(content) == 0:
+        raise HTTPException(status_code=400, detail="Empty file cannot be uploaded")
+
+    if len(content) > 15 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File exceeds maximum 15MB upload limit")
+
+    original_filename = file.filename or "document.pdf"
+    ext = original_filename.split(".")[-1].lower() if "." in original_filename else "bin"
+    allowed_exts = {"pdf", "png", "jpg", "jpeg", "webp", "doc", "docx"}
+    if ext not in allowed_exts:
+        raise HTTPException(status_code=400, detail=f"File extension .{ext} is not supported. Please upload a PDF, PNG, JPG, or DOC file.")
+
+    safe_folder = coop_id or "kyc"
+    unique_name = f"{document_type}_{uuid.uuid4().hex[:10]}.{ext}"
+    storage_path = f"cooperatives/{safe_folder}/{unique_name}"
+
+    db = get_db()
+    content_type = file.content_type or mimetypes.guess_type(original_filename)[0] or "application/octet-stream"
+
+    bucket_name = "marketing" if ext in {"png", "jpg", "jpeg", "webp"} else "legal-vault"
+
+    try:
+        await db_execute(lambda: db.storage.from_(bucket_name).upload(
+            path=storage_path,
+            file=content,
+            file_options={"content-type": content_type, "upsert": "true"}
+        ))
+        public_url = db.storage.from_(bucket_name).get_public_url(storage_path)
+    except Exception as e:
+        logger.error(f"Failed to upload document to storage: {e}")
+        try:
+            await db_execute(lambda: db.storage.from_("signatures").upload(
+                path=storage_path,
+                file=content,
+                file_options={"content-type": content_type, "upsert": "true"}
+            ))
+            public_url = db.storage.from_("signatures").get_public_url(storage_path)
+        except Exception as e2:
+            raise HTTPException(status_code=500, detail=f"Upload failed: {str(e2)}")
+
+    return {
+        "status": "success",
+        "url": public_url,
+        "filename": original_filename,
+        "size": len(content),
+        "document_type": document_type
+    }
 
 
 @router.post("/{coop_id}/kyc")
@@ -1564,4 +1634,321 @@ async def download_cooperative_receipt_pdf(payment_id: str, viewer=Depends(resol
         media_type="application/pdf",
         headers={"Content-Disposition": f"inline; filename={filename}"}
     )
+
+
+# ── Statement of Account Endpoints ───────────────────────────────────────────
+
+@router.get("/members/{member_id}/statement/html")
+async def view_member_statement_html(member_id: str, viewer=Depends(resolve_coop_viewer)):
+    """Renders the HTML Statement of Account for an individual cooperative member."""
+    db = get_db()
+    m_res = await db_execute(lambda: db.table("cooperative_members").select("*, cooperatives(*)").eq("id", member_id).limit(1).execute())
+    if not m_res.data:
+        raise HTTPException(status_code=404, detail="Member not found")
+    member = m_res.data[0]
+    coop = member.get("cooperatives") or {}
+
+    if not viewer.get("is_internal"):
+        if viewer.get("user_type") == "coop_admin" and viewer.get("cooperative_id") != member.get("cooperative_id"):
+            raise HTTPException(status_code=403, detail="Access denied")
+        if viewer.get("user_type") == "coop_member" and viewer.get("member_id") != member_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+    inv_res = await db_execute(lambda: db.table("cooperative_invoices").select("*").eq("member_id", member_id).order("created_at").execute())
+    invoices = inv_res.data or []
+
+    pay_res = await db_execute(lambda: db.table("cooperative_payments").select("*").eq("member_id", member_id).order("payment_date").execute())
+    payments = pay_res.data or []
+
+    inv_map = {}
+    formatted_invoices = []
+    for inv in invoices:
+        item = {
+            "id": inv.get("id"),
+            "invoice_date": inv.get("created_at", "")[:10] if inv.get("created_at") else "",
+            "invoice_number": inv.get("invoice_number", ""),
+            "amount": float(inv.get("total_amount") or 0),
+            "status": inv.get("status", "pending"),
+            "payments": []
+        }
+        inv_map[inv.get("id")] = item
+        formatted_invoices.append(item)
+
+    unassigned_payments = []
+    for p in payments:
+        p_item = {
+            "payment_date": p.get("payment_date") or (p.get("created_at", "")[:10] if p.get("created_at") else ""),
+            "reference": p.get("receipt_number") or p.get("payment_reference") or f"RCP_{p.get('id', '')[:8]}",
+            "payment_type": "payment",
+            "amount": float(p.get("amount") or 0),
+            "is_voided": False
+        }
+        inv_id = p.get("invoice_id")
+        if inv_id and inv_id in inv_map:
+            inv_map[inv_id]["payments"].append(p_item)
+        else:
+            unassigned_payments.append(p_item)
+
+    if not formatted_invoices:
+        plot_val = float(member.get("total_cost") or member.get("total_amount") or 0)
+        baseline = {
+            "invoice_date": member.get("created_at", "")[:10] if member.get("created_at") else datetime.now().strftime("%Y-%m-%d"),
+            "invoice_number": f"ALLOT-{member.get('sub_index', '001')}",
+            "amount": plot_val,
+            "status": "active",
+            "payments": unassigned_payments
+        }
+        formatted_invoices.append(baseline)
+    elif unassigned_payments:
+        formatted_invoices[0]["payments"].extend(unassigned_payments)
+
+    client_data = {
+        "full_name": member.get("full_name", "Member"),
+        "phone": member.get("phone", ""),
+        "email": member.get("email", ""),
+        "address": f"Plot #{member.get('plot_number', 'Pending')} | {coop.get('name', 'Cooperative Scheme')} (Member #{member.get('member_number', member.get('sub_index', ''))})",
+    }
+
+    html_content = render_statement_html(formatted_invoices, client_data)
+    return HTMLResponse(content=html_content)
+
+
+@router.get("/members/{member_id}/statement/pdf")
+async def download_member_statement_pdf(member_id: str, viewer=Depends(resolve_coop_viewer)):
+    """Generates and streams the PDF Statement of Account for an individual cooperative member."""
+    db = get_db()
+    m_res = await db_execute(lambda: db.table("cooperative_members").select("*, cooperatives(*)").eq("id", member_id).limit(1).execute())
+    if not m_res.data:
+        raise HTTPException(status_code=404, detail="Member not found")
+    member = m_res.data[0]
+    coop = member.get("cooperatives") or {}
+
+    if not viewer.get("is_internal"):
+        if viewer.get("user_type") == "coop_admin" and viewer.get("cooperative_id") != member.get("cooperative_id"):
+            raise HTTPException(status_code=403, detail="Access denied")
+        if viewer.get("user_type") == "coop_member" and viewer.get("member_id") != member_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+    inv_res = await db_execute(lambda: db.table("cooperative_invoices").select("*").eq("member_id", member_id).order("created_at").execute())
+    invoices = inv_res.data or []
+
+    pay_res = await db_execute(lambda: db.table("cooperative_payments").select("*").eq("member_id", member_id).order("payment_date").execute())
+    payments = pay_res.data or []
+
+    inv_map = {}
+    formatted_invoices = []
+    for inv in invoices:
+        item = {
+            "id": inv.get("id"),
+            "invoice_date": inv.get("created_at", "")[:10] if inv.get("created_at") else "",
+            "invoice_number": inv.get("invoice_number", ""),
+            "amount": float(inv.get("total_amount") or 0),
+            "status": inv.get("status", "pending"),
+            "payments": []
+        }
+        inv_map[inv.get("id")] = item
+        formatted_invoices.append(item)
+
+    unassigned_payments = []
+    for p in payments:
+        p_item = {
+            "payment_date": p.get("payment_date") or (p.get("created_at", "")[:10] if p.get("created_at") else ""),
+            "reference": p.get("receipt_number") or p.get("payment_reference") or f"RCP_{p.get('id', '')[:8]}",
+            "payment_type": "payment",
+            "amount": float(p.get("amount") or 0),
+            "is_voided": False
+        }
+        inv_id = p.get("invoice_id")
+        if inv_id and inv_id in inv_map:
+            inv_map[inv_id]["payments"].append(p_item)
+        else:
+            unassigned_payments.append(p_item)
+
+    if not formatted_invoices:
+        plot_val = float(member.get("total_cost") or member.get("total_amount") or 0)
+        baseline = {
+            "invoice_date": member.get("created_at", "")[:10] if member.get("created_at") else datetime.now().strftime("%Y-%m-%d"),
+            "invoice_number": f"ALLOT-{member.get('sub_index', '001')}",
+            "amount": plot_val,
+            "status": "active",
+            "payments": unassigned_payments
+        }
+        formatted_invoices.append(baseline)
+    elif unassigned_payments:
+        formatted_invoices[0]["payments"].extend(unassigned_payments)
+
+    client_data = {
+        "full_name": member.get("full_name", "Member"),
+        "phone": member.get("phone", ""),
+        "email": member.get("email", ""),
+        "address": f"Plot #{member.get('plot_number', 'Pending')} | {coop.get('name', 'Cooperative Scheme')} (Member #{member.get('member_number', member.get('sub_index', ''))})",
+    }
+
+    pdf_bytes = await db_execute(lambda: generate_statement_pdf(formatted_invoices, client_data))
+    clean_name = "".join(c for c in member.get("full_name", "Member") if c.isalnum() or c in (" ", "_")).replace(" ", "_")
+    filename = f"Statement_{clean_name}_{member.get('sub_index', '001')}.pdf"
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename={filename}"}
+    )
+
+
+@router.get("/{coop_id}/statement/html")
+async def view_society_statement_html(coop_id: str, viewer=Depends(resolve_coop_viewer)):
+    """Renders the HTML Statement of Account for the entire cooperative society."""
+    db = get_db()
+    c_res = await db_execute(lambda: db.table("cooperatives").select("*").eq("id", coop_id).limit(1).execute())
+    if not c_res.data:
+        raise HTTPException(status_code=404, detail="Cooperative not found")
+    coop = c_res.data[0]
+
+    if not viewer.get("is_internal"):
+        if viewer.get("user_type") == "coop_admin" and viewer.get("cooperative_id") != coop_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+        if viewer.get("user_type") == "coop_member":
+            raise HTTPException(status_code=403, detail="Access denied. Society statement is restricted to society executives and staff.")
+
+    inv_res = await db_execute(lambda: db.table("cooperative_invoices").select("*").eq("cooperative_id", coop_id).order("created_at").execute())
+    all_invoices = inv_res.data or []
+
+    master_invoices = [i for i in all_invoices if i.get("invoice_type") == "master"]
+    target_invoices = master_invoices if master_invoices else all_invoices
+
+    pay_res = await db_execute(lambda: db.table("cooperative_payments").select("*").eq("cooperative_id", coop_id).order("payment_date").execute())
+    payments = pay_res.data or []
+
+    inv_map = {}
+    formatted_invoices = []
+    for inv in target_invoices:
+        item = {
+            "id": inv.get("id"),
+            "invoice_date": inv.get("created_at", "")[:10] if inv.get("created_at") else "",
+            "invoice_number": inv.get("invoice_number", ""),
+            "amount": float(inv.get("total_amount") or 0),
+            "status": inv.get("status", "pending"),
+            "payments": []
+        }
+        inv_map[inv.get("id")] = item
+        formatted_invoices.append(item)
+
+    unassigned_payments = []
+    for p in payments:
+        p_item = {
+            "payment_date": p.get("payment_date") or (p.get("created_at", "")[:10] if p.get("created_at") else ""),
+            "reference": p.get("receipt_number") or p.get("payment_reference") or f"RCP_{p.get('id', '')[:8]}",
+            "payment_type": "payment",
+            "amount": float(p.get("amount") or 0),
+            "is_voided": False
+        }
+        inv_id = p.get("invoice_id")
+        if inv_id and inv_id in inv_map:
+            inv_map[inv_id]["payments"].append(p_item)
+        else:
+            unassigned_payments.append(p_item)
+
+    if not formatted_invoices:
+        baseline = {
+            "invoice_date": coop.get("created_at", "")[:10] if coop.get("created_at") else datetime.now().strftime("%Y-%m-%d"),
+            "invoice_number": f"MASTER-{coop.get('code', 'COOP')}",
+            "amount": 0.0,
+            "status": "active",
+            "payments": unassigned_payments
+        }
+        formatted_invoices.append(baseline)
+    elif unassigned_payments:
+        formatted_invoices[0]["payments"].extend(unassigned_payments)
+
+    client_data = {
+        "full_name": coop.get("name", "Cooperative Society"),
+        "phone": coop.get("contact_phone", ""),
+        "email": coop.get("contact_email", ""),
+        "address": coop.get("registered_address") or f"Corporate Cooperative Scheme - Code: {coop.get('code', '')}",
+    }
+
+    html_content = render_statement_html(formatted_invoices, client_data)
+    return HTMLResponse(content=html_content)
+
+
+@router.get("/{coop_id}/statement/pdf")
+async def download_society_statement_pdf(coop_id: str, viewer=Depends(resolve_coop_viewer)):
+    """Generates and streams the PDF Statement of Account for the entire cooperative society."""
+    db = get_db()
+    c_res = await db_execute(lambda: db.table("cooperatives").select("*").eq("id", coop_id).limit(1).execute())
+    if not c_res.data:
+        raise HTTPException(status_code=404, detail="Cooperative not found")
+    coop = c_res.data[0]
+
+    if not viewer.get("is_internal"):
+        if viewer.get("user_type") == "coop_admin" and viewer.get("cooperative_id") != coop_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+        if viewer.get("user_type") == "coop_member":
+            raise HTTPException(status_code=403, detail="Access denied. Society statement is restricted to society executives and staff.")
+
+    inv_res = await db_execute(lambda: db.table("cooperative_invoices").select("*").eq("cooperative_id", coop_id).order("created_at").execute())
+    all_invoices = inv_res.data or []
+
+    master_invoices = [i for i in all_invoices if i.get("invoice_type") == "master"]
+    target_invoices = master_invoices if master_invoices else all_invoices
+
+    pay_res = await db_execute(lambda: db.table("cooperative_payments").select("*").eq("cooperative_id", coop_id).order("payment_date").execute())
+    payments = pay_res.data or []
+
+    inv_map = {}
+    formatted_invoices = []
+    for inv in target_invoices:
+        item = {
+            "id": inv.get("id"),
+            "invoice_date": inv.get("created_at", "")[:10] if inv.get("created_at") else "",
+            "invoice_number": inv.get("invoice_number", ""),
+            "amount": float(inv.get("total_amount") or 0),
+            "status": inv.get("status", "pending"),
+            "payments": []
+        }
+        inv_map[inv.get("id")] = item
+        formatted_invoices.append(item)
+
+    unassigned_payments = []
+    for p in payments:
+        p_item = {
+            "payment_date": p.get("payment_date") or (p.get("created_at", "")[:10] if p.get("created_at") else ""),
+            "reference": p.get("receipt_number") or p.get("payment_reference") or f"RCP_{p.get('id', '')[:8]}",
+            "payment_type": "payment",
+            "amount": float(p.get("amount") or 0),
+            "is_voided": False
+        }
+        inv_id = p.get("invoice_id")
+        if inv_id and inv_id in inv_map:
+            inv_map[inv_id]["payments"].append(p_item)
+        else:
+            unassigned_payments.append(p_item)
+
+    if not formatted_invoices:
+        baseline = {
+            "invoice_date": coop.get("created_at", "")[:10] if coop.get("created_at") else datetime.now().strftime("%Y-%m-%d"),
+            "invoice_number": f"MASTER-{coop.get('code', 'COOP')}",
+            "amount": 0.0,
+            "status": "active",
+            "payments": unassigned_payments
+        }
+        formatted_invoices.append(baseline)
+    elif unassigned_payments:
+        formatted_invoices[0]["payments"].extend(unassigned_payments)
+
+    client_data = {
+        "full_name": coop.get("name", "Cooperative Society"),
+        "phone": coop.get("contact_phone", ""),
+        "email": coop.get("contact_email", ""),
+        "address": coop.get("registered_address") or f"Corporate Cooperative Scheme - Code: {coop.get('code', '')}",
+    }
+
+    pdf_bytes = await db_execute(lambda: generate_statement_pdf(formatted_invoices, client_data))
+    clean_code = "".join(c for c in coop.get("code", "COOP") if c.isalnum() or c in ("-", "_"))
+    filename = f"Society_Statement_{clean_code}.pdf"
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename={filename}"}
+    )
+
 

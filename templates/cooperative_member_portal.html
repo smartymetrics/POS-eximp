@@ -212,6 +212,27 @@
                 </div>
             </div>
 
+            <!-- Statement of Account Card -->
+            <div class="bg-surface border border-[#C47D0A]/30 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-[#C47D0A]/10 flex items-center justify-center text-[#C47D0A]">
+                        <i class="fas fa-file-invoice text-lg"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-bold text-theme-primary">Member Statement of Account</h4>
+                        <p class="text-[11px] text-theme-secondary">Official statement of all your payments, plot allotments, and cleared balances.</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="downloadMyStatement('html')" class="bg-elevated border border-theme hover:bg-surface text-theme-primary px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition">
+                        <i class="fas fa-eye text-[#C47D0A]"></i> View HTML
+                    </button>
+                    <button onclick="downloadMyStatement('pdf')" class="btn-gold px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+                        <i class="fas fa-download"></i> Download PDF
+                    </button>
+                </div>
+            </div>
+
             <!-- Invoices & Payment Receipts List -->
             <div class="bg-surface border border-theme rounded-xl p-5 space-y-3">
                 <h3 class="text-xs font-bold text-theme-primary uppercase tracking-wider">Payment Receipts &amp; Milestones</h3>
@@ -229,6 +250,19 @@
             <div class="bg-surface border border-theme rounded-xl p-5 space-y-3">
                 <h3 class="text-xs font-bold text-theme-primary uppercase tracking-wider">Official Legal &amp; Allocation Files</h3>
                 <div id="dynamicDocumentsContainer" class="space-y-2 pt-2">
+                    <div class="bg-elevated border border-theme rounded-xl p-3.5 flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <i class="fas fa-file-invoice text-[#C47D0A] text-lg"></i>
+                            <div>
+                                <h4 class="text-xs font-bold text-theme-primary">Official Statement of Account</h4>
+                                <span class="text-[11px] text-theme-secondary">Verified Member Financial Ledger</span>
+                            </div>
+                        </div>
+                        <button onclick="downloadMyStatement('pdf')" class="btn-gold px-3 py-1.5 rounded-lg text-[11px] font-semibold inline-flex items-center gap-1">
+                            <i class="fas fa-download"></i> Download
+                        </button>
+                    </div>
+
                     <div class="bg-elevated border border-theme rounded-xl p-3.5 flex items-center justify-between">
                         <div class="flex items-center gap-3">
                             <i class="fas fa-file-pdf text-red-500 text-lg"></i>
@@ -466,6 +500,18 @@
             if (tabId === 'ledger') loadLedgerData();
         }
 
+        let currentMemberId = null;
+
+        function downloadMyStatement(format) {
+            if (!currentMemberId) {
+                alert('Member profile loading, please try again in a moment.');
+                return;
+            }
+            const token = localStorage.getItem('member_token') || localStorage.getItem('ec_member_token');
+            const url = `/api/cooperatives/members/${currentMemberId}/statement/${format}?token=${token}`;
+            window.open(url, '_blank');
+        }
+
         async function initMemberPortal() {
             const token = localStorage.getItem('member_token') || localStorage.getItem('ec_member_token');
             if (!token) {
@@ -481,6 +527,7 @@
                 if (!res.ok) throw new Error('Session invalid');
                 const data = await res.json();
                 const m = data.member;
+                currentMemberId = m.id;
 
                 document.getElementById('topMemberName').textContent = m.full_name;
                 document.getElementById('propCoopName').textContent = m.cooperatives ? m.cooperatives.name : 'Cooperative Scheme';
