@@ -86,6 +86,16 @@
             border-color: #C47D0A;
             box-shadow: 0 0 0 2px rgba(196, 125, 10, 0.2);
         }
+
+        /* Dynamic Theme-Adaptive Brand Logo */
+        html[data-theme="dark"] .logo-dark-theme { display: block !important; }
+        html[data-theme="dark"] .logo-light-theme { display: none !important; }
+
+        html[data-theme="light"] .logo-dark-theme,
+        html[data-theme="warm"] .logo-dark-theme { display: none !important; }
+
+        html[data-theme="light"] .logo-light-theme,
+        html[data-theme="warm"] .logo-light-theme { display: block !important; }
     </style>
 </head>
 <body class="min-h-screen flex flex-col justify-between p-4 sm:p-6 lg:p-8">
@@ -93,8 +103,8 @@
     <!-- Top Bar: Brand & 3-Theme Switcher -->
     <header class="w-full max-w-4xl mx-auto flex items-center justify-between pb-6">
         <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-[#C47D0A]/30 flex items-center justify-center font-bold text-[#C47D0A] text-lg">
-                EC
+            <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-[#C47D0A]/30 flex items-center justify-center p-1.5 shadow-xs">
+                <img src="/static/img/logo_icon.png" alt="Eximp &amp; Cloves" class="w-full h-full object-contain">
             </div>
             <div>
                 <h1 class="text-sm font-bold tracking-tight text-theme-primary">Eximp &amp; Cloves</h1>
@@ -123,6 +133,11 @@
             <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#C47D0A] via-[#F5A623] to-[#C47D0A]"></div>
 
             <div class="text-center mb-6">
+                <!-- Theme-Adaptive Official Brand Logo -->
+                <div class="flex justify-center mb-3">
+                    <img src="/static/img/logo.svg" alt="Eximp &amp; Cloves" class="h-11 w-auto object-contain logo-dark-theme">
+                    <img src="/static/img/logo.png" alt="Eximp &amp; Cloves" class="h-11 w-auto object-contain logo-light-theme">
+                </div>
                 <h2 class="text-xl font-bold text-theme-primary">Sign In</h2>
                 <p class="text-xs text-theme-secondary mt-1">
                     Enter your credentials to access your account
