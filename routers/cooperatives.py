@@ -1,4 +1,5 @@
 import os
+import base64
 import csv
 import io
 import json
@@ -1231,6 +1232,219 @@ async def create_member_sub_invoice(
     return {"message": f"Sub-invoice {formatted_sub_num} created", "invoice": res.data[0]}
 
 
+# ── Estate Schemes & Negotiated Pricing ──────────────────────────────────────
+
+@router.get("/{coop_id}/schemes")
+async def list_cooperative_schemes(coop_id: str, current_user=Depends(resolve_coop_viewer)):
+    """Fetches all estates officially tied to this cooperative with their negotiated price tiers."""
+    db = get_db()
+    res = await db_execute(lambda: db.table("cooperative_estate_schemes")
+        .select("*, properties(id, name, address, city, state, price)")
+        .eq("cooperative_id", coop_id)
+        .eq("is_active", True)
+        .order("created_at")
+        .execute())
+    return {"schemes": res.data or []}
+
+@router.post("/{coop_id}/schemes")
+async def tie_estate_scheme(coop_id: str, request: Request, current_staff=Depends(verify_token)):
+    """Eximp Admin ties an estate to this cooperative with custom negotiated pricing."""
+    if not has_any_role(current_staff, "admin", "super_admin", "operations", "sales"):
+        raise HTTPException(status_code=403, detail="Only Eximp staff can configure estate schemes")
+    db = get_db()
+    data = await request.json()
+    property_id = data.get("property_id")
+    if not property_id:
+        raise HTTPException(status_code=400, detail="property_id is required")
+
+    payload = {
+        "cooperative_id": coop_id,
+        "property_id": property_id,
+        "estate_code": (data.get("estate_code") or "EST").upper().strip(),
+        "price_300sqm": float(data.get("price_300sqm", 0.0)),
+        "price_500sqm": float(data.get("price_500sqm", 0.0)),
+        "price_600sqm": float(data.get("price_600sqm", 0.0)),
+        "price_custom": float(data.get("price_custom", 0.0)),
+        "is_active": True,
+        "updated_at": datetime.utcnow().isoformat()
+    }
+
+    res = await db_execute(lambda: db.table("cooperative_estate_schemes").upsert(payload, on_conflict="cooperative_id,property_id").execute())
+    return {"message": "Estate scheme and negotiated pricing configured successfully", "scheme": res.data[0] if res.data else {}}
+
+@router.delete("/{coop_id}/schemes/{scheme_id}")
+async def untie_estate_scheme(coop_id: str, scheme_id: str, current_staff=Depends(verify_token)):
+    """Eximp Admin deactivates an estate scheme for this cooperative."""
+    if not has_any_role(current_staff, "admin", "super_admin"):
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    db = get_db()
+    await db_execute(lambda: db.table("cooperative_estate_schemes").update({"is_active": False}).eq("id", scheme_id).execute())
+    return {"message": "Scheme deactivated"}
+
+
+# ── Allotments & Hybrid Subscriptions ───────────────────────────────────────
+
+@router.get("/{coop_id}/allotments")
+async def list_cooperative_allotments(coop_id: str, current_admin=Depends(resolve_coop_admin)):
+    """Lists all plot allotments for this cooperative society."""
+    db = get_db()
+    res = await db_execute(lambda: db.table("cooperative_plot_allotments")
+        .select("*, cooperative_members(full_name, phone, email, sub_index), properties(address, city, state), cooperative_invoices(invoice_number, total_amount, amount_paid, balance_due, status)")
+        .eq("cooperative_id", coop_id)
+        .order("created_at", desc=True)
+        .execute())
+    return {"allotments": res.data or []}
+
+@router.post("/{coop_id}/allotments")
+async def create_cooperative_allotment(coop_id: str, request: Request, current_user=Depends(resolve_coop_viewer)):
+    """
+    Hybrid Subscription: Admin or Member subscribes to a specific tied estate and plot size.
+    Automatically generates matching sub-invoice and allotment record.
+    """
+    db = get_db()
+    data = await request.json()
+    if current_user.get("user_type") == "coop_member":
+        member_id = current_user.get("member_id")
+    else:
+        member_id = data.get("member_id")
+    property_id = data.get("property_id")
+    plot_size = float(data.get("plot_size_sqm", 500))
+    quantity = int(data.get("quantity", 1))
+    payment_plan = data.get("payment_plan", "installments")
+
+    if not member_id or not property_id:
+        raise HTTPException(status_code=400, detail="member_id and property_id are required")
+
+    # Verify estate is tied to this cooperative
+    sc_res = await db_execute(lambda: db.table("cooperative_estate_schemes")
+        .select("*")
+        .eq("cooperative_id", coop_id)
+        .eq("property_id", property_id)
+        .eq("is_active", True)
+        .execute())
+    if not sc_res.data:
+        raise HTTPException(status_code=400, detail="The selected estate is not an approved scheme for this cooperative")
+
+    scheme = sc_res.data[0]
+    estate_code = scheme.get("estate_code") or "EST"
+
+    # Price resolution based on negotiated pricing
+    if plot_size == 300:
+        unit_price = float(scheme.get("price_300sqm") or 0)
+    elif plot_size == 500:
+        unit_price = float(scheme.get("price_500sqm") or 0)
+    elif plot_size == 600:
+        unit_price = float(scheme.get("price_600sqm") or 0)
+    else:
+        unit_price = float(scheme.get("price_custom") or 0)
+
+    if unit_price <= 0:
+        p_res = await db_execute(lambda: db.table("properties").select("price").eq("id", property_id).execute())
+        unit_price = float(p_res.data[0].get("price") or 0) if p_res.data else 0
+
+    total_amount = unit_price * quantity
+
+    m_res = await db_execute(lambda: db.table("cooperative_members").select("*").eq("id", member_id).execute())
+    if not m_res.data:
+        raise HTTPException(status_code=404, detail="Member not found")
+    member = m_res.data[0]
+
+    sub_idx = member.get("sub_index", 1)
+    inv_number = f"EC-{estate_code}-{str(sub_idx).zfill(4)}"
+
+    inv_res = await db_execute(lambda: db.table("cooperative_invoices").insert({
+        "cooperative_id": coop_id,
+        "member_id": member_id,
+        "invoice_type": "sub",
+        "invoice_number": inv_number,
+        "sub_index": sub_idx,
+        "property_id": property_id,
+        "total_amount": float(total_amount),
+        "amount_paid": 0.0,
+        "balance_due": float(total_amount),
+        "payment_plan": payment_plan,
+        "status": "pending",
+        "created_at": datetime.utcnow().isoformat()
+    }).execute())
+    inv_id = inv_res.data[0]["id"] if inv_res.data else None
+
+    allotments_to_insert = []
+    for u in range(1, quantity + 1):
+        allotments_to_insert.append({
+            "cooperative_id": coop_id,
+            "member_id": member_id,
+            "property_id": property_id,
+            "invoice_id": inv_id,
+            "plot_size_sqm": plot_size,
+            "unit_number": u,
+            "allocation_status": "unallocated",
+            "created_by_type": "admin" if current_user.get("user_type") == "coop_admin" or current_user.get("role") == "super_admin" else "member_portal",
+            "created_at": datetime.utcnow().isoformat()
+        })
+    allot_res = await db_execute(lambda: db.table("cooperative_plot_allotments").insert(allotments_to_insert).execute())
+
+    return {
+        "message": f"Successfully subscribed {quantity} unit(s) of {plot_size} sqm",
+        "invoice_number": inv_number,
+        "total_amount": total_amount,
+        "allotments": allot_res.data or []
+    }
+
+@router.patch("/{coop_id}/allotments/{allotment_id}/assign-plot")
+async def assign_physical_plot(coop_id: str, allotment_id: str, request: Request, current_staff=Depends(verify_token)):
+    """
+    Eximp Operations / Staff assigns a physical plot.
+    Anti-Fraud Gate: Physical allocation strictly requires >= 50% verified payment.
+    """
+    if not has_any_role(current_staff, "admin", "super_admin", "operations", "surveyor"):
+        raise HTTPException(status_code=403, detail="Only Eximp Operations or Admins can assign physical plots")
+
+    db = get_db()
+    data = await request.json()
+    plot_num = data.get("plot_number", "").strip()
+    block_num = data.get("block_number", "").strip()
+
+    if not plot_num or not block_num:
+        raise HTTPException(status_code=400, detail="Plot number and Block number are required")
+
+    allot_res = await db_execute(lambda: db.table("cooperative_plot_allotments")
+        .select("*, cooperative_invoices(*)")
+        .eq("id", allotment_id)
+        .execute())
+    if not allot_res.data:
+        raise HTTPException(status_code=404, detail="Allotment not found")
+    allotment = allot_res.data[0]
+    invoice = allotment.get("cooperative_invoices") or {}
+
+    total_amount = Decimal(str(invoice.get("total_amount", 0)))
+    amount_paid = Decimal(str(invoice.get("amount_paid", 0)))
+
+    # Hard Anti-Fraud Threshold Check: >= 50%
+    if total_amount > 0 and amount_paid < (total_amount * Decimal("0.50")):
+        pct_paid = (amount_paid / total_amount * 100) if total_amount > 0 else 0
+        raise HTTPException(
+            status_code=400,
+            detail=f"Anti-Fraud Lock: Minimum 50% verified payment is required to assign physical plots. Current verified payment is {pct_paid:.1f}%."
+        )
+
+    new_status = "confirmed" if amount_paid >= total_amount else "provisional"
+
+    try:
+        upd_res = await db_execute(lambda: db.table("cooperative_plot_allotments").update({
+            "block_number": block_num,
+            "plot_number": plot_num,
+            "allocation_status": new_status,
+            "allocation_date": date.today().isoformat(),
+            "updated_at": datetime.utcnow().isoformat()
+        }).eq("id", allotment_id).execute())
+    except Exception as e:
+        if "uq_coop_estate_plot_allocation" in str(e).lower() or "unique" in str(e).lower():
+            raise HTTPException(status_code=400, detail=f"Double Allocation Alert: Plot {plot_num}, Block {block_num} is already allocated in this estate!")
+        raise HTTPException(status_code=500, detail=f"Failed to assign plot: {e}")
+
+    return {"message": f"Plot {plot_num}, Block {block_num} assigned ({new_status})", "allotment": upd_res.data[0] if upd_res.data else {}}
+
+
 @router.post("/{coop_id}/payments")
 async def record_cooperative_payment(
     coop_id: str,
@@ -1308,6 +1522,304 @@ async def record_cooperative_payment(
         "balance_due": float(new_balance),
         "status": new_status,
     }
+
+
+# ── Unified Payment Verification Queue (Finance Gate) ────────────────────────
+
+@router.get("/verifications/pending")
+async def list_pending_verifications(
+    coop_id: Optional[str] = None,
+    request: Request = None,
+    current_admin=Depends(resolve_coop_admin),
+):
+    """
+    Unified Verification Queue:
+    - Eximp Staff sees ALL pending payments across all cooperatives in one consolidated master feed.
+    - Cooperative Admin sees only payments for their society.
+    """
+    db = get_db()
+    query = db.table("cooperative_payments")\
+        .select("*, cooperatives(id, name), cooperative_members(id, full_name, phone, email, sub_index), cooperative_invoices(invoice_number, total_amount, balance_due, property_id, properties(address))")\
+        .eq("status", "pending")\
+        .order("created_at", desc=True)
+
+    if current_admin.get("user_type") == "coop_admin":
+        query = query.eq("cooperative_id", current_admin["cooperative_id"])
+    elif coop_id:
+        query = query.eq("cooperative_id", coop_id)
+
+    res = await db_execute(lambda: query.execute())
+    return {"pending_verifications": res.data or [], "count": len(res.data or [])}
+
+@router.post("/{coop_id}/payments/claim")
+async def submit_payment_claim(
+    coop_id: str,
+    request: Request,
+    current_user=Depends(resolve_coop_viewer),
+):
+    """Maker step: Member or Cooperative Admin submits proof of installment payment."""
+    db = get_db()
+    data = await request.json()
+    invoice_id = data.get("invoice_id")
+    amount = Decimal(str(data.get("amount", 0)))
+    bank_name = data.get("bank_name", "").strip()
+    bank_session_id = data.get("bank_session_id", "").strip()
+    proof_url = data.get("proof_of_payment_url", "").strip()
+    method = data.get("payment_method", "bank_transfer")
+    pay_date = data.get("payment_date") or date.today().isoformat()
+
+    if not invoice_id or amount <= 0:
+        raise HTTPException(status_code=400, detail="invoice_id and a valid amount greater than 0 are required")
+
+    inv_res = await db_execute(lambda: db.table("cooperative_invoices").select("*").eq("id", invoice_id).execute())
+    if not inv_res.data:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    invoice = inv_res.data[0]
+
+    if current_user.get("user_type") == "coop_member":
+        if str(invoice.get("member_id")) != str(current_user.get("member_id")):
+            raise HTTPException(status_code=403, detail="You can only submit payment claims for your own invoices")
+
+    claim_num = f"CLM-{uuid.uuid4().hex[:6].upper()}"
+    pay_payload = {
+        "cooperative_id": coop_id,
+        "invoice_id": invoice_id,
+        "member_id": invoice.get("member_id"),
+        "receipt_number": claim_num,
+        "amount": float(amount),
+        "payment_method": method,
+        "bank_name": bank_name,
+        "bank_session_id": bank_session_id,
+        "payment_reference": bank_session_id or claim_num,
+        "proof_of_payment_url": proof_url,
+        "payment_date": pay_date,
+        "status": "pending",
+        "created_at": datetime.utcnow().isoformat(),
+    }
+
+    res = await db_execute(lambda: db.table("cooperative_payments").insert(pay_payload).execute())
+    return {
+        "message": "Payment claim submitted successfully. Eximp Finance will verify the bank session ID.",
+        "claim_number": claim_num,
+        "payment": res.data[0] if res.data else {}
+    }
+
+@router.post("/payments/{payment_id}/verify")
+async def confirm_payment_claim(
+    payment_id: str,
+    request: Request,
+    current_staff=Depends(verify_token),
+):
+    """Checker step: Eximp Finance confirms bank inflow and issues official atomic receipt."""
+    if not has_any_role(current_staff, "admin", "super_admin", "finance", "operations"):
+        raise HTTPException(status_code=403, detail="Only Eximp Finance or Admins can confirm payments")
+
+    db = get_db()
+    p_res = await db_execute(lambda: db.table("cooperative_payments")
+        .select("*, cooperative_invoices(*, cooperative_members(*), cooperatives(*))")
+        .eq("id", payment_id)
+        .execute())
+    if not p_res.data:
+        raise HTTPException(status_code=404, detail="Payment claim not found")
+    payment = p_res.data[0]
+    if payment.get("status") == "confirmed":
+        raise HTTPException(status_code=400, detail="Payment is already confirmed")
+
+    invoice = payment.get("cooperative_invoices") or {}
+    amount = Decimal(str(payment.get("amount", 0)))
+    new_paid = Decimal(str(invoice.get("amount_paid", 0))) + amount
+    new_balance = Decimal(str(invoice.get("total_amount", 0))) - new_paid
+    new_status = "paid" if new_balance <= 0 else "partially_paid"
+
+    rcp_res = await db_execute(lambda: db.rpc("generate_coop_receipt_number").execute())
+    rcp_num = rcp_res.data if rcp_res.data else f"RCP-COP-{uuid.uuid4().hex[:6].upper()}"
+
+    await db_execute(lambda: db.table("cooperative_payments").update({
+        "status": "confirmed",
+        "receipt_number": rcp_num,
+        "verified_by": current_staff["sub"],
+        "verified_at": datetime.utcnow().isoformat()
+    }).eq("id", payment_id).execute())
+
+    await db_execute(lambda: db.table("cooperative_invoices").update({
+        "amount_paid": float(new_paid),
+        "balance_due": float(new_balance),
+        "status": new_status,
+        "updated_at": datetime.utcnow().isoformat()
+    }).eq("id", invoice.get("id")).execute())
+
+    if new_balance <= 0:
+        await db_execute(lambda: db.table("cooperative_plot_allotments").update({
+            "allocation_status": "confirmed"
+        }).eq("invoice_id", invoice.get("id")).eq("allocation_status", "provisional").execute())
+
+    member = invoice.get("cooperative_members")
+    if member:
+        coop_name = invoice.get("cooperatives", {}).get("name", "Cooperative Society")
+        await dispatch_member_notification(
+            member=member,
+            title="Payment Verified - Official Receipt Issued",
+            message=f"Your payment of NGN {amount:,.2f} for {invoice.get('invoice_number', 'Sub-Invoice')} has been verified by Eximp Finance. Receipt #{rcp_num} is ready. Outstanding balance: NGN {new_balance:,.2f}.",
+            notif_type="payment_receipt",
+            ref_id=rcp_num,
+        )
+
+    return {"message": f"Payment verified. Receipt #{rcp_num} issued.", "receipt_number": rcp_num, "balance_due": float(new_balance)}
+
+@router.post("/payments/{payment_id}/reject")
+async def reject_payment_claim(
+    payment_id: str,
+    request: Request,
+    current_staff=Depends(verify_token),
+):
+    """Eximp Finance rejects a payment claim."""
+    if not has_any_role(current_staff, "admin", "super_admin", "finance"):
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    db = get_db()
+    data = await request.json()
+    reason = data.get("rejection_reason", "Bank transaction could not be matched").strip()
+
+    await db_execute(lambda: db.table("cooperative_payments").update({
+        "status": "rejected",
+        "rejection_reason": reason,
+        "verified_by": current_staff["sub"],
+        "verified_at": datetime.utcnow().isoformat()
+    }).eq("id", payment_id).execute())
+
+    return {"message": "Payment claim marked as rejected", "rejection_reason": reason}
+
+
+# ── Member Signature Lifecycle (Manual Upload + Digital Request + Review) ────
+
+@router.post("/{coop_id}/members/{member_id}/request-signature")
+async def request_member_signature(
+    coop_id: str,
+    member_id: str,
+    request: Request,
+    current_admin=Depends(resolve_coop_admin),
+):
+    """Admin dispatches digital signing link to member via Email and/or WhatsApp."""
+    db = get_db()
+    data = await request.json()
+    channels = data.get("channels") or ["email", "whatsapp"]
+
+    m_res = await db_execute(lambda: db.table("cooperative_members").select("*").eq("id", member_id).execute())
+    if not m_res.data:
+        raise HTTPException(status_code=404, detail="Member not found")
+    member = m_res.data[0]
+
+    signing_token = f"coop_sig_{uuid.uuid4().hex}"
+    app_base = os.getenv("APP_BASE_URL", "https://app.eximps-cloves.com").rstrip("/")
+    signing_url = f"{app_base}/sign/client/{signing_token}?type=coop"
+
+    await db_execute(lambda: db.table("cooperative_members").update({
+        "signing_token": signing_token,
+        "signature_status": "pending_signature",
+        "signature_requested_at": datetime.utcnow().isoformat(),
+        "updated_at": datetime.utcnow().isoformat()
+    }).eq("id", member_id).execute())
+
+    sent_channels = []
+    # 1. WhatsApp Dispatch
+    if "whatsapp" in channels and member.get("phone"):
+        try:
+            from routers.whatsapp import send_whatsapp_message
+            msg = (
+                f"Hello {member.get('full_name')},\n\n"
+                f"Eximp & Cloves requires your digital signature to finalize your property allotment records.\n\n"
+                f"Please tap the secure link below to sign on your phone:\n{signing_url}\n\n"
+                f"Link expires in 48 hours."
+            )
+            await send_whatsapp_message(phone=member["phone"], message=msg)
+            sent_channels.append("whatsapp")
+        except Exception as e:
+            logger.warning(f"WhatsApp dispatch error: {e}")
+
+    # 2. Email Dispatch
+    if "email" in channels and member.get("email"):
+        try:
+            from email_service import send_email_async
+            subject = "Action Required: Digital Signature for Your Property Allotment"
+            html = f"""
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 8px;">
+                <h2 style="color: #111;">Eximp &amp; Cloves Infrastructure Limited</h2>
+                <p>Dear {member.get('full_name')},</p>
+                <p>Your property allotment documents are ready for execution. To ensure legal compliance, please sign digitally using our secure portal.</p>
+                <div style="margin: 25px 0; text-align: center;">
+                    <a href="{signing_url}" style="background: #C47D0A; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Review &amp; Sign Document</a>
+                </div>
+                <p style="font-size: 11px; color: #777;">This link is exclusively tied to your profile. If you did not request this, please contact support.</p>
+            </div>
+            """
+            await send_email_async(to=member["email"], subject=subject, html_body=html)
+            sent_channels.append("email")
+        except Exception as e:
+            logger.warning(f"Email dispatch error: {e}")
+
+    return {
+        "message": f"Signing link dispatched via {', '.join(sent_channels) if sent_channels else 'none'}",
+        "signing_url": signing_url,
+        "channels": sent_channels
+    }
+
+@router.post("/{coop_id}/members/{member_id}/upload-signature")
+async def manual_upload_signature(
+    coop_id: str,
+    member_id: str,
+    file: UploadFile = File(...),
+    current_admin=Depends(resolve_coop_admin),
+):
+    """Admin manually uploads a scanned/physical signature image."""
+    db = get_db()
+    content = await file.read()
+    b64_sig = f"data:{file.content_type};base64,{base64.b64encode(content).decode()}"
+
+    from routers.signing import _upload_client_signature
+    stored_url = await db_execute(lambda: _upload_client_signature(db, member_id, b64_sig))
+
+    await db_execute(lambda: db.table("cooperative_members").update({
+        "signature_url": stored_url,
+        "signature_status": "approved",
+        "signature_locked": True,
+        "updated_at": datetime.utcnow().isoformat()
+    }).eq("id", member_id).execute())
+
+    return {"message": "Signature uploaded and approved successfully", "signature_url": stored_url}
+
+@router.post("/{coop_id}/members/{member_id}/review-signature")
+async def review_member_signature(
+    coop_id: str,
+    member_id: str,
+    request: Request,
+    current_admin=Depends(resolve_coop_admin),
+):
+    """Admin reviews submitted signature: Approve or Reject."""
+    db = get_db()
+    data = await request.json()
+    action = data.get("action")
+    reason = data.get("reason", "").strip()
+
+    if action == "approve":
+        await db_execute(lambda: db.table("cooperative_members").update({
+            "signature_status": "approved",
+            "signature_locked": True,
+            "signature_rejected_reason": None,
+            "updated_at": datetime.utcnow().isoformat()
+        }).eq("id", member_id).execute())
+        return {"message": "Signature approved and locked for legal execution"}
+
+    elif action == "reject":
+        await db_execute(lambda: db.table("cooperative_members").update({
+            "signature_status": "rejected",
+            "signature_locked": False,
+            "signature_rejected_reason": reason or "Signature is unclear or illegible. Please sign again.",
+            "signature_url": None,
+            "updated_at": datetime.utcnow().isoformat()
+        }).eq("id", member_id).execute())
+        return {"message": "Signature rejected. Member will be prompted to re-sign.", "reason": reason}
+
+    raise HTTPException(status_code=400, detail="Invalid action. Must be 'approve' or 'reject'")
 
 
 # ── Property Transfer & Ownership Reassignment Engine ─────────────────────────

@@ -116,6 +116,9 @@
         <button onclick="switchTab('property')" id="tab-property" class="member-tab active py-3 whitespace-nowrap">
             <i class="fas fa-house-chimney mr-1.5"></i> My Property
         </button>
+        <button onclick="switchTab('schemes')" id="tab-schemes" class="member-tab py-3 whitespace-nowrap">
+            <i class="fas fa-layer-group mr-1.5"></i> Approved Schemes
+        </button>
         <button onclick="switchTab('ledger')" id="tab-ledger" class="member-tab py-3 whitespace-nowrap">
             <i class="fas fa-file-invoice-dollar mr-1.5"></i> Ledger &amp; Receipts
         </button>
@@ -194,6 +197,28 @@
             </div>
         </section>
 
+        <!-- TAB: APPROVED SCHEMES (SELF-SERVICE SUBSCRIPTION) -->
+        <section id="view-schemes" class="hidden space-y-4">
+            <div class="bg-surface border border-theme rounded-2xl p-5 lg:p-6 space-y-4">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-theme">
+                    <div>
+                        <span class="text-[11px] font-bold uppercase tracking-wider text-[#C47D0A] block">Approved Schemes</span>
+                        <h3 class="text-base font-bold text-theme-primary mt-0.5">Society Negotiated Scheme Rates</h3>
+                        <p class="text-xs text-theme-secondary">
+                            Browse estates officially mapped to your cooperative society with negotiated bulk rates. Subscribe to reserve plot allotments.
+                        </p>
+                    </div>
+                </div>
+
+                <div id="memberSchemesContainer" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- Populated dynamically -->
+                </div>
+                <div id="memberSchemesEmpty" class="hidden text-center py-10 text-theme-secondary text-xs">
+                    No estate schemes currently tied to your society. Please contact your scheme executive administrators.
+                </div>
+            </div>
+        </section>
+
         <!-- TAB 2: FINANCIAL LEDGER & RECEIPTS -->
         <section id="view-ledger" class="hidden space-y-4">
             <!-- Financial Summary Cards -->
@@ -235,7 +260,12 @@
 
             <!-- Invoices & Payment Receipts List -->
             <div class="bg-surface border border-theme rounded-xl p-5 space-y-3">
-                <h3 class="text-xs font-bold text-theme-primary uppercase tracking-wider">Payment Receipts &amp; Milestones</h3>
+                <div class="flex items-center justify-between">
+                    <h3 class="text-xs font-bold text-theme-primary uppercase tracking-wider">Payment Receipts &amp; Milestones</h3>
+                    <button onclick="openPaymentClaimModal()" class="btn-gold px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+                        <i class="fas fa-receipt"></i> Submit Payment Proof
+                    </button>
+                </div>
                 <div id="receiptsContainer" class="space-y-2 pt-2">
                     <!-- Populated dynamically -->
                 </div>
@@ -466,6 +496,128 @@
 
     </main>
 
+    <!-- Modal: Self-Service Estate Subscription -->
+    <div id="memberSubscribeModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+        <div class="bg-surface border border-theme rounded-xl max-w-md w-full p-4 sm:p-6 space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-theme">
+                <div>
+                    <h3 class="text-sm font-bold text-theme-primary">Subscribe to Estate Scheme</h3>
+                    <span class="text-[11px] text-[#C47D0A] font-semibold" id="mSubEstateName">Estate Name</span>
+                </div>
+                <button onclick="closeModal('memberSubscribeModal')" class="text-theme-secondary hover:text-theme-primary"><i class="fas fa-times"></i></button>
+            </div>
+            <form onsubmit="submitMemberSelfSubscription(event)" class="space-y-3 text-xs">
+                <input type="hidden" id="mSubPropertyId">
+                <input type="hidden" id="mSubPrice300">
+                <input type="hidden" id="mSubPrice500">
+                <input type="hidden" id="mSubPrice600">
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Plot Dimensions</label>
+                        <select id="mSubPlotSize" onchange="calculateMemberSubTotal()" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                            <option value="300">300 SQM</option>
+                            <option value="500" selected>500 SQM</option>
+                            <option value="600">600 SQM</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Quantity</label>
+                        <input type="number" id="mSubQuantity" min="1" max="10" value="1" required oninput="calculateMemberSubTotal()"
+                            class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Payment Plan</label>
+                    <select id="mSubPaymentPlan" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                        <option value="installments">Monthly Installment Plan</option>
+                        <option value="outright">Outright Full Payment</option>
+                    </select>
+                </div>
+
+                <!-- Price Calculation Breakdown -->
+                <div class="bg-elevated border border-theme rounded-xl p-3.5 space-y-1.5">
+                    <div class="flex justify-between text-theme-secondary">
+                        <span>Wholesale Rate:</span>
+                        <span id="mSubUnitPriceDisplay" class="font-bold text-theme-primary">NGN 0.00</span>
+                    </div>
+                    <div class="flex justify-between border-t border-theme pt-1.5 font-bold">
+                        <span class="text-theme-primary">Total Invoiced:</span>
+                        <span id="mSubTotalDisplay" class="text-emerald-500 font-mono text-sm">NGN 0.00</span>
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeModal('memberSubscribeModal')" class="px-4 py-2 rounded-lg text-theme-secondary hover:bg-elevated">Cancel</button>
+                    <button type="submit" id="btnConfirmMemberSub" class="btn-gold px-5 py-2 rounded-lg font-semibold">Confirm Subscription</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Submit Payment Claim -->
+    <div id="memberPaymentClaimModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+        <div class="bg-surface border border-theme rounded-xl max-w-md w-full p-4 sm:p-6 space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-theme">
+                <div>
+                    <h3 class="text-sm font-bold text-theme-primary">Submit Bank Transfer Proof</h3>
+                    <span class="text-[11px] text-[#C47D0A] font-semibold">Eximp Finance Verification Gate</span>
+                </div>
+                <button onclick="closeModal('memberPaymentClaimModal')" class="text-theme-secondary hover:text-theme-primary"><i class="fas fa-times"></i></button>
+            </div>
+            <p class="text-xs text-theme-secondary leading-relaxed">
+                Provide the bank transaction details and session ID of your installment remittance. Eximp Finance reconciles this against the central bank statement to issue your official receipt.
+            </p>
+            <form onsubmit="submitPaymentClaim(event)" class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Target Scheme Invoice *</label>
+                    <select id="claimInvoiceId" required class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                        <option value="">Select invoice to credit...</option>
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Amount Paid (NGN) *</label>
+                        <input type="number" id="claimAmount" required min="1000" step="100" placeholder="e.g. 500000"
+                            class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Payment Date *</label>
+                        <input type="date" id="claimDate" required
+                            class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Originating Bank Name *</label>
+                    <input type="text" id="claimBankName" required placeholder="e.g. Zenith Bank, GTBank, First Bank"
+                        class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Bank Session ID / Narration Reference *</label>
+                    <input type="text" id="claimSessionId" required placeholder="30-digit Session ID or Transfer Reference"
+                        class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary font-mono focus:outline-none">
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Upload Receipt / Transfer Screenshot (Optional)</label>
+                    <input type="file" id="claimProofFile" accept=".png,.jpg,.jpeg,.pdf" class="w-full text-xs text-theme-secondary">
+                    <input type="hidden" id="claimProofUrl">
+                </div>
+
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeModal('memberPaymentClaimModal')" class="px-4 py-2 rounded-lg text-theme-secondary hover:bg-elevated">Cancel</button>
+                    <button type="submit" id="btnSubmitClaim" class="btn-gold px-5 py-2 rounded-lg font-semibold flex items-center gap-1.5">
+                        <i class="fas fa-check"></i> Submit Claim
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- JavaScript Client Logic -->
     <script>
         function setTheme(theme) {
@@ -490,17 +642,30 @@
         const savedTheme = localStorage.getItem('ec_member_theme') || 'dark';
         setTheme(savedTheme);
 
+        function escapeJs(str) {
+            return (str || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        }
+
+        function closeModal(id) {
+            const el = document.getElementById(id);
+            if (el) el.classList.add('hidden');
+        }
+
         function switchTab(tabId) {
-            ['property', 'ledger', 'documents', 'transfer', 'profile'].forEach(t => {
+            ['property', 'schemes', 'ledger', 'documents', 'transfer', 'profile'].forEach(t => {
                 const view = document.getElementById(`view-${t}`);
                 const tab = document.getElementById(`tab-${t}`);
                 if (view) view.classList.toggle('hidden', t !== tabId);
                 if (tab) tab.classList.toggle('active', t === tabId);
             });
+            if (tabId === 'schemes') loadMemberSchemes();
             if (tabId === 'ledger') loadLedgerData();
         }
 
         let currentMemberId = null;
+        let currentCoopId = null;
+        let currentMemberSchemes = [];
+        let currentMemberInvoices = [];
 
         function downloadMyStatement(format) {
             if (!currentMemberId) {
@@ -528,6 +693,7 @@
                 const data = await res.json();
                 const m = data.member;
                 currentMemberId = m.id;
+                currentCoopId = m.cooperative_id;
 
                 document.getElementById('topMemberName').textContent = m.full_name;
                 document.getElementById('propCoopName').textContent = m.cooperatives ? m.cooperatives.name : 'Cooperative Scheme';
@@ -539,9 +705,210 @@
                 document.getElementById('prefEmail').checked = m.notify_email !== false;
                 document.getElementById('prefSms').checked = m.notify_sms !== false;
                 document.getElementById('prefWhatsapp').checked = m.notify_whatsapp !== false;
+
+                loadMemberSchemes();
+                loadLedgerData();
             } catch (err) {
                 console.warn('Fallback loading member profile:', err);
                 document.getElementById('topMemberName').textContent = 'Cooperative Member';
+            }
+        }
+
+        async function loadMemberSchemes() {
+            if (!currentCoopId) return;
+            const token = localStorage.getItem('member_token') || localStorage.getItem('ec_member_token');
+            try {
+                const res = await fetch(`/api/cooperatives/${currentCoopId}/schemes`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                currentMemberSchemes = data.schemes || [];
+                const container = document.getElementById('memberSchemesContainer');
+                const empty = document.getElementById('memberSchemesEmpty');
+                if (!container) return;
+
+                if (currentMemberSchemes.length === 0) {
+                    container.innerHTML = '';
+                    if (empty) empty.classList.remove('hidden');
+                    return;
+                }
+                if (empty) empty.classList.add('hidden');
+
+                container.innerHTML = currentMemberSchemes.map(s => {
+                    const p = s.properties || {};
+                    const propName = p.name || p.address || 'Eximp Estate';
+                    const loc = [p.city, p.state].filter(Boolean).join(', ') || 'Nigeria';
+                    return `
+                        <div class="bg-surface border border-theme rounded-2xl p-5 space-y-3.5 flex flex-col justify-between shadow-sm">
+                            <div>
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="badge-theme text-[10px] font-bold px-2 py-0.5 rounded font-mono uppercase bg-amber-500/10 text-[#C47D0A] border border-amber-500/20">${s.estate_code}</span>
+                                    <span class="text-[10px] text-emerald-400 font-semibold"><i class="fas fa-circle-check mr-1"></i>Approved Scheme</span>
+                                </div>
+                                <h4 class="font-bold text-sm text-theme-primary">${propName}</h4>
+                                <div class="text-[11px] text-theme-secondary mt-0.5"><i class="fas fa-location-dot text-[#C47D0A] mr-1"></i> ${loc}</div>
+                            </div>
+
+                            <div class="bg-elevated rounded-xl p-3 border border-theme space-y-2 text-xs">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-theme-secondary">300 SQM Price:</span>
+                                    <span class="font-bold text-theme-primary font-mono">${s.price_300sqm ? `NGN ${Number(s.price_300sqm).toLocaleString()}` : 'Default Retail'}</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-theme-secondary">500 SQM Price:</span>
+                                    <span class="font-bold text-theme-primary font-mono">${s.price_500sqm ? `NGN ${Number(s.price_500sqm).toLocaleString()}` : 'Default Retail'}</span>
+                                </div>
+                                ${s.price_600sqm ? `
+                                <div class="flex justify-between items-center">
+                                    <span class="text-theme-secondary">600 SQM Price:</span>
+                                    <span class="font-bold text-theme-primary font-mono">NGN ${Number(s.price_600sqm).toLocaleString()}</span>
+                                </div>` : ''}
+                            </div>
+
+                            <button onclick="openMemberSubscribeModal('${s.property_id}', '${escapeJs(propName)}', ${s.price_300sqm || 0}, ${s.price_500sqm || 0}, ${s.price_600sqm || 0})"
+                                class="btn-gold w-full py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm">
+                                <i class="fas fa-cart-plus"></i> Subscribe to this Scheme
+                            </button>
+                        </div>
+                    `;
+                }).join('');
+            } catch (err) {
+                console.warn('Could not load member schemes:', err);
+            }
+        }
+
+        function openMemberSubscribeModal(propertyId, estateName, p300, p500, p600) {
+            document.getElementById('mSubPropertyId').value = propertyId;
+            document.getElementById('mSubEstateName').textContent = estateName;
+            document.getElementById('mSubPrice300').value = p300;
+            document.getElementById('mSubPrice500').value = p500;
+            document.getElementById('mSubPrice600').value = p600;
+
+            calculateMemberSubTotal();
+            document.getElementById('memberSubscribeModal').classList.remove('hidden');
+        }
+
+        function calculateMemberSubTotal() {
+            const size = document.getElementById('mSubPlotSize').value;
+            const qty = parseInt(document.getElementById('mSubQuantity').value || 1, 10);
+            let unitPrice = 0;
+            if (size === '300') unitPrice = parseFloat(document.getElementById('mSubPrice300').value || 0);
+            else if (size === '500') unitPrice = parseFloat(document.getElementById('mSubPrice500').value || 0);
+            else if (size === '600') unitPrice = parseFloat(document.getElementById('mSubPrice600').value || 0);
+
+            const total = unitPrice * qty;
+            document.getElementById('mSubUnitPriceDisplay').textContent = `NGN ${unitPrice.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+            document.getElementById('mSubTotalDisplay').textContent = `NGN ${total.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+        }
+
+        async function submitMemberSelfSubscription(e) {
+            e.preventDefault();
+            const propertyId = document.getElementById('mSubPropertyId').value;
+            const plotSize = parseFloat(document.getElementById('mSubPlotSize').value);
+            const quantity = parseInt(document.getElementById('mSubQuantity').value || 1, 10);
+            const paymentPlan = document.getElementById('mSubPaymentPlan').value;
+            const token = localStorage.getItem('member_token') || localStorage.getItem('ec_member_token');
+
+            const btn = document.getElementById('btnConfirmMemberSub');
+            btn.disabled = true;
+            try {
+                const res = await fetch(`/api/cooperatives/${currentCoopId}/allotments`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        property_id: propertyId,
+                        plot_size_sqm: plotSize,
+                        quantity: quantity,
+                        payment_plan: paymentPlan
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Subscription failed');
+                closeModal('memberSubscribeModal');
+                alert(data.message || 'Subscription confirmed! Sub-invoice has been generated in your ledger.');
+                switchTab('ledger');
+                loadLedgerData();
+            } catch (err) {
+                alert(err.message);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        function openPaymentClaimModal() {
+            const select = document.getElementById('claimInvoiceId');
+            if (select) {
+                select.innerHTML = '<option value="">Select invoice to credit...</option>' + (currentMemberInvoices || []).map(inv => `
+                    <option value="${inv.id}">${inv.invoice_number} (Total: NGN ${Number(inv.total_amount).toLocaleString()} &bull; Balance: NGN ${Number(inv.balance_due).toLocaleString()})</option>
+                `).join('');
+            }
+            document.getElementById('claimDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('memberPaymentClaimModal').classList.remove('hidden');
+        }
+
+        async function submitPaymentClaim(e) {
+            e.preventDefault();
+            const invoiceId = document.getElementById('claimInvoiceId').value;
+            const amount = parseFloat(document.getElementById('claimAmount').value || 0);
+            const bankName = document.getElementById('claimBankName').value.trim();
+            const sessionId = document.getElementById('claimSessionId').value.trim();
+            const payDate = document.getElementById('claimDate').value;
+            const token = localStorage.getItem('member_token') || localStorage.getItem('ec_member_token');
+
+            if (!invoiceId) {
+                alert('Please select an invoice to credit');
+                return;
+            }
+
+            const btn = document.getElementById('btnSubmitClaim');
+            btn.disabled = true;
+            try {
+                // If a file was selected, upload it first
+                let proofUrl = '';
+                const fileInput = document.getElementById('claimProofFile');
+                if (fileInput && fileInput.files && fileInput.files.length > 0) {
+                    const fd = new FormData();
+                    fd.append('file', fileInput.files[0]);
+                    fd.append('document_type', 'proof_of_payment');
+                    const upRes = await fetch(`/api/cooperatives/${currentCoopId}/upload-document`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}` },
+                        body: fd
+                    });
+                    if (upRes.ok) {
+                        const upData = await upRes.json();
+                        proofUrl = upData.url || '';
+                    }
+                }
+
+                const res = await fetch(`/api/cooperatives/${currentCoopId}/payments/claim`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        invoice_id: invoiceId,
+                        amount: amount,
+                        bank_name: bankName,
+                        bank_session_id: sessionId,
+                        proof_of_payment_url: proofUrl,
+                        payment_date: payDate
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to submit payment claim');
+                closeModal('memberPaymentClaimModal');
+                alert(data.message || 'Payment claim submitted! Eximp Finance will verify your bank session ID.');
+                loadLedgerData();
+            } catch (err) {
+                alert(err.message);
+            } finally {
+                btn.disabled = false;
             }
         }
 
@@ -560,6 +927,7 @@
 
                 const receipts = data.receipts || [];
                 const invoices = data.invoices || [];
+                currentMemberInvoices = invoices;
 
                 // Render Invoices in Dynamic Documents list
                 const docsContainer = document.getElementById('dynamicDocumentsContainer');

@@ -126,6 +126,11 @@
                     <i class="fas fa-users text-[#C47D0A] w-4"></i>
                     <span id="mobileMenuMembersText">Participants Roster</span>
                 </button>
+                <button onclick="switchTab('verifications')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-theme-primary hover:bg-elevated transition text-left">
+                    <i class="fas fa-money-bill-transfer text-amber-500 w-4"></i>
+                    <span>Payment Verifications</span>
+                    <span id="mobilePendingVerifBadge" class="hidden ml-auto text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-bold">0</span>
+                </button>
                 <button onclick="switchTab('kyc')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-theme-primary hover:bg-elevated transition text-left">
                     <i class="fas fa-id-card-clip text-[#C47D0A] w-4"></i>
                     <span>Corporate KYC</span>
@@ -263,6 +268,9 @@
         <button onclick="switchTab('members')" id="tab-members" class="tab-btn py-3 whitespace-nowrap">
             <i class="fas fa-users mr-1.5"></i> <span id="tabMembersLabel">Participants</span> Roster (<span id="memberCountBadge">0</span>)
         </button>
+        <button onclick="switchTab('verifications')" id="tab-verifications" class="tab-btn py-3 whitespace-nowrap">
+            <i class="fas fa-money-bill-transfer mr-1.5 text-amber-500"></i> Payment Verifications (<span id="pendingVerifCountBadge">0</span>)
+        </button>
         <button onclick="switchTab('kyc')" id="tab-kyc" class="tab-btn py-3 whitespace-nowrap">
             <i class="fas fa-id-card-clip mr-1.5"></i> Corporate KYC &amp; Verification
         </button>
@@ -333,6 +341,29 @@
                     <!-- Populated dynamically -->
                 </div>
             </div>
+
+            <!-- Approved Estate Schemes & Negotiated Rates Card -->
+            <div class="bg-surface border border-theme rounded-xl p-5">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-bold uppercase tracking-wider text-[#C47D0A]">Estate Schemes</span>
+                            <span id="schemeCountBadge" class="badge-theme text-[10px] font-bold px-2 py-0.5 rounded">0 Mapped</span>
+                        </div>
+                        <h3 class="text-sm font-bold text-theme-primary mt-0.5">Approved Estate Schemes &amp; Negotiated Rates</h3>
+                        <p class="text-xs text-theme-secondary">Estates mapped to this entity with negotiated wholesale rates. Enrollees can only view and subscribe to these approved estates.</p>
+                    </div>
+                    <button onclick="openTieSchemeModal()" class="btn-gold px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5">
+                        <i class="fas fa-plus"></i> Tie Estate Scheme
+                    </button>
+                </div>
+                <div id="schemesContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <!-- Populated dynamically -->
+                </div>
+                <div id="schemesEmptyState" class="hidden text-center py-8 text-theme-secondary text-xs">
+                    No estates currently mapped to this entity. Click "Tie Estate Scheme" to map an estate with negotiated wholesale prices.
+                </div>
+            </div>
         </section>
 
         <!-- TAB 2: PARTICIPANTS ROSTER -->
@@ -358,14 +389,14 @@
             <!-- Members Table Card -->
             <div class="bg-surface border border-theme rounded-xl overflow-hidden shadow-sm">
                 <div class="w-full overflow-x-auto">
-                    <table class="min-w-[650px] w-full text-left text-xs text-theme-primary">
+                    <table class="min-w-[850px] w-full text-left text-xs text-theme-primary">
                         <thead class="bg-elevated border-b border-theme text-theme-secondary font-medium uppercase tracking-wider text-[11px]">
                             <tr>
                                 <th class="py-3 px-4">Sub-Index</th>
                                 <th class="py-3 px-4" id="thMemberName">Participant Name</th>
                                 <th class="py-3 px-4">Phone / Email</th>
-                                <th class="py-3 px-4">NIN</th>
-                                <th class="py-3 px-4">Plot Allocation</th>
+                                <th class="py-3 px-4">Subscriptions &amp; Plots</th>
+                                <th class="py-3 px-4">Signature Status</th>
                                 <th class="py-3 px-4">Identity Security</th>
                                 <th class="py-3 px-4 text-right">Actions</th>
                             </tr>
@@ -377,6 +408,61 @@
                 </div>
                 <div id="membersEmptyState" class="hidden text-center py-12 text-theme-secondary text-xs">
                     No records registered yet. Click "Add Participant" or "Bulk CSV Import" to begin.
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB: PAYMENT VERIFICATIONS (FINANCE MASTER QUEUE) -->
+        <section id="view-verifications" class="hidden space-y-4">
+            <div class="bg-surface border border-theme rounded-xl p-5 space-y-4">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-theme">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-bold uppercase tracking-wider text-amber-500">Finance Master Gate</span>
+                            <span id="verifQueueCountBadge" class="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">0 Pending Claims</span>
+                        </div>
+                        <h3 class="text-base font-bold text-theme-primary mt-0.5">Entity Payment Verification Queue</h3>
+                        <p class="text-xs text-theme-secondary">
+                            Consolidated finance review feed for reconciling bank session IDs and issuing atomic receipts. Eximp Finance verifies all entity claims here in one view without workspace switching.
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-2 w-full sm:w-auto">
+                        <select id="verifFilterDropdown" onchange="loadPendingVerifications()" class="w-full sm:w-auto text-xs font-semibold bg-elevated border border-theme rounded-lg px-3 py-2 text-theme-primary focus:outline-none focus:border-[#C47D0A]">
+                            <option value="">All Entities (Master Feed)</option>
+                            <option value="current">Current Entity Only</option>
+                        </select>
+                        <button onclick="loadPendingVerifications()" class="px-3 py-2 bg-elevated border border-theme hover:bg-surface text-theme-primary rounded-lg text-xs font-semibold flex items-center gap-1.5 transition" title="Refresh Queue">
+                            <i class="fas fa-arrows-rotate text-[#C47D0A]"></i>
+                            <span class="hidden sm:inline">Refresh</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Verifications Table -->
+                <div class="w-full overflow-x-auto">
+                    <table class="min-w-[850px] w-full text-left text-xs text-theme-primary">
+                        <thead class="bg-elevated border-b border-theme text-theme-secondary uppercase text-[11px] font-medium">
+                            <tr>
+                                <th class="py-3 px-4">Claim Ref / Date</th>
+                                <th class="py-3 px-4">Entity / Organization</th>
+                                <th class="py-3 px-4">Participant</th>
+                                <th class="py-3 px-4">Claim Amount</th>
+                                <th class="py-3 px-4">Bank Name &amp; Session ID</th>
+                                <th class="py-3 px-4">Proof of Inflow</th>
+                                <th class="py-3 px-4 text-right">Verification Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="verificationsTableBody" class="divide-y divide-theme">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="verificationsEmptyState" class="hidden text-center py-12 text-theme-secondary text-xs">
+                    <div class="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500 mx-auto mb-2 text-lg">
+                        <i class="fas fa-check-double"></i>
+                    </div>
+                    <div class="font-semibold text-theme-primary">All Payment Claims Reconciled</div>
+                    <div class="text-[11px] text-theme-secondary mt-0.5">There are no pending entity payment claims awaiting verification.</div>
                 </div>
             </div>
         </section>
@@ -992,6 +1078,312 @@
         </div>
     </div>
 
+    <!-- Modal: Tie Estate Scheme -->
+    <div id="tieSchemeModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+        <div class="bg-surface border border-theme rounded-xl max-w-lg w-full p-4 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between pb-3 border-b border-theme">
+                <div>
+                    <h3 class="text-sm font-bold text-theme-primary">Tie Estate Scheme to Entity</h3>
+                    <span class="text-[11px] text-[#C47D0A] font-semibold">Negotiated Wholesale Pricing</span>
+                </div>
+                <button onclick="closeModal('tieSchemeModal')" class="text-theme-secondary hover:text-theme-primary"><i class="fas fa-times"></i></button>
+            </div>
+            <p class="text-xs text-theme-secondary leading-relaxed">
+                Bind an Eximp estate to this corporate entity and set approved negotiated plot rates. Only tied estates are visible for subscription to this entity's participants.
+            </p>
+            <form onsubmit="submitTieScheme(event)" class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Select Eximp Estate *</label>
+                    <select id="schemePropertyId" required class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                        <option value="">Select property...</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Estate Reference Code *</label>
+                    <input type="text" id="schemeEstateCode" required placeholder="e.g. HER, EMP, OAK" maxlength="6"
+                        class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary uppercase focus:outline-none">
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Negotiated Price: 300 SQM (NGN)</label>
+                        <input type="number" id="schemePrice300" placeholder="e.g. 3500000" step="1000" min="0"
+                            class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Negotiated Price: 500 SQM (NGN)</label>
+                        <input type="number" id="schemePrice500" placeholder="e.g. 5500000" step="1000" min="0"
+                            class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Negotiated Price: 600 SQM (NGN)</label>
+                    <input type="number" id="schemePrice600" placeholder="e.g. 6500000" step="1000" min="0"
+                        class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                </div>
+                <div class="flex justify-end gap-2 pt-3">
+                    <button type="button" onclick="closeModal('tieSchemeModal')" class="px-4 py-2 rounded-lg text-theme-secondary hover:bg-elevated">Cancel</button>
+                    <button type="submit" id="btnSaveScheme" class="btn-gold px-5 py-2 rounded-lg font-semibold">Save Estate Scheme</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Subscribe Member to Estate Scheme -->
+    <div id="subscribeMemberModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+        <div class="bg-surface border border-theme rounded-xl max-w-lg w-full p-4 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between pb-3 border-b border-theme">
+                <div>
+                    <h3 class="text-sm font-bold text-theme-primary">Subscribe Participant to Estate</h3>
+                    <span class="text-[11px] text-[#C47D0A] font-semibold" id="subMemberNameDisplay">Loading...</span>
+                </div>
+                <button onclick="closeModal('subscribeMemberModal')" class="text-theme-secondary hover:text-theme-primary"><i class="fas fa-times"></i></button>
+            </div>
+            <form onsubmit="submitMemberAllotment(event)" class="space-y-3 text-xs">
+                <input type="hidden" id="subMemberId">
+                <div>
+                    <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Approved Estate Scheme *</label>
+                    <select id="subEstateSelect" required onchange="calculateSubscriptionTotal()" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                        <option value="">Select approved estate...</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Plot Dimensions *</label>
+                        <select id="subPlotSize" onchange="calculateSubscriptionTotal()" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                            <option value="300">300 SQM</option>
+                            <option value="500" selected>500 SQM</option>
+                            <option value="600">600 SQM</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Quantity of Plots / Units *</label>
+                        <input type="number" id="subQuantity" min="1" max="100" value="1" required oninput="calculateSubscriptionTotal()"
+                            class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Payment Plan</label>
+                    <select id="subPaymentPlan" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                        <option value="installments">Monthly Installment Plan</option>
+                        <option value="outright">Outright Full Payment</option>
+                    </select>
+                </div>
+
+                <!-- Price Calculation Summary -->
+                <div class="bg-elevated border border-theme rounded-xl p-3.5 space-y-1.5">
+                    <div class="flex justify-between text-theme-secondary">
+                        <span>Negotiated Unit Price:</span>
+                        <span id="subUnitPriceDisplay" class="font-bold text-theme-primary">NGN 0.00</span>
+                    </div>
+                    <div class="flex justify-between text-theme-secondary">
+                        <span>Quantity:</span>
+                        <span id="subQuantityDisplay" class="font-bold text-theme-primary">1 Unit</span>
+                    </div>
+                    <div class="flex justify-between border-t border-theme pt-1.5 font-bold">
+                        <span class="text-theme-primary">Total Invoiced Amount:</span>
+                        <span id="subTotalDisplay" class="text-emerald-500 font-mono text-sm">NGN 0.00</span>
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3">
+                    <button type="button" onclick="closeModal('subscribeMemberModal')" class="px-4 py-2 rounded-lg text-theme-secondary hover:bg-elevated">Cancel</button>
+                    <button type="submit" id="btnSubmitSub" class="btn-gold px-5 py-2 rounded-lg font-semibold">Confirm Subscription</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Assign Physical Plot (Anti-Fraud Protected) -->
+    <div id="assignPlotModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+        <div class="bg-surface border border-theme rounded-xl max-w-md w-full p-4 sm:p-6 space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-theme">
+                <div>
+                    <h3 class="text-sm font-bold text-theme-primary">Physical Plot Allocation</h3>
+                    <span class="text-[11px] text-[#C47D0A] font-semibold">Anti-Fraud Payment Lock</span>
+                </div>
+                <button onclick="closeModal('assignPlotModal')" class="text-theme-secondary hover:text-theme-primary"><i class="fas fa-times"></i></button>
+            </div>
+            <form onsubmit="submitAssignPlot(event)" class="space-y-3 text-xs">
+                <input type="hidden" id="assignAllotmentId">
+                <div class="space-y-1">
+                    <div class="flex justify-between">
+                        <span class="text-theme-secondary">Participant:</span>
+                        <span id="assignMemberName" class="font-bold text-theme-primary"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-theme-secondary">Estate &amp; Unit:</span>
+                        <span id="assignEstateSize" class="font-medium text-theme-primary"></span>
+                    </div>
+                </div>
+
+                <!-- Financial Clearance Meter -->
+                <div class="bg-elevated border border-theme rounded-xl p-3.5 space-y-2">
+                    <div class="flex justify-between text-[11px]">
+                        <span class="text-theme-secondary">Verified Paid: <strong id="assignAmountPaid" class="text-emerald-500">NGN 0.00</strong></span>
+                        <span class="text-theme-secondary">Total: <strong id="assignTotalAmount" class="text-theme-primary">NGN 0.00</strong></span>
+                    </div>
+                    <div class="w-full bg-surface rounded-full h-2 overflow-hidden border border-theme">
+                        <div id="assignProgressBar" class="h-2 rounded-full bg-emerald-500 transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                    <div id="assignAntiFraudNotice" class="text-[11px] leading-relaxed pt-1">
+                        <!-- Populated dynamically with lock or unlock message -->
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Block Number *</label>
+                        <input type="text" id="assignBlockNumber" required placeholder="e.g. Block C"
+                            class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary uppercase focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Plot Number *</label>
+                        <input type="text" id="assignPlotNumber" required placeholder="e.g. Plot 14"
+                            class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary uppercase focus:outline-none">
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3">
+                    <button type="button" onclick="closeModal('assignPlotModal')" class="px-4 py-2 rounded-lg text-theme-secondary hover:bg-elevated">Cancel</button>
+                    <button type="submit" id="btnConfirmAssign" class="btn-gold px-5 py-2 rounded-lg font-semibold">Assign Physical Plot</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Request Participant Digital Signature -->
+    <div id="requestSigModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+        <div class="bg-surface border border-theme rounded-xl max-w-md w-full p-4 sm:p-6 space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-theme">
+                <div>
+                    <h3 class="text-sm font-bold text-theme-primary">Request Digital Signature</h3>
+                    <span class="text-[11px] text-[#C47D0A] font-semibold" id="reqSigMemberName">Loading...</span>
+                </div>
+                <button onclick="closeModal('requestSigModal')" class="text-theme-secondary hover:text-theme-primary"><i class="fas fa-times"></i></button>
+            </div>
+            <p class="text-xs text-theme-secondary leading-relaxed">
+                Dispatch an electronic signing invitation with a secure one-time link. The participant can sign directly on their smartphone screen or upload a signature image.
+            </p>
+            <form onsubmit="submitRequestSignature(event)" class="space-y-3 text-xs">
+                <input type="hidden" id="reqSigMemberId">
+                <div class="p-3 bg-elevated rounded-xl border border-theme space-y-2">
+                    <div class="text-[11px] font-semibold text-theme-primary">Delivery Channels</div>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="reqSigChanWhatsapp" checked class="w-4 h-4 accent-[#C47D0A]">
+                        <span class="text-theme-primary">WhatsApp Official Gateway (<span id="reqSigPhoneDisplay" class="font-mono text-[11px]"></span>)</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="reqSigChanEmail" checked class="w-4 h-4 accent-[#C47D0A]">
+                        <span class="text-theme-primary">Official Email Notification (<span id="reqSigEmailDisplay" class="font-mono text-[11px]"></span>)</span>
+                    </label>
+                </div>
+                <div class="text-[11px] text-theme-secondary leading-relaxed">
+                    <strong>Evidence Act Compliance:</strong> All digital submissions capture signing IP address, timestamp, device metadata, and cryptographic SHA-256 audit hash to ensure admissibility in Nigerian courts.
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeModal('requestSigModal')" class="px-4 py-2 rounded-lg text-theme-secondary hover:bg-elevated">Cancel</button>
+                    <button type="submit" id="btnSendSigReq" class="btn-gold px-5 py-2 rounded-lg font-semibold flex items-center gap-1.5">
+                        <i class="fas fa-paper-plane"></i> Dispatch E-Sign Link
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Manual Upload Signature -->
+    <div id="uploadSigModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+        <div class="bg-surface border border-theme rounded-xl max-w-md w-full p-4 sm:p-6 space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-theme">
+                <div>
+                    <h3 class="text-sm font-bold text-theme-primary">Upload Physical Signature</h3>
+                    <span class="text-[11px] text-[#C47D0A] font-semibold" id="uploadSigMemberName">Loading...</span>
+                </div>
+                <button onclick="closeModal('uploadSigModal')" class="text-theme-secondary hover:text-theme-primary"><i class="fas fa-times"></i></button>
+            </div>
+            <p class="text-xs text-theme-secondary leading-relaxed">
+                Upload a scanned physical signature from an offline registration slip or bank mandate. Once uploaded, it is automatically approved and locked for contract execution.
+            </p>
+            <form onsubmit="submitManualUploadSignature(event)" class="space-y-4 text-xs">
+                <input type="hidden" id="uploadSigMemberId">
+                <div class="border-2 border-dashed border-theme rounded-xl p-6 text-center hover:border-[#C47D0A] transition cursor-pointer">
+                    <input type="file" id="manualSigFileInput" accept=".png,.jpg,.jpeg,.pdf" required class="w-full text-xs text-theme-secondary">
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" onclick="closeModal('uploadSigModal')" class="px-4 py-2 rounded-lg text-theme-secondary hover:bg-elevated">Cancel</button>
+                    <button type="submit" id="btnSubmitManualSig" class="btn-gold px-5 py-2 rounded-lg font-semibold">Upload &amp; Approve</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Review Participant Signature -->
+    <div id="reviewSigModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+        <div class="bg-surface border border-theme rounded-xl max-w-md w-full p-4 sm:p-6 space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-theme">
+                <div>
+                    <h3 class="text-sm font-bold text-theme-primary">Review Participant Signature</h3>
+                    <span class="text-[11px] text-[#C47D0A] font-semibold" id="reviewSigMemberName">Loading...</span>
+                </div>
+                <button onclick="closeModal('reviewSigModal')" class="text-theme-secondary hover:text-theme-primary"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="space-y-3 text-xs">
+                <input type="hidden" id="reviewSigMemberId">
+                <div class="bg-white p-4 rounded-xl border border-theme flex items-center justify-center min-h-[140px]">
+                    <img id="reviewSigImage" src="" alt="Submitted Signature" class="max-h-32 object-contain">
+                </div>
+                <div class="bg-elevated border border-theme rounded-xl p-3 space-y-1 text-[11px] text-theme-secondary">
+                    <div>Signing IP: <span id="reviewSigIp" class="font-mono text-theme-primary">Unknown</span></div>
+                    <div>Timestamp: <span id="reviewSigTimestamp" class="font-mono text-theme-primary">Unknown</span></div>
+                    <div>Audit Hash: <span id="reviewSigHash" class="font-mono text-[10px] text-theme-primary break-all">Unknown</span></div>
+                </div>
+
+                <!-- Rejection Reason Input Box (Hidden initially) -->
+                <div id="reviewRejectBox" class="hidden space-y-1.5 pt-1">
+                    <label class="block font-semibold text-red-400 text-[10px] uppercase">Reason for Rejection *</label>
+                    <textarea id="reviewRejectReason" rows="2" placeholder="e.g. Signature is unclear or does not match name"
+                        class="w-full px-3 py-2 rounded-lg bg-elevated border border-red-500/30 text-theme-primary focus:outline-none"></textarea>
+                </div>
+
+                <div class="flex justify-between items-center gap-2 pt-3 border-t border-theme">
+                    <button type="button" onclick="handleRejectSigClick()" id="btnRejectSig" class="px-3.5 py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 font-semibold transition">
+                        Reject Signature
+                    </button>
+                    <button type="button" onclick="confirmReviewSignature('approve')" id="btnApproveSig" class="btn-gold px-5 py-2 rounded-lg font-semibold flex items-center gap-1.5">
+                        <i class="fas fa-check"></i> Approve Signature
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Reject Payment Claim -->
+    <div id="rejectPaymentModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+        <div class="bg-surface border border-theme rounded-xl max-w-md w-full p-4 sm:p-6 space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-theme">
+                <div>
+                    <h3 class="text-sm font-bold text-theme-primary">Reject Payment Claim</h3>
+                    <span class="text-[11px] text-red-400 font-semibold">Eximp Finance Verification Gate</span>
+                </div>
+                <button onclick="closeModal('rejectPaymentModal')" class="text-theme-secondary hover:text-theme-primary"><i class="fas fa-times"></i></button>
+            </div>
+            <form onsubmit="submitRejectPayment(event)" class="space-y-3 text-xs">
+                <input type="hidden" id="rejectPaymentId">
+                <div class="p-3 bg-elevated rounded-xl border border-theme text-theme-secondary text-[11px]" id="rejectPaymentSummary">
+                    Loading claim details...
+                </div>
+                <div>
+                    <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Audit Rejection Reason *</label>
+                    <textarea id="rejectPaymentReason" required rows="3" placeholder="e.g. Bank session ID could not be verified on Zenith Bank statement"
+                        class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none"></textarea>
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeModal('rejectPaymentModal')" class="px-4 py-2 rounded-lg text-theme-secondary hover:bg-elevated">Cancel</button>
+                    <button type="submit" class="px-5 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white font-semibold transition">Confirm Rejection</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- JavaScript Logic -->
     <script>
         let currentCoopId = '';
@@ -1196,14 +1588,16 @@
         // Tab Switcher Logic
         function switchTab(tabId) {
             toggleMobileMenu(false);
-            ['overview', 'members', 'kyc', 'transfers', 'history', 'whatsapp'].forEach(t => {
+            ['overview', 'members', 'verifications', 'kyc', 'transfers', 'history', 'whatsapp'].forEach(t => {
                 const view = document.getElementById(`view-${t}`);
                 const tab = document.getElementById(`tab-${t}`);
                 if (view) view.classList.toggle('hidden', t !== tabId);
                 if (tab) tab.classList.toggle('active', t === tabId);
             });
 
+            if (tabId === 'overview') loadCoopSchemes();
             if (tabId === 'members') loadMembers();
+            if (tabId === 'verifications') loadPendingVerifications();
             if (tabId === 'history') loadAuditHistory();
             if (tabId === 'transfers') loadTransfers();
             if (tabId === 'whatsapp') loadWhatsAppStatus();
@@ -1445,6 +1839,8 @@
             }
 
             loadOverviewStats();
+            loadCoopSchemes();
+            loadPendingVerificationsCount();
         }
 
         function renderAdmins(admins) {
@@ -1547,6 +1943,10 @@
             }
         }
 
+        function escapeJs(str) {
+            return (str || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        }
+
         async function loadMembers() {
             const tbody = document.getElementById('membersTableBody');
             if (!tbody) return;
@@ -1555,11 +1955,18 @@
                 return;
             }
             try {
-                const res = await fetch(`/api/cooperatives/${currentCoopId}/members?limit=100`, {
-                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
-                });
-                const data = await res.json();
-                const members = data.members || [];
+                const token = getAuthToken();
+                const [memRes, allotRes] = await Promise.all([
+                    fetch(`/api/cooperatives/${currentCoopId}/members?limit=100`, { headers: { 'Authorization': `Bearer ${token}` } }),
+                    fetch(`/api/cooperatives/${currentCoopId}/allotments`, { headers: { 'Authorization': `Bearer ${token}` } })
+                ]);
+                const memData = await memRes.json();
+                const members = memData.members || [];
+                const allotData = allotRes.ok ? await allotRes.json() : { allotments: [] };
+                const allotments = allotData.allotments || [];
+
+                window.currentMembers = members;
+                window.currentAllotments = allotments;
                 document.getElementById('memberCountBadge').textContent = members.length;
 
                 if (!members.length) {
@@ -1570,35 +1977,669 @@
                 }
                 document.getElementById('membersEmptyState').classList.add('hidden');
 
-                tbody.innerHTML = members.map(m => `
-                    <tr class="hover:bg-elevated/50 transition">
-                        <td class="py-3 px-4 font-mono font-bold text-[#C47D0A]">EC-COP-000001/${String(m.sub_index).padStart(3, '0')}</td>
-                        <td class="py-3 px-4 font-medium text-theme-primary">${m.full_name}</td>
-                        <td class="py-3 px-4 text-theme-secondary">${m.phone}<br><span class="text-[10px]">${m.email || 'No email'}</span></td>
-                        <td class="py-3 px-4 font-mono text-[11px] text-theme-secondary">${m.nin || 'Not provided'}</td>
-                        <td class="py-3 px-4">
-                            <span class="badge-theme text-[10px] font-bold px-2 py-0.5 rounded">${m.allocation_status}</span>
-                            <div class="text-[10px] text-theme-secondary mt-0.5">${m.plot_number ? `Plot ${m.plot_number}` : 'Pending allocation'}</div>
-                        </td>
-                        <td class="py-3 px-4">
-                            <div class="flex items-center gap-1.5">
-                                <span title="Passport photo status" class="${m.passport_locked ? 'text-emerald-500' : 'text-amber-500'} text-[11px]">
-                                    <i class="fas ${m.passport_locked ? 'fa-lock' : 'fa-lock-open'}"></i> Photo
-                                </span>
-                                <span title="Signature status" class="${m.signature_locked ? 'text-emerald-500' : 'text-amber-500'} text-[11px] ml-1.5">
-                                    <i class="fas ${m.signature_locked ? 'fa-lock' : 'fa-lock-open'}"></i> Sig
-                                </span>
-                            </div>
-                        </td>
-                        <td class="py-3 px-4 text-right">
-                            <button onclick="openUnlockModal('${m.id}')" class="px-2 py-1 text-[11px] font-semibold text-[#C47D0A] hover:bg-[#C47D0A]/10 rounded transition">
-                                Unlock Doc
+                tbody.innerHTML = members.map(m => {
+                    const mAllots = allotments.filter(a => a.member_id === m.id);
+                    let allotsHtml = '';
+                    if (mAllots.length === 0) {
+                        allotsHtml = '<span class="text-theme-secondary text-[11px] italic">No active subscriptions</span>';
+                    } else {
+                        allotsHtml = mAllots.map(a => {
+                            const estName = a.properties ? (a.properties.name || a.properties.address || 'Estate') : 'Estate';
+                            if (a.plot_number) {
+                                return `<div class="mb-1"><span class="badge-theme text-[10px] font-bold px-1.5 py-0.5 rounded uppercase">Plot ${a.plot_number}, ${a.block_number || 'Block A'}</span><span class="text-[10px] text-theme-secondary ml-1">(${a.plot_size_sqm} sqm - ${estName})</span></div>`;
+                            } else {
+                                return `<div class="mb-1"><span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold px-1.5 py-0.5 rounded">Awaiting Plot (${a.plot_size_sqm} sqm)</span><span class="text-[10px] text-theme-secondary ml-1">${estName}</span></div>`;
+                            }
+                        }).join('');
+                    }
+
+                    let sigStatusHtml = '';
+                    const sigStatus = m.signature_status || (m.signature_url ? 'approved' : 'unsigned');
+                    if (sigStatus === 'approved') {
+                        sigStatusHtml = '<span class="text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-bold px-2 py-0.5 rounded inline-flex items-center gap-1"><i class="fas fa-check-circle"></i> Approved</span>';
+                    } else if (sigStatus === 'pending_review') {
+                        sigStatusHtml = `<button onclick="openReviewSigModal('${m.id}', '${escapeJs(m.full_name)}', '${m.signature_url || ''}', '${m.signing_ip || ''}', '${m.updated_at || ''}', '${m.signing_audit_hash || ''}')" class="text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 text-[10px] font-bold px-2 py-0.5 rounded inline-flex items-center gap-1 cursor-pointer transition"><i class="fas fa-clock"></i> Review Sig</button>`;
+                    } else if (sigStatus === 'pending_signature') {
+                        sigStatusHtml = '<span class="text-blue-400 bg-blue-500/10 border border-blue-500/20 text-[10px] font-bold px-2 py-0.5 rounded inline-flex items-center gap-1"><i class="fas fa-paper-plane"></i> Link Sent</span>';
+                    } else if (sigStatus === 'rejected') {
+                        sigStatusHtml = `<span class="text-red-400 bg-red-500/10 border border-red-500/20 text-[10px] font-bold px-2 py-0.5 rounded inline-flex items-center gap-1" title="${m.signature_rejected_reason || 'Rejected by Admin'}"><i class="fas fa-times-circle"></i> Rejected</span>`;
+                    } else {
+                        sigStatusHtml = '<span class="text-theme-secondary bg-elevated border border-theme text-[10px] font-bold px-2 py-0.5 rounded inline-flex items-center gap-1"><i class="fas fa-pen-nib"></i> Unsigned</span>';
+                    }
+
+                    const hasUnallocated = mAllots.some(a => !a.plot_number || a.allocation_status === 'unallocated');
+                    let actionsHtml = `
+                    <div class="flex items-center justify-end gap-1.5 flex-wrap">
+                        <button onclick="openSubscribeMemberModal('${m.id}', '${escapeJs(m.full_name)}')" class="px-2 py-1 text-[11px] font-semibold text-[#C47D0A] hover:bg-[#C47D0A]/10 border border-[#C47D0A]/30 rounded transition" title="Subscribe to Estate Scheme">
+                            <i class="fas fa-cart-plus mr-1"></i>Subscribe
+                        </button>
+                    `;
+                    if (hasUnallocated) {
+                        actionsHtml += `
+                        <button onclick="openAssignPlotModal('${m.id}', '${escapeJs(m.full_name)}')" class="px-2 py-1 text-[11px] font-semibold text-emerald-400 hover:bg-emerald-500/10 border border-emerald-500/30 rounded transition" title="Assign Physical Plot">
+                            <i class="fas fa-map-pin mr-1"></i>Assign Plot
+                        </button>
+                        `;
+                    }
+                    actionsHtml += `
+                        <div class="relative inline-block text-left group">
+                            <button class="px-2 py-1 text-[11px] font-semibold text-theme-secondary hover:text-theme-primary bg-elevated border border-theme rounded transition">
+                                <i class="fas fa-signature mr-1"></i>Sig <i class="fas fa-chevron-down text-[9px] ml-0.5"></i>
                             </button>
-                        </td>
-                    </tr>
-                `).join('');
+                            <div class="hidden group-hover:block absolute right-0 mt-1 w-36 bg-surface border border-theme rounded-lg shadow-xl z-20 py-1 text-left">
+                                <button onclick="openRequestSigModal('${m.id}', '${escapeJs(m.full_name)}', '${m.phone || ''}', '${m.email || ''}')" class="w-full text-left px-3 py-1.5 text-[11px] text-theme-primary hover:bg-elevated flex items-center gap-1.5">
+                                    <i class="fas fa-paper-plane text-blue-400"></i> Request Link
+                                </button>
+                                <button onclick="openUploadSigModal('${m.id}', '${escapeJs(m.full_name)}')" class="w-full text-left px-3 py-1.5 text-[11px] text-theme-primary hover:bg-elevated flex items-center gap-1.5">
+                                    <i class="fas fa-upload text-[#C47D0A]"></i> Upload Sig
+                                </button>
+                            </div>
+                        </div>
+                        <button onclick="openUnlockModal('${m.id}')" class="px-2 py-1 text-[11px] font-semibold text-theme-secondary hover:text-theme-primary bg-elevated border border-theme rounded transition" title="Unlock Document">
+                            <i class="fas fa-lock-open"></i>
+                        </button>
+                    </div>
+                    `;
+
+                    return `
+                        <tr class="hover:bg-elevated/50 transition">
+                            <td class="py-3 px-4 font-mono font-bold text-[#C47D0A]">EC-COP-000001/${String(m.sub_index).padStart(3, '0')}</td>
+                            <td class="py-3 px-4 font-medium text-theme-primary">${m.full_name}</td>
+                            <td class="py-3 px-4 text-theme-secondary">${m.phone}<br><span class="text-[10px]">${m.email || 'No email'}</span></td>
+                            <td class="py-3 px-4">${allotsHtml}</td>
+                            <td class="py-3 px-4">${sigStatusHtml}</td>
+                            <td class="py-3 px-4">
+                                <div class="flex items-center gap-1.5">
+                                    <span title="Passport photo status" class="${m.passport_locked ? 'text-emerald-500' : 'text-amber-500'} text-[11px]">
+                                        <i class="fas ${m.passport_locked ? 'fa-lock' : 'fa-lock-open'}"></i> Photo
+                                    </span>
+                                    <span title="Signature status" class="${m.signature_locked ? 'text-emerald-500' : 'text-amber-500'} text-[11px] ml-1.5">
+                                        <i class="fas ${m.signature_locked ? 'fa-lock' : 'fa-lock-open'}"></i> Sig
+                                    </span>
+                                </div>
+                            </td>
+                            <td class="py-3 px-4 text-right">${actionsHtml}</td>
+                        </tr>
+                    `;
+                }).join('');
             } catch (err) {
                 console.error('Failed to load participants:', err);
+            }
+        }
+
+        // Estate Schemes Logic
+        let currentSchemes = [];
+
+        async function loadCoopSchemes() {
+            if (!currentCoopId) return;
+            try {
+                const res = await fetch(`/api/cooperatives/${currentCoopId}/schemes`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                currentSchemes = data.schemes || [];
+                window.currentSchemes = currentSchemes;
+
+                const countBadge = document.getElementById('schemeCountBadge');
+                if (countBadge) countBadge.textContent = `${currentSchemes.length} Mapped`;
+
+                const container = document.getElementById('schemesContainer');
+                const empty = document.getElementById('schemesEmptyState');
+                if (!container) return;
+
+                if (currentSchemes.length === 0) {
+                    container.innerHTML = '';
+                    if (empty) empty.classList.remove('hidden');
+                    return;
+                }
+                if (empty) empty.classList.add('hidden');
+
+                container.innerHTML = currentSchemes.map(s => {
+                    const prop = s.properties || {};
+                    const propName = prop.name || prop.address || 'Eximp Estate';
+                    const location = [prop.city, prop.state].filter(Boolean).join(', ') || 'Nigeria';
+                    return `
+                        <div class="bg-elevated border border-theme rounded-xl p-4 text-xs flex flex-col justify-between space-y-3">
+                            <div>
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="badge-theme text-[10px] font-bold px-2 py-0.5 rounded font-mono uppercase bg-amber-500/10 text-[#C47D0A] border border-amber-500/20">${s.estate_code}</span>
+                                    <button onclick="deleteCoopScheme('${s.id}', '${escapeJs(propName)}')" class="text-red-400 hover:text-red-300 text-xs transition" title="Untie Estate">
+                                        <i class="fas fa-link-slash mr-1"></i> Untie
+                                    </button>
+                                </div>
+                                <h4 class="font-bold text-sm text-theme-primary">${propName}</h4>
+                                <div class="text-[11px] text-theme-secondary mt-0.5"><i class="fas fa-location-dot text-[#C47D0A] mr-1"></i> ${location}</div>
+                            </div>
+
+                            <div class="bg-surface/60 rounded-lg p-2.5 border border-theme/60 space-y-1.5 text-[11px]">
+                                <div class="flex justify-between">
+                                    <span class="text-theme-secondary">300 SQM Wholesale:</span>
+                                    <span class="font-bold text-theme-primary font-mono">${s.price_300sqm ? `NGN ${Number(s.price_300sqm).toLocaleString()}` : 'Default Retail'}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-theme-secondary">500 SQM Wholesale:</span>
+                                    <span class="font-bold text-theme-primary font-mono">${s.price_500sqm ? `NGN ${Number(s.price_500sqm).toLocaleString()}` : 'Default Retail'}</span>
+                                </div>
+                                ${s.price_600sqm ? `
+                                <div class="flex justify-between">
+                                    <span class="text-theme-secondary">600 SQM Wholesale:</span>
+                                    <span class="font-bold text-theme-primary font-mono">NGN ${Number(s.price_600sqm).toLocaleString()}</span>
+                                </div>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (err) {
+                console.warn('Failed to load schemes:', err);
+            }
+        }
+
+        async function openTieSchemeModal() {
+            try {
+                const res = await fetch('/api/properties/', {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                const props = await res.json();
+                const select = document.getElementById('schemePropertyId');
+                if (select) {
+                    select.innerHTML = '<option value="">Select property...</option>' + (props || []).map(p => `
+                        <option value="${p.id}">${p.name || p.address} (${p.city || ''}, ${p.state || ''})</option>
+                    `).join('');
+                }
+            } catch (err) {
+                console.warn('Could not fetch properties:', err);
+            }
+            document.getElementById('tieSchemeModal').classList.remove('hidden');
+        }
+
+        async function submitTieScheme(e) {
+            e.preventDefault();
+            const payload = {
+                property_id: document.getElementById('schemePropertyId').value,
+                estate_code: document.getElementById('schemeEstateCode').value.trim(),
+                price_300sqm: parseFloat(document.getElementById('schemePrice300').value || 0),
+                price_500sqm: parseFloat(document.getElementById('schemePrice500').value || 0),
+                price_600sqm: parseFloat(document.getElementById('schemePrice600').value || 0),
+            };
+
+            const res = await fetch(`/api/cooperatives/${currentCoopId}/schemes`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${getAuthToken()}`
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                closeModal('tieSchemeModal');
+                alert('Estate scheme tied successfully with negotiated wholesale pricing');
+                loadCoopSchemes();
+            } else {
+                const data = await res.json().catch(() => ({}));
+                alert(data.detail || 'Failed to tie estate scheme');
+            }
+        }
+
+        async function deleteCoopScheme(schemeId, estateName) {
+            if (!confirm(`Are you sure you want to deactivate scheme "${estateName}" for this entity?`)) return;
+            try {
+                const res = await fetch(`/api/cooperatives/${currentCoopId}/schemes/${schemeId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                if (res.ok) {
+                    loadCoopSchemes();
+                } else {
+                    const data = await res.json();
+                    alert(data.detail || 'Failed to deactivate scheme');
+                }
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+
+        // Hybrid Subscriptions & Allotments Logic
+        function openSubscribeMemberModal(memberId, memberName) {
+            document.getElementById('subMemberId').value = memberId;
+            document.getElementById('subMemberNameDisplay').textContent = memberName;
+
+            const select = document.getElementById('subEstateSelect');
+            if (select) {
+                select.innerHTML = '<option value="">Select approved estate...</option>' + (window.currentSchemes || []).map(s => {
+                    const p = s.properties || {};
+                    return `<option value="${s.property_id}" data-p300="${s.price_300sqm || 0}" data-p500="${s.price_500sqm || 0}" data-p600="${s.price_600sqm || 0}">${p.name || p.address || s.estate_code} (${s.estate_code})</option>`;
+                }).join('');
+            }
+
+            calculateSubscriptionTotal();
+            document.getElementById('subscribeMemberModal').classList.remove('hidden');
+        }
+
+        function calculateSubscriptionTotal() {
+            const select = document.getElementById('subEstateSelect');
+            if (!select || !select.selectedOptions || !select.selectedOptions[0]) return;
+            const opt = select.selectedOptions[0];
+            const size = document.getElementById('subPlotSize').value;
+            const qty = parseInt(document.getElementById('subQuantity').value || 1, 10);
+
+            let unitPrice = 0;
+            if (size === '300') unitPrice = parseFloat(opt.getAttribute('data-p300') || 0);
+            else if (size === '500') unitPrice = parseFloat(opt.getAttribute('data-p500') || 0);
+            else if (size === '600') unitPrice = parseFloat(opt.getAttribute('data-p600') || 0);
+
+            const total = unitPrice * qty;
+            document.getElementById('subUnitPriceDisplay').textContent = `NGN ${unitPrice.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+            document.getElementById('subQuantityDisplay').textContent = `${qty} Unit${qty === 1 ? '' : 's'}`;
+            document.getElementById('subTotalDisplay').textContent = `NGN ${total.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+        }
+
+        async function submitMemberAllotment(e) {
+            e.preventDefault();
+            const memberId = document.getElementById('subMemberId').value;
+            const propertyId = document.getElementById('subEstateSelect').value;
+            const plotSize = parseFloat(document.getElementById('subPlotSize').value);
+            const quantity = parseInt(document.getElementById('subQuantity').value || 1, 10);
+            const paymentPlan = document.getElementById('subPaymentPlan').value;
+
+            if (!propertyId) {
+                alert('Please select an approved estate scheme');
+                return;
+            }
+
+            const btn = document.getElementById('btnSubmitSub');
+            btn.disabled = true;
+            try {
+                const res = await fetch(`/api/cooperatives/${currentCoopId}/allotments`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    },
+                    body: JSON.stringify({
+                        member_id: memberId,
+                        property_id: propertyId,
+                        plot_size_sqm: plotSize,
+                        quantity: quantity,
+                        payment_plan: paymentPlan
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Subscription failed');
+                closeModal('subscribeMemberModal');
+                alert(data.message || 'Subscription created successfully and sub-invoice generated');
+                loadMembers();
+                loadOverviewStats();
+            } catch (err) {
+                alert(err.message);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        // Plot Assignment with Anti-Fraud Check
+        function openAssignPlotModal(memberId, memberName) {
+            const memberAllots = (window.currentAllotments || []).filter(a => a.member_id === memberId && (!a.plot_number || a.allocation_status === 'unallocated'));
+            if (memberAllots.length === 0) {
+                alert('This participant has no unallocated subscriptions.');
+                return;
+            }
+            const allot = memberAllots[0];
+            document.getElementById('assignAllotmentId').value = allot.id;
+            document.getElementById('assignMemberName').textContent = memberName;
+
+            const estName = allot.properties ? (allot.properties.name || allot.properties.address || 'Estate') : 'Estate';
+            document.getElementById('assignEstateSize').textContent = `${allot.plot_size_sqm} SQM - ${estName} (Unit ${allot.unit_number || 1})`;
+
+            // Check payments on invoice
+            const inv = allot.cooperative_invoices || {};
+            const total = Number(inv.total_amount || 0);
+            const paid = Number(inv.amount_paid || 0);
+            const pct = total > 0 ? (paid / total * 100) : 0;
+
+            document.getElementById('assignTotalAmount').textContent = `NGN ${total.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+            document.getElementById('assignAmountPaid').textContent = `NGN ${paid.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+
+            const bar = document.getElementById('assignProgressBar');
+            bar.style.width = `${Math.min(100, pct)}%`;
+
+            const notice = document.getElementById('assignAntiFraudNotice');
+            const btn = document.getElementById('btnConfirmAssign');
+
+            if (pct < 50) {
+                notice.innerHTML = `<span class="text-amber-400 font-bold"><i class="fas fa-triangle-exclamation mr-1"></i>Anti-Fraud Lock Active (${pct.toFixed(1)}% verified):</span> Minimum 50% verified payment is strictly required before assigning physical plot numbers. Physical inventory is withheld.`;
+                notice.className = 'text-[11px] leading-relaxed p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300';
+                btn.disabled = true;
+                btn.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                notice.innerHTML = `<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i>Financial Threshold Cleared (${pct.toFixed(1)}% verified):</span> Participant is cleared for physical plot allocation. Double-allocation safeguards active.`;
+                notice.className = 'text-[11px] leading-relaxed p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300';
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+
+            document.getElementById('assignBlockNumber').value = allot.block_number || '';
+            document.getElementById('assignPlotNumber').value = allot.plot_number || '';
+
+            document.getElementById('assignPlotModal').classList.remove('hidden');
+        }
+
+        async function submitAssignPlot(e) {
+            e.preventDefault();
+            const allotId = document.getElementById('assignAllotmentId').value;
+            const blockNum = document.getElementById('assignBlockNumber').value.trim();
+            const plotNum = document.getElementById('assignPlotNumber').value.trim();
+
+            const btn = document.getElementById('btnConfirmAssign');
+            btn.disabled = true;
+            try {
+                const res = await fetch(`/api/cooperatives/${currentCoopId}/allotments/${allotId}/assign-plot`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    },
+                    body: JSON.stringify({
+                        block_number: blockNum,
+                        plot_number: plotNum
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to assign plot');
+                closeModal('assignPlotModal');
+                alert(data.message || `Plot ${plotNum}, ${blockNum} successfully assigned!`);
+                loadMembers();
+                loadOverviewStats();
+            } catch (err) {
+                alert(err.message);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        // Signature Lifecycle Logic
+        function openRequestSigModal(memberId, memberName, phone, email) {
+            document.getElementById('reqSigMemberId').value = memberId;
+            document.getElementById('reqSigMemberName').textContent = memberName;
+            document.getElementById('reqSigPhoneDisplay').textContent = phone || 'No phone registered';
+            document.getElementById('reqSigEmailDisplay').textContent = email || 'No email registered';
+            document.getElementById('requestSigModal').classList.remove('hidden');
+        }
+
+        async function submitRequestSignature(e) {
+            e.preventDefault();
+            const memberId = document.getElementById('reqSigMemberId').value;
+            const channels = [];
+            if (document.getElementById('reqSigChanWhatsapp').checked) channels.push('whatsapp');
+            if (document.getElementById('reqSigChanEmail').checked) channels.push('email');
+
+            if (channels.length === 0) {
+                alert('Please select at least one delivery channel (WhatsApp or Email)');
+                return;
+            }
+
+            const btn = document.getElementById('btnSendSigReq');
+            btn.disabled = true;
+            try {
+                const res = await fetch(`/api/cooperatives/${currentCoopId}/members/${memberId}/request-signature`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    },
+                    body: JSON.stringify({ channels })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to send signature request');
+                closeModal('requestSigModal');
+                alert(data.message || 'Signature request link dispatched successfully');
+                loadMembers();
+            } catch (err) {
+                alert(err.message);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        function openUploadSigModal(memberId, memberName) {
+            document.getElementById('uploadSigMemberId').value = memberId;
+            document.getElementById('uploadSigMemberName').textContent = memberName;
+            document.getElementById('manualSigFileInput').value = '';
+            document.getElementById('uploadSigModal').classList.remove('hidden');
+        }
+
+        async function submitManualUploadSignature(e) {
+            e.preventDefault();
+            const memberId = document.getElementById('uploadSigMemberId').value;
+            const fileInput = document.getElementById('manualSigFileInput');
+            if (!fileInput.files.length) return;
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            const btn = document.getElementById('btnSubmitManualSig');
+            btn.disabled = true;
+            try {
+                const res = await fetch(`/api/cooperatives/${currentCoopId}/members/${memberId}/upload-signature`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` },
+                    body: formData
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Upload failed');
+                closeModal('uploadSigModal');
+                alert('Signature uploaded and approved successfully');
+                loadMembers();
+            } catch (err) {
+                alert(err.message);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        function openReviewSigModal(memberId, memberName, sigUrl, ip, timestamp, hash) {
+            document.getElementById('reviewSigMemberId').value = memberId;
+            document.getElementById('reviewSigMemberName').textContent = memberName;
+            document.getElementById('reviewSigImage').src = sigUrl || '';
+            document.getElementById('reviewSigIp').textContent = ip || 'IP Not Logged';
+            document.getElementById('reviewSigTimestamp').textContent = timestamp ? new Date(timestamp).toLocaleString() : 'N/A';
+            document.getElementById('reviewSigHash').textContent = hash || 'None';
+
+            document.getElementById('reviewRejectBox').classList.add('hidden');
+            document.getElementById('reviewRejectReason').value = '';
+            document.getElementById('reviewSigModal').classList.remove('hidden');
+        }
+
+        function handleRejectSigClick() {
+            const box = document.getElementById('reviewRejectBox');
+            if (box.classList.contains('hidden')) {
+                box.classList.remove('hidden');
+                document.getElementById('reviewRejectReason').focus();
+            } else {
+                const reason = document.getElementById('reviewRejectReason').value.trim();
+                if (!reason) {
+                    alert('Please enter the reason for rejecting this signature');
+                    return;
+                }
+                confirmReviewSignature('reject', reason);
+            }
+        }
+
+        async function confirmReviewSignature(action, reason = '') {
+            const memberId = document.getElementById('reviewSigMemberId').value;
+            const res = await fetch(`/api/cooperatives/${currentCoopId}/members/${memberId}/review-signature`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${getAuthToken()}`
+                },
+                body: JSON.stringify({ action, reason })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                closeModal('reviewSigModal');
+                alert(data.message || `Signature ${action}ed`);
+                loadMembers();
+            } else {
+                alert(data.detail || 'Action failed');
+            }
+        }
+
+        // Finance Master Verification Queue Logic
+        async function loadPendingVerificationsCount() {
+            try {
+                const res = await fetch('/api/cooperatives/verifications/pending', {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                const count = data.count || 0;
+                const dBadge = document.getElementById('pendingVerifCountBadge');
+                const mBadge = document.getElementById('mobilePendingVerifBadge');
+                const qBadge = document.getElementById('verifQueueCountBadge');
+
+                [dBadge, mBadge].forEach(b => {
+                    if (b) {
+                        b.textContent = count;
+                        if (count > 0) b.classList.remove('hidden');
+                        else b.classList.add('hidden');
+                    }
+                });
+                if (qBadge) qBadge.textContent = `${count} Pending Claim${count === 1 ? '' : 's'}`;
+            } catch (err) {
+                console.warn('Could not load verifications count:', err);
+            }
+        }
+
+        async function loadPendingVerifications() {
+            const filterEl = document.getElementById('verifFilterDropdown');
+            const filter = filterEl ? filterEl.value : '';
+            let url = '/api/cooperatives/verifications/pending';
+            if (filter === 'current' && currentCoopId) {
+                url += `?coop_id=${currentCoopId}`;
+            }
+
+            try {
+                const res = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                const claims = data.pending_verifications || [];
+
+                const qBadge = document.getElementById('verifQueueCountBadge');
+                if (qBadge) qBadge.textContent = `${claims.length} Pending Claim${claims.length === 1 ? '' : 's'}`;
+
+                const tbody = document.getElementById('verificationsTableBody');
+                const empty = document.getElementById('verificationsEmptyState');
+                if (!tbody) return;
+
+                if (claims.length === 0) {
+                    tbody.innerHTML = '';
+                    if (empty) empty.classList.remove('hidden');
+                    return;
+                }
+                if (empty) empty.classList.add('hidden');
+
+                tbody.innerHTML = claims.map(c => {
+                    const coopName = c.cooperatives ? c.cooperatives.name : 'Unknown Entity';
+                    const mem = c.cooperative_members || {};
+                    const memName = mem.full_name || 'Enrolled Participant';
+                    const memSub = mem.sub_index ? `EC-COP-000001/${String(mem.sub_index).padStart(3, '0')}` : '';
+                    const claimNum = c.receipt_number || `CLM-${c.id.slice(0, 6).toUpperCase()}`;
+                    const payDate = c.payment_date ? new Date(c.payment_date).toLocaleDateString() : 'N/A';
+                    const proofHtml = c.proof_of_payment_url ?
+                        `<a href="${c.proof_of_payment_url}" target="_blank" class="text-xs text-[#C47D0A] font-semibold underline flex items-center gap-1"><i class="fas fa-file-invoice"></i> View Proof</a>` :
+                        '<span class="text-theme-secondary text-[10px]">None attached</span>';
+
+                    return `
+                        <tr class="hover:bg-elevated/50 transition">
+                            <td class="py-3 px-4">
+                                <div class="font-mono font-bold text-[#C47D0A]">${claimNum}</div>
+                                <div class="text-[10px] text-theme-secondary">${payDate}</div>
+                            </td>
+                            <td class="py-3 px-4 font-medium text-theme-primary">${coopName}</td>
+                            <td class="py-3 px-4">
+                                <div class="font-medium text-theme-primary">${memName}</div>
+                                <div class="font-mono text-[10px] text-theme-secondary">${memSub}</div>
+                            </td>
+                            <td class="py-3 px-4 font-mono font-bold text-emerald-500">
+                                NGN ${Number(c.amount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}
+                            </td>
+                            <td class="py-3 px-4 text-theme-secondary">
+                                <div class="font-medium text-theme-primary">${c.bank_name || 'Bank Transfer'}</div>
+                                <div class="font-mono text-[10px] text-theme-secondary">${c.bank_session_id || c.payment_reference || 'N/A'}</div>
+                            </td>
+                            <td class="py-3 px-4">${proofHtml}</td>
+                            <td class="py-3 px-4 text-right">
+                                <div class="flex items-center justify-end gap-1.5">
+                                    <button onclick="verifyPaymentClaim('${c.id}', '${claimNum}', '${Number(c.amount || 0).toLocaleString()}')" class="btn-gold px-3 py-1.5 rounded-lg text-[11px] font-semibold flex items-center gap-1">
+                                        <i class="fas fa-check"></i> Verify
+                                    </button>
+                                    <button onclick="openRejectPaymentModal('${c.id}', '${claimNum}', '${Number(c.amount || 0).toLocaleString()}')" class="px-2.5 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg text-[11px] font-semibold transition">
+                                        <i class="fas fa-times"></i> Reject
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (err) {
+                console.warn('Failed to load verifications:', err);
+            }
+        }
+
+        async function verifyPaymentClaim(paymentId, claimNum, amountStr) {
+            if (!confirm(`Confirm Bank Inflow Verification:\n\nVerify claim ${claimNum} (NGN ${amountStr})?\n\nThis will issue an official atomic receipt RCP-COP-XXXXXX, deduct the invoice balance, and dispatch confirmation alerts.`)) {
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/cooperatives/payments/${paymentId}/verify`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Verification failed');
+                alert(data.message || `Payment verified! Receipt #${data.receipt_number} issued.`);
+                loadPendingVerifications();
+                loadPendingVerificationsCount();
+                loadOverviewStats();
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+
+        function openRejectPaymentModal(paymentId, claimNum, amountStr) {
+            document.getElementById('rejectPaymentId').value = paymentId;
+            document.getElementById('rejectPaymentSummary').textContent = `Claim: ${claimNum} - NGN ${amountStr}`;
+            document.getElementById('rejectPaymentReason').value = '';
+            document.getElementById('rejectPaymentModal').classList.remove('hidden');
+        }
+
+        async function submitRejectPayment(e) {
+            e.preventDefault();
+            const paymentId = document.getElementById('rejectPaymentId').value;
+            const reason = document.getElementById('rejectPaymentReason').value.trim();
+
+            try {
+                const res = await fetch(`/api/cooperatives/payments/${paymentId}/reject`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    },
+                    body: JSON.stringify({ rejection_reason: reason })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Rejection failed');
+                closeModal('rejectPaymentModal');
+                alert('Payment claim marked as rejected');
+                loadPendingVerifications();
+                loadPendingVerificationsCount();
+            } catch (err) {
+                alert(err.message);
             }
         }
 
@@ -1655,6 +2696,8 @@
             closeModal('bulkUploadModal');
             loadMembers();
             loadOverviewStats();
+            loadCoopSchemes();
+            loadPendingVerificationsCount();
         }
 
         function openUnlockModal(memberId) {

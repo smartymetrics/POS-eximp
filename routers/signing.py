@@ -7,6 +7,7 @@ from routers.analytics import log_activity
 from datetime import datetime, timezone, timedelta
 import base64
 import io
+import hashlib
 from PIL import Image
 import pdf_service
 
@@ -130,6 +131,32 @@ async def get_client_signing_page(request: Request, token: str):
 @router.get("/api/signing/client-context/{token}")
 async def get_client_signing_context(token: str):
     db = get_db()
+
+    # Cooperative Member Signing Context
+    if token.startswith("coop_sig_"):
+        mem_res = await db_execute(lambda: db.table("cooperative_members")
+            .select("*, cooperatives(*)")
+            .eq("signing_token", token)
+            .execute())
+        if not mem_res.data:
+            raise HTTPException(status_code=404, detail="Invalid signing link")
+        member = mem_res.data[0]
+        coop = member.get("cooperatives") or {}
+
+        # Resolve estate from property_id or recent allotment
+        estate_name = coop.get("name") or "Cooperative Land Scheme"
+        if member.get("property_id"):
+            pr = await db_execute(lambda: db.table("properties").select("address, title").eq("id", member["property_id"]).limit(1).execute())
+            if pr.data:
+                estate_name = pr.data[0].get("address") or pr.data[0].get("title") or estate_name
+
+        return {
+            "client_name": member["full_name"],
+            "estate_name": estate_name,
+            "plot_size_sqm": str(member.get("plot_size_sqm", 500)),
+            "contract_date": (member.get("created_at") or "")[:10] or datetime.now().strftime("%Y-%m-%d")
+        }
+
     session_res = db.table("contract_signing_sessions")\
         .select("*, invoices(*, clients(*))")\
         .eq("token", token)\
@@ -155,6 +182,50 @@ async def submit_client_signature(token: str, data: ClientContractSignatureSubmi
 
     if not data.acknowledgement:
         raise HTTPException(status_code=400, detail="You must acknowledge that you have read and understood the contract to proceed.")
+
+    # Cooperative Member Digital Execution
+    if token.startswith("coop_sig_"):
+        mem_res = await db_execute(lambda: db.table("cooperative_members")
+            .select("*, cooperatives(*)")
+            .eq("signing_token", token)
+            .execute())
+        if not mem_res.data:
+            raise HTTPException(status_code=404, detail="Invalid signing session")
+        member = mem_res.data[0]
+
+        audit_ip = request.client.host if request.client else "unknown"
+        audit_agent = request.headers.get("User-Agent", "unknown")
+        audit_hash = hashlib.sha256(f"{token}:{member['id']}:{audit_ip}:{datetime.utcnow().isoformat()}".encode()).hexdigest()
+
+        # Upload signature image to storage
+        stored_signature = await db_execute(lambda: _upload_client_signature(db, member["id"], data.signature_base64))
+
+        # Update member record with Evidence Act 2023 audit metadata
+        await db_execute(lambda: db.table("cooperative_members").update({
+            "signature_url": stored_signature,
+            "signature_status": "pending_review",
+            "signing_ip": audit_ip,
+            "signing_user_agent": audit_agent,
+            "signing_audit_hash": audit_hash,
+            "updated_at": datetime.utcnow().isoformat()
+        }).eq("id", member["id"]).execute())
+
+        try:
+            from routers.cooperatives import log_coop_activity
+            await log_coop_activity(
+                cooperative_id=member["cooperative_id"],
+                admin_id=None,
+                admin_name=member["full_name"],
+                action="submitted_digital_signature",
+                target_entity="cooperative_member",
+                target_id=member["id"],
+                details={"ip": audit_ip, "audit_hash": audit_hash[:16]},
+                request=request
+            )
+        except Exception as e:
+            print("Failed to log coop signing activity:", e)
+
+        return {"status": "success", "message": "Signature submitted successfully and is pending administrator review."}
 
     session_res = db.table("contract_signing_sessions")\
         .select("*, invoices(*, clients(*))")\
