@@ -9,6 +9,7 @@ import os
 import shutil
 import subprocess
 import logging
+import asyncio
 import urllib.request
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -48,22 +49,70 @@ def start_whatsapp_gateway_process():
 
     node_bin = shutil.which("node")
     if not node_bin:
-        for candidate in ["/usr/bin/node", "/usr/local/bin/node", "/opt/render/project/.render/node/bin/node"]:
+        for candidate in [
+            "/usr/bin/node",
+            "/usr/local/bin/node",
+            "/opt/render/project/.render/node/bin/node",
+            "/opt/render/project/nodes/node-22.22.0/bin/node",
+        ]:
             if os.path.exists(candidate):
                 node_bin = candidate
                 break
 
     if not node_bin:
+        # Scan for any node version directory on Render
+        nodes_parent = "/opt/render/project/nodes"
+        if os.path.exists(nodes_parent):
+            try:
+                for item in sorted(os.listdir(nodes_parent), reverse=True):
+                    cand = os.path.join(nodes_parent, item, "bin", "node")
+                    if os.path.exists(cand):
+                        node_bin = cand
+                        break
+            except Exception:
+                pass
+
+    if not node_bin:
         logger.warning("[WhatsApp Gateway] Node.js binary not found on PATH. Start gateway manually on port 8005.")
         return
 
+    # Check if node_modules exist; if missing, auto-install dependencies using npm
+    baileys_dir = os.path.join(service_dir, "node_modules", "@whiskeysockets")
+    express_dir = os.path.join(service_dir, "node_modules", "express")
+    if not os.path.exists(baileys_dir) or not os.path.exists(express_dir):
+        npm_bin = shutil.which("npm")
+        if not npm_bin and node_bin:
+            cand_npm = os.path.join(os.path.dirname(node_bin), "npm")
+            if os.path.exists(cand_npm):
+                npm_bin = cand_npm
+
+        if npm_bin:
+            try:
+                logger.info(f"[WhatsApp Gateway] node_modules missing. Auto-running '{npm_bin} install --omit=dev' in {service_dir}...")
+                install_run = subprocess.run(
+                    [npm_bin, "install", "--omit=dev"],
+                    cwd=service_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=180,
+                )
+                if install_run.returncode == 0:
+                    logger.info("[WhatsApp Gateway] npm install completed successfully!")
+                else:
+                    logger.error(f"[WhatsApp Gateway] npm install error: {install_run.stderr}")
+            except Exception as e:
+                logger.error(f"[WhatsApp Gateway] Failed to run npm install: {e}")
+        else:
+            logger.warning("[WhatsApp Gateway] npm binary not found to auto-install dependencies.")
+
     try:
         logger.info(f"[WhatsApp Gateway] Spawning WhatsApp Gateway sidecar ({node_bin} server.js)...")
+        # Let stdout/stderr inherit so all Baileys startup logs and messages appear directly in Render logs
         _gateway_process = subprocess.Popen(
             [node_bin, "server.js"],
             cwd=service_dir,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=None,
+            stderr=None,
         )
         logger.info(f"[WhatsApp Gateway] Sidecar process started (PID {_gateway_process.pid})")
     except Exception as e:
@@ -112,21 +161,25 @@ async def get_whatsapp_status(request: Request, current_user=Depends(verify_toke
     Retrieves the current connection status of the WhatsApp Support Line.
     Returns status: 'connected' | 'connecting' | 'disconnected', qrCode, user phone.
     """
-    try:
-        async with httpx.AsyncClient(timeout=4.0) as client:
-            resp = await client.get(f"{WHATSAPP_GATEWAY_URL}/api/whatsapp/status")
-            return resp.json()
-    except Exception as e:
-        logger.warning(f"[WhatsApp Gateway] Could not reach gateway service: {e}")
-        start_whatsapp_gateway_process()
-        return {
-            "status": "disconnected",
-            "qrCode": None,
-            "user": None,
-            "authExists": False,
-            "serviceOnline": False,
-            "error": "WhatsApp Gateway service starting up. Please refresh in a moment.",
-        }
+    for attempt in range(2):
+        try:
+            async with httpx.AsyncClient(timeout=4.0) as client:
+                resp = await client.get(f"{WHATSAPP_GATEWAY_URL}/api/whatsapp/status")
+                return resp.json()
+        except Exception as e:
+            if attempt == 0:
+                start_whatsapp_gateway_process()
+                await asyncio.sleep(1.5)
+            else:
+                logger.warning(f"[WhatsApp Gateway] Could not reach gateway service: {e}")
+                return {
+                    "status": "disconnected",
+                    "qrCode": None,
+                    "user": None,
+                    "authExists": False,
+                    "serviceOnline": False,
+                    "error": "WhatsApp Gateway service is starting up. Please refresh in a moment.",
+                }
 
 
 @router.post("/connect")

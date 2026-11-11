@@ -14,7 +14,7 @@ services:
       - libjpeg-turbo8
       - libpng16-16
     buildCommand: cd hrm-portal && npm install && npm run build && cd .. && cd whatsapp-service && npm install && cd .. && pip install -r requirements.txt
-    startCommand: (node whatsapp-service/server.js &) && gunicorn main:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 180
+    startCommand: (cd whatsapp-service && node server.js &) && gunicorn main:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 180
     envVars:
       - key: SUPABASE_URL
         sync: false

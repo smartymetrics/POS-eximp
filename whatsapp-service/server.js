@@ -546,7 +546,7 @@ app.post('/api/whatsapp/send', async (req, res) => {
   res.json(result);
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`[WhatsApp Gateway] Running on http://127.0.0.1:${PORT}`);
   // Auto-connect existing credentials immediately on boot
   if (hasLocalAuth()) {
