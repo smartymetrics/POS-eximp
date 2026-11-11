@@ -1122,7 +1122,7 @@ async def list_cooperative_invoices(
         return {"invoices": []}
     db = get_db()
     try:
-        query = db.table("cooperative_invoices").select("*, cooperative_members(full_name, member_number), properties(title)").eq("cooperative_id", coop_id).order("created_at", desc=True)
+        query = db.table("cooperative_invoices").select("*, cooperative_members(full_name, member_number), properties(id, name, location, estate_name, plot_size_sqm, total_price)").eq("cooperative_id", coop_id).order("created_at", desc=True)
         if invoice_type:
             query = query.eq("invoice_type", invoice_type)
         res = await db_execute(lambda: query.execute())
@@ -1234,52 +1234,198 @@ async def create_member_sub_invoice(
 
 # ── Estate Schemes & Negotiated Pricing ──────────────────────────────────────
 
+@router.get("/available-estates")
+async def list_available_estates(current_user=Depends(resolve_coop_viewer)):
+    """
+    Returns all active estates grouped by estate name with their available SQM variants
+    and standard retail prices so cooperative administrators can tie them.
+    """
+    db = get_db()
+    res = await db_execute(lambda: db.table("properties")
+        .select("id, name, location, estate_name, plot_size_sqm, total_price, starting_price")
+        .eq("is_archived", False)
+        .order("name")
+        .execute())
+
+    grouped = {}
+    for r in res.data or []:
+        raw_name = (r.get("name") or r.get("estate_name") or "Unnamed Estate").strip()
+        if raw_name not in grouped:
+            words = [w for w in raw_name.split() if w.isalnum()]
+            code = "".join([w[0] for w in words[:3]]).upper() if words else "EST"
+            if len(code) < 3:
+                code = (raw_name.replace(" ", "")[:3]).upper()
+            grouped[raw_name] = {
+                "name": raw_name,
+                "location": (r.get("location") or "").strip(),
+                "estate_code": code,
+                "variants": []
+            }
+        grouped[raw_name]["variants"].append({
+            "property_id": r["id"],
+            "plot_size_sqm": float(r.get("plot_size_sqm") or 500),
+            "standard_price": float(r.get("total_price") or r.get("starting_price") or 0)
+        })
+
+    for g in grouped.values():
+        g["variants"].sort(key=lambda x: x["plot_size_sqm"])
+
+    return {"estates": list(grouped.values())}
+
 @router.get("/{coop_id}/schemes")
 async def list_cooperative_schemes(coop_id: str, current_user=Depends(resolve_coop_viewer)):
     """Fetches all estates officially tied to this cooperative with their negotiated price tiers."""
     db = get_db()
     res = await db_execute(lambda: db.table("cooperative_estate_schemes")
-        .select("*, properties(id, name, address, city, state, price)")
+        .select("*, properties(id, name, location, estate_name, total_price, starting_price, plot_size_sqm)")
         .eq("cooperative_id", coop_id)
         .eq("is_active", True)
         .order("created_at")
         .execute())
-    return {"schemes": res.data or []}
 
-@router.post("/{coop_id}/schemes")
-async def tie_estate_scheme(coop_id: str, request: Request, current_staff=Depends(verify_token)):
-    """Eximp Admin ties an estate to this cooperative with custom negotiated pricing."""
-    if not has_any_role(current_staff, "admin", "super_admin", "operations", "sales"):
-        raise HTTPException(status_code=403, detail="Only Eximp staff can configure estate schemes")
-    db = get_db()
-    data = await request.json()
-    property_id = data.get("property_id")
-    if not property_id:
-        raise HTTPException(status_code=400, detail="property_id is required")
+    raw_schemes = res.data or []
 
-    payload = {
-        "cooperative_id": coop_id,
-        "property_id": property_id,
-        "estate_code": (data.get("estate_code") or "EST").upper().strip(),
-        "price_300sqm": float(data.get("price_300sqm", 0.0)),
-        "price_500sqm": float(data.get("price_500sqm", 0.0)),
-        "price_600sqm": float(data.get("price_600sqm", 0.0)),
-        "price_custom": float(data.get("price_custom", 0.0)),
-        "is_active": True,
-        "updated_at": datetime.utcnow().isoformat()
+    # Group schemes by estate name for seamless multi-estate display
+    grouped_estates = {}
+    for s in raw_schemes:
+        p = s.get("properties") or {}
+        ename = (p.get("name") or p.get("estate_name") or "Eximp Estate").strip()
+        if ename not in grouped_estates:
+            grouped_estates[ename] = {
+                "estate_name": ename,
+                "estate_code": s.get("estate_code") or "EST",
+                "location": (p.get("location") or "").strip(),
+                "property_ids": [],
+                "scheme_ids": [],
+                "variants": []
+            }
+        grouped_estates[ename]["property_ids"].append(s.get("property_id"))
+        grouped_estates[ename]["scheme_ids"].append(s.get("id"))
+
+        sqm = float(p.get("plot_size_sqm") or 500)
+        wholesale_price = float(s.get("price_custom") or 0)
+        if wholesale_price <= 0:
+            if sqm == 300: wholesale_price = float(s.get("price_300sqm") or 0)
+            elif sqm == 500: wholesale_price = float(s.get("price_500sqm") or 0)
+            elif sqm == 600: wholesale_price = float(s.get("price_600sqm") or 0)
+
+        retail_price = float(p.get("total_price") or p.get("starting_price") or 0)
+
+        grouped_estates[ename]["variants"].append({
+            "scheme_id": s.get("id"),
+            "property_id": s.get("property_id"),
+            "plot_size_sqm": sqm,
+            "wholesale_price": wholesale_price if wholesale_price > 0 else retail_price,
+            "retail_price": retail_price
+        })
+
+    for ge in grouped_estates.values():
+        ge["variants"].sort(key=lambda x: x["plot_size_sqm"])
+
+    return {
+        "schemes": raw_schemes,
+        "grouped_estates": list(grouped_estates.values())
     }
 
-    res = await db_execute(lambda: db.table("cooperative_estate_schemes").upsert(payload, on_conflict="cooperative_id,property_id").execute())
-    return {"message": "Estate scheme and negotiated pricing configured successfully", "scheme": res.data[0] if res.data else {}}
+@router.post("/{coop_id}/schemes")
+async def tie_estate_scheme(coop_id: str, request: Request, current_admin=Depends(resolve_coop_admin)):
+    """
+    Ties an estate to this cooperative with custom negotiated wholesale pricing for its SQM variants.
+    Supports batch tying of multiple SQM variants for an estate in a single request.
+    """
+    db = get_db()
+    data = await request.json()
+    estate_code = (data.get("estate_code") or "EST").upper().strip()
+
+    variants = data.get("variants") or []
+    if not variants and data.get("property_id"):
+        # Single property fallback format
+        variants = [{
+            "property_id": data.get("property_id"),
+            "plot_size_sqm": float(data.get("plot_size_sqm", 500)),
+            "price": float(data.get("price_custom") or data.get("price_500sqm") or data.get("price_300sqm") or 0)
+        }]
+
+    if not variants:
+        raise HTTPException(status_code=400, detail="At least one estate variant with negotiated price is required")
+
+    saved = []
+    estate_name = (data.get("estate_name") or "Estate").strip()
+    estate_location = (data.get("location") or "Nigeria").strip()
+
+    for v in variants:
+        prop_id = v.get("property_id")
+        sqm = float(v.get("plot_size_sqm", 500))
+        price = float(v.get("price", 0.0))
+        standard_price = float(v.get("standard_price", 0.0))
+
+        # Auto-create or resolve property record if this is a custom SQM
+        if not prop_id:
+            existing_p = await db_execute(lambda: db.table("properties")
+                .select("id")
+                .ilike("name", f"%{estate_name}%")
+                .eq("plot_size_sqm", sqm)
+                .eq("is_archived", False)
+                .limit(1)
+                .execute())
+            if existing_p.data:
+                prop_id = existing_p.data[0]["id"]
+            else:
+                retail = standard_price if standard_price > 0 else (price if price > 0 else 1000000.0)
+                new_prop = {
+                    "name": estate_name,
+                    "estate_name": estate_name,
+                    "location": estate_location,
+                    "plot_size_sqm": sqm,
+                    "total_price": retail,
+                    "starting_price": retail,
+                    "is_active": True,
+                    "is_archived": False
+                }
+                new_p_res = await db_execute(lambda: db.table("properties").insert(new_prop).execute())
+                if new_p_res.data:
+                    prop_id = new_p_res.data[0]["id"]
+
+        if not prop_id:
+            continue
+
+        payload = {
+            "cooperative_id": coop_id,
+            "property_id": prop_id,
+            "estate_code": estate_code,
+            "price_custom": price,
+            "price_300sqm": price if sqm == 300 else 0,
+            "price_500sqm": price if sqm == 500 else 0,
+            "price_600sqm": price if sqm == 600 else 0,
+            "is_active": True,
+            "updated_at": datetime.utcnow().isoformat()
+        }
+        res = await db_execute(lambda p=payload: db.table("cooperative_estate_schemes").upsert(p, on_conflict="cooperative_id,property_id").execute())
+        if res.data:
+            saved.append(res.data[0])
+
+    return {"message": "Estate scheme tied successfully with negotiated wholesale pricing", "saved_count": len(saved), "schemes": saved}
 
 @router.delete("/{coop_id}/schemes/{scheme_id}")
-async def untie_estate_scheme(coop_id: str, scheme_id: str, current_staff=Depends(verify_token)):
-    """Eximp Admin deactivates an estate scheme for this cooperative."""
-    if not has_any_role(current_staff, "admin", "super_admin"):
-        raise HTTPException(status_code=403, detail="Unauthorized")
+async def untie_estate_scheme(coop_id: str, scheme_id: str, current_admin=Depends(resolve_coop_admin)):
+    """Deactivates an estate scheme for this cooperative."""
     db = get_db()
     await db_execute(lambda: db.table("cooperative_estate_schemes").update({"is_active": False}).eq("id", scheme_id).execute())
     return {"message": "Scheme deactivated"}
+
+@router.post("/{coop_id}/schemes/untie-estate")
+async def untie_whole_estate(coop_id: str, request: Request, current_admin=Depends(resolve_coop_admin)):
+    """Deactivates all variants for a given property ID list belonging to an estate."""
+    db = get_db()
+    data = await request.json()
+    property_ids = data.get("property_ids") or []
+    if property_ids:
+        await db_execute(lambda: db.table("cooperative_estate_schemes")
+            .update({"is_active": False})
+            .eq("cooperative_id", coop_id)
+            .in_("property_id", property_ids)
+            .execute())
+    return {"message": "Estate untied successfully"}
 
 
 # ── Allotments & Hybrid Subscriptions ───────────────────────────────────────
@@ -1289,7 +1435,7 @@ async def list_cooperative_allotments(coop_id: str, current_admin=Depends(resolv
     """Lists all plot allotments for this cooperative society."""
     db = get_db()
     res = await db_execute(lambda: db.table("cooperative_plot_allotments")
-        .select("*, cooperative_members(full_name, phone, email, sub_index), properties(address, city, state), cooperative_invoices(invoice_number, total_amount, amount_paid, balance_due, status)")
+        .select("*, cooperative_members(full_name, phone, email, sub_index), properties(id, name, location, estate_name, plot_size_sqm, total_price), cooperative_invoices(invoice_number, total_amount, amount_paid, balance_due, status)")
         .eq("cooperative_id", coop_id)
         .order("created_at", desc=True)
         .execute())
@@ -1329,18 +1475,18 @@ async def create_cooperative_allotment(coop_id: str, request: Request, current_u
     estate_code = scheme.get("estate_code") or "EST"
 
     # Price resolution based on negotiated pricing
-    if plot_size == 300:
-        unit_price = float(scheme.get("price_300sqm") or 0)
-    elif plot_size == 500:
-        unit_price = float(scheme.get("price_500sqm") or 0)
-    elif plot_size == 600:
-        unit_price = float(scheme.get("price_600sqm") or 0)
-    else:
-        unit_price = float(scheme.get("price_custom") or 0)
+    unit_price = float(scheme.get("price_custom") or 0)
+    if unit_price <= 0:
+        if plot_size == 300:
+            unit_price = float(scheme.get("price_300sqm") or 0)
+        elif plot_size == 500:
+            unit_price = float(scheme.get("price_500sqm") or 0)
+        elif plot_size == 600:
+            unit_price = float(scheme.get("price_600sqm") or 0)
 
     if unit_price <= 0:
-        p_res = await db_execute(lambda: db.table("properties").select("price").eq("id", property_id).execute())
-        unit_price = float(p_res.data[0].get("price") or 0) if p_res.data else 0
+        p_res = await db_execute(lambda: db.table("properties").select("total_price, starting_price").eq("id", property_id).execute())
+        unit_price = float(p_res.data[0].get("total_price") or p_res.data[0].get("starting_price") or 0) if p_res.data else 0
 
     total_amount = unit_price * quantity
 
@@ -1539,7 +1685,7 @@ async def list_pending_verifications(
     """
     db = get_db()
     query = db.table("cooperative_payments")\
-        .select("*, cooperatives(id, name), cooperative_members(id, full_name, phone, email, sub_index), cooperative_invoices(invoice_number, total_amount, balance_due, property_id, properties(address))")\
+        .select("*, cooperatives(id, name), cooperative_members(id, full_name, phone, email, sub_index), cooperative_invoices(invoice_number, total_amount, balance_due, property_id, properties(id, name, location))")\
         .eq("status", "pending")\
         .order("created_at", desc=True)
 

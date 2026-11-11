@@ -507,18 +507,13 @@
                 <button onclick="closeModal('memberSubscribeModal')" class="text-theme-secondary hover:text-theme-primary"><i class="fas fa-times"></i></button>
             </div>
             <form onsubmit="submitMemberSelfSubscription(event)" class="space-y-3 text-xs">
-                <input type="hidden" id="mSubPropertyId">
-                <input type="hidden" id="mSubPrice300">
-                <input type="hidden" id="mSubPrice500">
-                <input type="hidden" id="mSubPrice600">
+                <input type="hidden" id="mSubSelectedEstateName">
 
                 <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Plot Dimensions</label>
+                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Plot Dimensions (SQM)</label>
                         <select id="mSubPlotSize" onchange="calculateMemberSubTotal()" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
-                            <option value="300">300 SQM</option>
-                            <option value="500" selected>500 SQM</option>
-                            <option value="600">600 SQM</option>
+                            <option value="">Select plot size...</option>
                         </select>
                     </div>
                     <div>
@@ -723,50 +718,51 @@
                 });
                 if (!res.ok) return;
                 const data = await res.json();
+                const grouped = data.grouped_estates || [];
+                window.memberGroupedEstates = grouped;
                 currentMemberSchemes = data.schemes || [];
+
                 const container = document.getElementById('memberSchemesContainer');
                 const empty = document.getElementById('memberSchemesEmpty');
                 if (!container) return;
 
-                if (currentMemberSchemes.length === 0) {
+                if (grouped.length === 0) {
                     container.innerHTML = '';
                     if (empty) empty.classList.remove('hidden');
                     return;
                 }
                 if (empty) empty.classList.add('hidden');
 
-                container.innerHTML = currentMemberSchemes.map(s => {
-                    const p = s.properties || {};
-                    const propName = p.name || p.address || 'Eximp Estate';
-                    const loc = [p.city, p.state].filter(Boolean).join(', ') || 'Nigeria';
+                container.innerHTML = grouped.map(g => {
+                    const variantsHtml = g.variants.map(v => {
+                        return `
+                            <div class="flex items-center justify-between py-1 border-b border-theme/40 last:border-b-0 text-xs">
+                                <span class="font-bold text-theme-primary font-mono">${v.plot_size_sqm} SQM:</span>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="font-bold text-[#C47D0A] font-mono">NGN ${Number(v.wholesale_price).toLocaleString()}</span>
+                                    <span class="text-[10px] text-theme-secondary line-through font-mono">Retail: NGN ${Number(v.retail_price).toLocaleString()}</span>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+
                     return `
                         <div class="bg-surface border border-theme rounded-2xl p-5 space-y-3.5 flex flex-col justify-between shadow-sm">
                             <div>
                                 <div class="flex items-center justify-between mb-2">
-                                    <span class="badge-theme text-[10px] font-bold px-2 py-0.5 rounded font-mono uppercase bg-amber-500/10 text-[#C47D0A] border border-amber-500/20">${s.estate_code}</span>
+                                    <span class="badge-theme text-[10px] font-bold px-2 py-0.5 rounded font-mono uppercase bg-amber-500/10 text-[#C47D0A] border border-amber-500/20">${g.estate_code}</span>
                                     <span class="text-[10px] text-emerald-400 font-semibold"><i class="fas fa-circle-check mr-1"></i>Approved Scheme</span>
                                 </div>
-                                <h4 class="font-bold text-sm text-theme-primary">${propName}</h4>
-                                <div class="text-[11px] text-theme-secondary mt-0.5"><i class="fas fa-location-dot text-[#C47D0A] mr-1"></i> ${loc}</div>
+                                <h4 class="font-bold text-sm text-theme-primary">${g.estate_name}</h4>
+                                <div class="text-[11px] text-theme-secondary mt-0.5"><i class="fas fa-location-dot text-[#C47D0A] mr-1"></i> ${g.location || 'Eximp Property'}</div>
                             </div>
 
-                            <div class="bg-elevated rounded-xl p-3 border border-theme space-y-2 text-xs">
-                                <div class="flex justify-between items-center">
-                                    <span class="text-theme-secondary">300 SQM Price:</span>
-                                    <span class="font-bold text-theme-primary font-mono">${s.price_300sqm ? `NGN ${Number(s.price_300sqm).toLocaleString()}` : 'Default Retail'}</span>
-                                </div>
-                                <div class="flex justify-between items-center">
-                                    <span class="text-theme-secondary">500 SQM Price:</span>
-                                    <span class="font-bold text-theme-primary font-mono">${s.price_500sqm ? `NGN ${Number(s.price_500sqm).toLocaleString()}` : 'Default Retail'}</span>
-                                </div>
-                                ${s.price_600sqm ? `
-                                <div class="flex justify-between items-center">
-                                    <span class="text-theme-secondary">600 SQM Price:</span>
-                                    <span class="font-bold text-theme-primary font-mono">NGN ${Number(s.price_600sqm).toLocaleString()}</span>
-                                </div>` : ''}
+                            <div class="bg-elevated rounded-xl p-3 border border-theme space-y-1.5 text-xs">
+                                <div class="text-[10px] font-bold text-theme-secondary uppercase tracking-wider mb-1">Available Plot Sizes & Negotiated Rates</div>
+                                ${variantsHtml}
                             </div>
 
-                            <button onclick="openMemberSubscribeModal('${s.property_id}', '${escapeJs(propName)}', ${s.price_300sqm || 0}, ${s.price_500sqm || 0}, ${s.price_600sqm || 0})"
+                            <button onclick="openMemberSubscribeModal('${escapeJs(g.estate_name)}')"
                                 class="btn-gold w-full py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm">
                                 <i class="fas fa-cart-plus"></i> Subscribe to this Scheme
                             </button>
@@ -778,24 +774,35 @@
             }
         }
 
-        function openMemberSubscribeModal(propertyId, estateName, p300, p500, p600) {
-            document.getElementById('mSubPropertyId').value = propertyId;
-            document.getElementById('mSubEstateName').textContent = estateName;
-            document.getElementById('mSubPrice300').value = p300;
-            document.getElementById('mSubPrice500').value = p500;
-            document.getElementById('mSubPrice600').value = p600;
+        function openMemberSubscribeModal(estateName) {
+            const grouped = window.memberGroupedEstates || [];
+            const matchedEstate = grouped.find(g => g.estate_name === estateName);
+            if (!matchedEstate) return;
+
+            document.getElementById('mSubSelectedEstateName').value = estateName;
+            document.getElementById('mSubEstateName').textContent = `${estateName} (${matchedEstate.estate_code})`;
+
+            const plotSelect = document.getElementById('mSubPlotSize');
+            plotSelect.innerHTML = matchedEstate.variants.map((v, idx) => `
+                <option value="${v.property_id}" data-sqm="${v.plot_size_sqm}" data-price="${v.wholesale_price}" ${idx === 0 ? 'selected' : ''}>
+                    ${v.plot_size_sqm} SQM - NGN ${Number(v.wholesale_price).toLocaleString()}
+                </option>
+            `).join('');
 
             calculateMemberSubTotal();
             document.getElementById('memberSubscribeModal').classList.remove('hidden');
         }
 
         function calculateMemberSubTotal() {
-            const size = document.getElementById('mSubPlotSize').value;
+            const plotSelect = document.getElementById('mSubPlotSize');
+            if (!plotSelect || !plotSelect.selectedOptions || !plotSelect.selectedOptions[0]) {
+                document.getElementById('mSubUnitPriceDisplay').textContent = 'NGN 0.00';
+                document.getElementById('mSubTotalDisplay').textContent = 'NGN 0.00';
+                return;
+            }
+            const opt = plotSelect.selectedOptions[0];
+            const unitPrice = parseFloat(opt.getAttribute('data-price') || 0);
             const qty = parseInt(document.getElementById('mSubQuantity').value || 1, 10);
-            let unitPrice = 0;
-            if (size === '300') unitPrice = parseFloat(document.getElementById('mSubPrice300').value || 0);
-            else if (size === '500') unitPrice = parseFloat(document.getElementById('mSubPrice500').value || 0);
-            else if (size === '600') unitPrice = parseFloat(document.getElementById('mSubPrice600').value || 0);
 
             const total = unitPrice * qty;
             document.getElementById('mSubUnitPriceDisplay').textContent = `NGN ${unitPrice.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
@@ -804,8 +811,14 @@
 
         async function submitMemberSelfSubscription(e) {
             e.preventDefault();
-            const propertyId = document.getElementById('mSubPropertyId').value;
-            const plotSize = parseFloat(document.getElementById('mSubPlotSize').value);
+            const plotSelect = document.getElementById('mSubPlotSize');
+            if (!plotSelect || !plotSelect.selectedOptions || !plotSelect.selectedOptions[0] || !plotSelect.value) {
+                alert('Please select a valid plot size.');
+                return;
+            }
+            const opt = plotSelect.selectedOptions[0];
+            const propertyId = opt.value;
+            const plotSize = parseFloat(opt.getAttribute('data-sqm') || 500);
             const quantity = parseInt(document.getElementById('mSubQuantity').value || 1, 10);
             const paymentPlan = document.getElementById('mSubPaymentPlan').value;
             const token = localStorage.getItem('member_token') || localStorage.getItem('ec_member_token');
@@ -833,6 +846,11 @@
                 switchTab('ledger');
                 loadLedgerData();
             } catch (err) {
+                alert(err.message);
+            } finally {
+                btn.disabled = false;
+            }
+        }
                 alert(err.message);
             } finally {
                 btn.disabled = false;

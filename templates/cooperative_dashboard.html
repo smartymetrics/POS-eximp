@@ -1080,49 +1080,75 @@
 
     <!-- Modal: Tie Estate Scheme -->
     <div id="tieSchemeModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
-        <div class="bg-surface border border-theme rounded-xl max-w-lg w-full p-4 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div class="bg-surface border border-theme rounded-xl max-w-xl w-full p-4 sm:p-6 space-y-4 max-h-[92vh] overflow-y-auto">
             <div class="flex items-center justify-between pb-3 border-b border-theme">
                 <div>
-                    <h3 class="text-sm font-bold text-theme-primary">Tie Estate Scheme to Entity</h3>
-                    <span class="text-[11px] text-[#C47D0A] font-semibold">Negotiated Wholesale Pricing</span>
+                    <h3 class="text-sm font-bold text-theme-primary">Tie Estate Schemes to Entity</h3>
+                    <span class="text-[11px] text-[#C47D0A] font-semibold">Negotiated Wholesale Plot Pricing</span>
                 </div>
                 <button onclick="closeModal('tieSchemeModal')" class="text-theme-secondary hover:text-theme-primary"><i class="fas fa-times"></i></button>
             </div>
+
+            <!-- Currently Tied Estates Pill Summary -->
+            <div id="currentlyTiedSummary" class="p-2.5 rounded-lg bg-elevated/70 border border-theme/60 text-xs space-y-1.5">
+                <div class="flex items-center justify-between">
+                    <span class="text-[10px] font-bold text-theme-secondary uppercase tracking-wider">Currently Tied Estates:</span>
+                    <span id="tiedEstatesCount" class="text-[10px] font-mono text-[#C47D0A] font-semibold">0 Estates Tied</span>
+                </div>
+                <div id="tiedEstatesPills" class="flex flex-wrap gap-1.5">
+                    <span class="text-[11px] text-theme-secondary italic">No estates tied yet. Select an estate below to configure.</span>
+                </div>
+            </div>
+
             <p class="text-xs text-theme-secondary leading-relaxed">
-                Bind an Eximp estate to this corporate entity and set approved negotiated plot rates. Only tied estates are visible for subscription to this entity's participants.
+                Select an Eximp estate to tie to this entity. Each estate's real physical plot sizes (SQM) and retail prices are loaded directly from the properties registry. Set your negotiated wholesale price for each plot size.
             </p>
-            <form onsubmit="submitTieScheme(event)" class="space-y-3 text-xs">
+
+            <form onsubmit="submitTieScheme(event, false)" class="space-y-4 text-xs">
                 <div>
                     <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Select Eximp Estate *</label>
-                    <select id="schemePropertyId" required class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
-                        <option value="">Select property...</option>
+                    <select id="schemeEstateSelect" required onchange="handleEstateSelectionChange(this.value)" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                        <option value="">Select estate...</option>
                     </select>
                 </div>
-                <div>
-                    <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Estate Reference Code *</label>
-                    <input type="text" id="schemeEstateCode" required placeholder="e.g. HER, EMP, OAK" maxlength="6"
-                        class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary uppercase focus:outline-none">
-                </div>
+
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Negotiated Price: 300 SQM (NGN)</label>
-                        <input type="number" id="schemePrice300" placeholder="e.g. 3500000" step="1000" min="0"
-                            class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Estate Reference Code *</label>
+                        <input type="text" id="schemeEstateCode" required placeholder="e.g. COI, BAC, CON" maxlength="6"
+                            class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary uppercase focus:outline-none">
                     </div>
                     <div>
-                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Negotiated Price: 500 SQM (NGN)</label>
-                        <input type="number" id="schemePrice500" placeholder="e.g. 5500000" step="1000" min="0"
-                            class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Estate Location</label>
+                        <input type="text" id="schemeEstateLocation" readonly placeholder="Auto-filled location"
+                            class="w-full px-3 py-2 rounded-lg bg-elevated/50 border border-theme text-theme-secondary focus:outline-none cursor-not-allowed">
                     </div>
                 </div>
-                <div>
-                    <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Negotiated Price: 600 SQM (NGN)</label>
-                    <input type="number" id="schemePrice600" placeholder="e.g. 6500000" step="1000" min="0"
-                        class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+
+                <!-- Dynamic Plot Sizes & Negotiated Wholesale Rates Container -->
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <label class="block font-semibold text-theme-secondary uppercase text-[10px]">Configured SQM Plot Sizes & Wholesale Pricing *</label>
+                        <button type="button" onclick="addCustomSqmRow()" id="btnAddCustomSqm" class="text-[10px] text-[#C47D0A] hover:underline font-semibold flex items-center gap-1 transition">
+                            <i class="fas fa-plus-circle"></i> Add Custom SQM Size
+                        </button>
+                    </div>
+
+                    <div id="schemeVariantsContainer" class="space-y-2 max-h-56 overflow-y-auto pr-1">
+                        <div class="p-4 rounded-lg bg-elevated/40 border border-theme/60 text-center text-theme-secondary text-xs">
+                            Please select an estate above to view and configure its SQM plot sizes and rates.
+                        </div>
+                    </div>
                 </div>
-                <div class="flex justify-end gap-2 pt-3">
+
+                <div class="flex flex-wrap items-center justify-end gap-2 pt-3 border-t border-theme">
                     <button type="button" onclick="closeModal('tieSchemeModal')" class="px-4 py-2 rounded-lg text-theme-secondary hover:bg-elevated">Cancel</button>
-                    <button type="submit" id="btnSaveScheme" class="btn-gold px-5 py-2 rounded-lg font-semibold">Save Estate Scheme</button>
+                    <button type="button" onclick="saveAndTieAnother(event)" id="btnSaveAndTieAnother" class="px-4 py-2 rounded-lg bg-elevated border border-[#C47D0A]/50 text-[#C47D0A] hover:bg-[#C47D0A]/10 font-semibold flex items-center gap-1.5 transition">
+                        <i class="fas fa-plus"></i> Save & Tie Another Estate
+                    </button>
+                    <button type="submit" id="btnSaveScheme" class="btn-gold px-5 py-2 rounded-lg font-semibold flex items-center gap-1.5">
+                        <i class="fas fa-check"></i> Save Estate Scheme
+                    </button>
                 </div>
             </form>
         </div>
@@ -1142,17 +1168,15 @@
                 <input type="hidden" id="subMemberId">
                 <div>
                     <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Approved Estate Scheme *</label>
-                    <select id="subEstateSelect" required onchange="calculateSubscriptionTotal()" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
+                    <select id="subEstateSelect" required onchange="handleSubEstateChange()" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
                         <option value="">Select approved estate...</option>
                     </select>
                 </div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Plot Dimensions *</label>
+                        <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Available Plot Dimensions (SQM) *</label>
                         <select id="subPlotSize" onchange="calculateSubscriptionTotal()" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
-                            <option value="300">300 SQM</option>
-                            <option value="500" selected>500 SQM</option>
-                            <option value="600">600 SQM</option>
+                            <option value="">Select estate first...</option>
                         </select>
                     </div>
                     <div>
@@ -2088,44 +2112,54 @@
                 const empty = document.getElementById('schemesEmptyState');
                 if (!container) return;
 
-                if (currentSchemes.length === 0) {
+                const grouped = data.grouped_estates || [];
+                window.currentGroupedEstates = grouped;
+                window.currentSchemes = data.schemes || [];
+
+                if (grouped.length === 0) {
                     container.innerHTML = '';
                     if (empty) empty.classList.remove('hidden');
+                    updateTiedEstatesSummary([]);
                     return;
                 }
                 if (empty) empty.classList.add('hidden');
+                updateTiedEstatesSummary(grouped);
 
-                container.innerHTML = currentSchemes.map(s => {
-                    const prop = s.properties || {};
-                    const propName = prop.name || prop.address || 'Eximp Estate';
-                    const location = [prop.city, prop.state].filter(Boolean).join(', ') || 'Nigeria';
+                container.innerHTML = grouped.map(g => {
+                    const variantsHtml = g.variants.map(v => {
+                        const savings = v.retail_price > v.wholesale_price ? v.retail_price - v.wholesale_price : 0;
+                        return `
+                            <div class="flex items-center justify-between py-1.5 border-b border-theme/40 last:border-b-0 text-[11px]">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="font-bold text-theme-primary font-mono">${v.plot_size_sqm} SQM:</span>
+                                    <span class="font-bold text-[#C47D0A] font-mono">NGN ${Number(v.wholesale_price).toLocaleString()}</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-theme-secondary text-[10px] line-through font-mono">Retail: NGN ${Number(v.retail_price).toLocaleString()}</span>
+                                    ${savings > 0 ? `<span class="text-[9px] bg-emerald-500/10 text-emerald-400 font-bold px-1.5 py-0.5 rounded border border-emerald-500/20">Save NGN ${Number(savings).toLocaleString()}</span>` : ''}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+
+                    const propIdsJson = JSON.stringify(g.property_ids || []).replace(/"/g, '&quot;');
+
                     return `
                         <div class="bg-elevated border border-theme rounded-xl p-4 text-xs flex flex-col justify-between space-y-3">
                             <div>
                                 <div class="flex items-center justify-between mb-2">
-                                    <span class="badge-theme text-[10px] font-bold px-2 py-0.5 rounded font-mono uppercase bg-amber-500/10 text-[#C47D0A] border border-amber-500/20">${s.estate_code}</span>
-                                    <button onclick="deleteCoopScheme('${s.id}', '${escapeJs(propName)}')" class="text-red-400 hover:text-red-300 text-xs transition" title="Untie Estate">
-                                        <i class="fas fa-link-slash mr-1"></i> Untie
+                                    <span class="badge-theme text-[10px] font-bold px-2 py-0.5 rounded font-mono uppercase bg-amber-500/10 text-[#C47D0A] border border-amber-500/20">${g.estate_code}</span>
+                                    <button onclick="untieWholeEstate('${escapeJs(g.estate_name)}', ${propIdsJson})" class="text-red-400 hover:text-red-300 text-xs transition" title="Untie Estate">
+                                        <i class="fas fa-link-slash mr-1"></i> Untie Estate
                                     </button>
                                 </div>
-                                <h4 class="font-bold text-sm text-theme-primary">${propName}</h4>
-                                <div class="text-[11px] text-theme-secondary mt-0.5"><i class="fas fa-location-dot text-[#C47D0A] mr-1"></i> ${location}</div>
+                                <h4 class="font-bold text-sm text-theme-primary">${g.estate_name}</h4>
+                                <div class="text-[11px] text-theme-secondary mt-0.5"><i class="fas fa-location-dot text-[#C47D0A] mr-1"></i> ${g.location || 'Eximp Property'}</div>
                             </div>
 
-                            <div class="bg-surface/60 rounded-lg p-2.5 border border-theme/60 space-y-1.5 text-[11px]">
-                                <div class="flex justify-between">
-                                    <span class="text-theme-secondary">300 SQM Wholesale:</span>
-                                    <span class="font-bold text-theme-primary font-mono">${s.price_300sqm ? `NGN ${Number(s.price_300sqm).toLocaleString()}` : 'Default Retail'}</span>
-                                </div>
-                                <div class="flex justify-between">
-                                    <span class="text-theme-secondary">500 SQM Wholesale:</span>
-                                    <span class="font-bold text-theme-primary font-mono">${s.price_500sqm ? `NGN ${Number(s.price_500sqm).toLocaleString()}` : 'Default Retail'}</span>
-                                </div>
-                                ${s.price_600sqm ? `
-                                <div class="flex justify-between">
-                                    <span class="text-theme-secondary">600 SQM Wholesale:</span>
-                                    <span class="font-bold text-theme-primary font-mono">NGN ${Number(s.price_600sqm).toLocaleString()}</span>
-                                </div>` : ''}
+                            <div class="bg-surface/70 rounded-lg p-2.5 border border-theme/60 space-y-1">
+                                <div class="text-[10px] font-bold text-theme-secondary uppercase tracking-wider mb-1">Approved Wholesale Rates (${g.variants.length} plot sizes)</div>
+                                ${variantsHtml}
                             </div>
                         </div>
                     `;
@@ -2135,65 +2169,269 @@
             }
         }
 
-        async function openTieSchemeModal() {
-            try {
-                const res = await fetch('/api/properties/', {
-                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
-                });
-                const props = await res.json();
-                const select = document.getElementById('schemePropertyId');
-                if (select) {
-                    select.innerHTML = '<option value="">Select property...</option>' + (props || []).map(p => `
-                        <option value="${p.id}">${p.name || p.address} (${p.city || ''}, ${p.state || ''})</option>
+        function updateTiedEstatesSummary(grouped) {
+            const countEl = document.getElementById('tiedEstatesCount');
+            const pillsEl = document.getElementById('tiedEstatesPills');
+            if (countEl) countEl.textContent = `${grouped.length} Estate${grouped.length === 1 ? '' : 's'} Tied`;
+            if (pillsEl) {
+                if (grouped.length === 0) {
+                    pillsEl.innerHTML = '<span class="text-[11px] text-theme-secondary italic">No estates tied yet. Select an estate below to configure.</span>';
+                } else {
+                    pillsEl.innerHTML = grouped.map(g => `
+                        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-[#C47D0A] font-semibold text-[10px]">
+                            <i class="fas fa-building"></i> ${g.estate_name} (${g.estate_code})
+                        </span>
                     `).join('');
                 }
+            }
+        }
+
+        async function openTieSchemeModal() {
+            try {
+                const res = await fetch('/api/cooperatives/available-estates', {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                const data = await res.json();
+                window.availableEstates = data.estates || [];
+
+                const select = document.getElementById('schemeEstateSelect');
+                if (select) {
+                    select.innerHTML = '<option value="">Select estate...</option>' + (window.availableEstates || []).map(e => `
+                        <option value="${e.name}">${e.name} (${e.location || 'Eximp Property'}) - ${e.variants.length} plot sizes</option>
+                    `).join('');
+                }
+
+                // Reset form fields
+                if (select) select.value = '';
+                document.getElementById('schemeEstateCode').value = '';
+                document.getElementById('schemeEstateLocation').value = '';
+                document.getElementById('schemeVariantsContainer').innerHTML = `
+                    <div class="p-4 rounded-lg bg-elevated/40 border border-theme/60 text-center text-theme-secondary text-xs">
+                        Please select an estate above to view and configure its SQM plot sizes and rates.
+                    </div>
+                `;
+
+                // Update summary of currently tied estates
+                updateTiedEstatesSummary(window.currentGroupedEstates || []);
             } catch (err) {
-                console.warn('Could not fetch properties:', err);
+                console.warn('Could not fetch available estates:', err);
             }
             document.getElementById('tieSchemeModal').classList.remove('hidden');
         }
 
-        async function submitTieScheme(e) {
-            e.preventDefault();
-            const payload = {
-                property_id: document.getElementById('schemePropertyId').value,
-                estate_code: document.getElementById('schemeEstateCode').value.trim(),
-                price_300sqm: parseFloat(document.getElementById('schemePrice300').value || 0),
-                price_500sqm: parseFloat(document.getElementById('schemePrice500').value || 0),
-                price_600sqm: parseFloat(document.getElementById('schemePrice600').value || 0),
-            };
+        function handleEstateSelectionChange(estateName) {
+            if (!estateName || !window.availableEstates) {
+                document.getElementById('schemeEstateCode').value = '';
+                document.getElementById('schemeEstateLocation').value = '';
+                document.getElementById('schemeVariantsContainer').innerHTML = `
+                    <div class="p-4 rounded-lg bg-elevated/40 border border-theme/60 text-center text-theme-secondary text-xs">
+                        Please select an estate above to view and configure its SQM plot sizes and rates.
+                    </div>
+                `;
+                return;
+            }
 
-            const res = await fetch(`/api/cooperatives/${currentCoopId}/schemes`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${getAuthToken()}`
-                },
-                body: JSON.stringify(payload)
+            const estate = window.availableEstates.find(e => e.name === estateName);
+            if (!estate) return;
+
+            document.getElementById('schemeEstateCode').value = estate.estate_code || 'EST';
+            document.getElementById('schemeEstateLocation').value = estate.location || 'Eximp Property';
+
+            // Check if this estate is already tied to pre-populate existing negotiated rates
+            const existingTie = (window.currentGroupedEstates || []).find(ge => ge.estate_name === estateName);
+            const existingMap = {};
+            if (existingTie && existingTie.variants) {
+                existingTie.variants.forEach(v => {
+                    existingMap[v.plot_size_sqm] = v.wholesale_price;
+                });
+            }
+
+            const container = document.getElementById('schemeVariantsContainer');
+            container.innerHTML = estate.variants.map(v => {
+                const prefilled = existingMap[v.plot_size_sqm] !== undefined ? existingMap[v.plot_size_sqm] : v.standard_price;
+                return `
+                    <div class="p-3 rounded-lg bg-elevated border border-theme flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                        <div class="flex items-center gap-2">
+                            <span class="badge-theme text-[10px] font-bold px-2 py-1 rounded bg-[#C47D0A]/15 text-[#C47D0A] border border-[#C47D0A]/30 font-mono">
+                                ${v.plot_size_sqm} SQM
+                            </span>
+                            <div>
+                                <div class="text-[11px] font-semibold text-theme-primary">Plot Size: ${v.plot_size_sqm} SQM</div>
+                                <div class="text-[10px] text-theme-secondary">Retail Price: <span class="font-mono">NGN ${Number(v.standard_price).toLocaleString()}</span></div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 sm:w-56">
+                            <label class="text-[10px] font-semibold text-theme-secondary uppercase whitespace-nowrap">Wholesale (NGN):</label>
+                            <input type="number" data-prop-id="${v.property_id}" data-sqm="${v.plot_size_sqm}" data-retail="${v.standard_price}"
+                                class="scheme-variant-price w-full px-2.5 py-1.5 rounded-lg bg-surface border border-theme text-theme-primary font-mono text-xs focus:outline-none focus:border-[#C47D0A]"
+                                placeholder="${v.standard_price}" value="${prefilled || ''}" step="1000" min="0">
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function addCustomSqmRow() {
+            const estateSelect = document.getElementById('schemeEstateSelect');
+            if (!estateSelect || !estateSelect.value) {
+                alert('Please select an estate first before adding custom plot sizes.');
+                return;
+            }
+            const container = document.getElementById('schemeVariantsContainer');
+            const customId = 'custom_' + Date.now();
+            const row = document.createElement('div');
+            row.className = 'p-3 rounded-lg bg-elevated border border-dashed border-[#C47D0A]/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 custom-sqm-row';
+            row.id = customId;
+            row.innerHTML = `
+                <div class="flex items-center gap-2">
+                    <span class="badge-theme text-[10px] font-bold px-2 py-1 rounded bg-[#C47D0A]/20 text-[#C47D0A] font-mono">Custom</span>
+                    <div>
+                        <div class="flex items-center gap-1.5">
+                            <input type="number" class="custom-sqm-size w-20 px-2 py-1 rounded bg-surface border border-theme text-theme-primary font-mono text-xs focus:outline-none focus:border-[#C47D0A]" placeholder="e.g. 600" min="50" step="10" required>
+                            <span class="text-xs font-semibold text-theme-primary">SQM</span>
+                        </div>
+                        <div class="text-[10px] text-theme-secondary mt-1 flex items-center gap-1">
+                            <span>Retail Est: NGN</span>
+                            <input type="number" class="custom-sqm-retail w-24 px-1.5 py-0.5 rounded bg-surface border border-theme text-theme-secondary text-[10px] font-mono focus:outline-none" placeholder="e.g. 10000000" min="0" step="1000">
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 sm:w-60">
+                    <label class="text-[10px] font-semibold text-theme-secondary uppercase whitespace-nowrap">Wholesale (NGN):</label>
+                    <input type="number" class="custom-sqm-price w-full px-2.5 py-1.5 rounded-lg bg-surface border border-theme text-theme-primary font-mono text-xs focus:outline-none focus:border-[#C47D0A]" placeholder="e.g. 8500000" min="0" step="1000" required>
+                    <button type="button" onclick="document.getElementById('${customId}').remove()" class="text-red-400 hover:text-red-300 p-1.5 rounded hover:bg-red-500/10 transition" title="Remove custom SQM">
+                        <i class="fas fa-trash-can"></i>
+                    </button>
+                </div>
+            `;
+            container.appendChild(row);
+        }
+
+        async function saveAndTieAnother(e) {
+            e.preventDefault();
+            await submitTieScheme(e, true);
+        }
+
+        async function submitTieScheme(e, keepOpen = false) {
+            if (e && e.preventDefault) e.preventDefault();
+
+            const estateSelect = document.getElementById('schemeEstateSelect');
+            const estateName = estateSelect ? estateSelect.value : '';
+            const estateCode = document.getElementById('schemeEstateCode').value.trim();
+
+            if (!estateName) {
+                alert('Please select an estate first.');
+                return;
+            }
+
+            const inputs = document.querySelectorAll('.scheme-variant-price');
+            const variants = [];
+            inputs.forEach(inp => {
+                const propId = inp.getAttribute('data-prop-id');
+                const sqm = parseFloat(inp.getAttribute('data-sqm') || 500);
+                const retail = parseFloat(inp.getAttribute('data-retail') || 0);
+                const val = inp.value.trim();
+                const price = val ? parseFloat(val) : retail;
+                if (propId && price > 0) {
+                    variants.push({
+                        property_id: propId,
+                        plot_size_sqm: sqm,
+                        price: price,
+                        standard_price: retail
+                    });
+                }
             });
 
-            if (res.ok) {
-                closeModal('tieSchemeModal');
-                alert('Estate scheme tied successfully with negotiated wholesale pricing');
-                loadCoopSchemes();
-            } else {
-                const data = await res.json().catch(() => ({}));
-                alert(data.detail || 'Failed to tie estate scheme');
+            // Read any custom SQM rows
+            document.querySelectorAll('.custom-sqm-row').forEach(row => {
+                const sizeInp = row.querySelector('.custom-sqm-size');
+                const priceInp = row.querySelector('.custom-sqm-price');
+                const retailInp = row.querySelector('.custom-sqm-retail');
+                const sqm = sizeInp ? parseFloat(sizeInp.value) : 0;
+                const price = priceInp ? parseFloat(priceInp.value) : 0;
+                const retail = retailInp && retailInp.value ? parseFloat(retailInp.value) : price;
+                if (sqm > 0 && price > 0) {
+                    variants.push({
+                        property_id: null,
+                        plot_size_sqm: sqm,
+                        price: price,
+                        standard_price: retail
+                    });
+                }
+            });
+
+            if (variants.length === 0) {
+                alert('Please configure at least one plot size rate.');
+                return;
+            }
+
+            const payload = {
+                estate_name: estateName,
+                estate_code: estateCode,
+                location: document.getElementById('schemeEstateLocation').value.trim(),
+                variants: variants
+            };
+
+            const btnSave = document.getElementById('btnSaveScheme');
+            const btnAnother = document.getElementById('btnSaveAndTieAnother');
+            if (btnSave) btnSave.disabled = true;
+            if (btnAnother) btnAnother.disabled = true;
+
+            try {
+                const res = await fetch(`/api/cooperatives/${currentCoopId}/schemes`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    await loadCoopSchemes();
+                    if (keepOpen) {
+                        alert(`Estate "${estateName}" tied successfully! You can now select and tie another estate.`);
+                        // Reset dropdown for next estate
+                        estateSelect.value = '';
+                        document.getElementById('schemeEstateCode').value = '';
+                        document.getElementById('schemeEstateLocation').value = '';
+                        document.getElementById('schemeVariantsContainer').innerHTML = `
+                            <div class="p-4 rounded-lg bg-elevated/40 border border-theme/60 text-center text-theme-secondary text-xs">
+                                Estate tied! Select another estate above to continue tying schemes.
+                            </div>
+                        `;
+                    } else {
+                        closeModal('tieSchemeModal');
+                        alert(`Estate "${estateName}" tied successfully with negotiated wholesale pricing.`);
+                    }
+                } else {
+                    const data = await res.json().catch(() => ({}));
+                    alert(data.detail || 'Failed to tie estate scheme');
+                }
+            } catch (err) {
+                alert(err.message || 'An error occurred while saving the estate scheme.');
+            } finally {
+                if (btnSave) btnSave.disabled = false;
+                if (btnAnother) btnAnother.disabled = false;
             }
         }
 
-        async function deleteCoopScheme(schemeId, estateName) {
-            if (!confirm(`Are you sure you want to deactivate scheme "${estateName}" for this entity?`)) return;
+        async function untieWholeEstate(estateName, propertyIds) {
+            if (!confirm(`Are you sure you want to untie all plot sizes for estate "${estateName}" from this entity?`)) return;
             try {
-                const res = await fetch(`/api/cooperatives/${currentCoopId}/schemes/${schemeId}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                const res = await fetch(`/api/cooperatives/${currentCoopId}/schemes/untie-estate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    },
+                    body: JSON.stringify({ property_ids: propertyIds })
                 });
                 if (res.ok) {
-                    loadCoopSchemes();
+                    await loadCoopSchemes();
                 } else {
-                    const data = await res.json();
-                    alert(data.detail || 'Failed to deactivate scheme');
+                    const data = await res.json().catch(() => ({}));
+                    alert(data.detail || 'Failed to untie estate');
                 }
             } catch (err) {
                 alert(err.message);
@@ -2206,28 +2444,56 @@
             document.getElementById('subMemberNameDisplay').textContent = memberName;
 
             const select = document.getElementById('subEstateSelect');
+            const grouped = window.currentGroupedEstates || [];
             if (select) {
-                select.innerHTML = '<option value="">Select approved estate...</option>' + (window.currentSchemes || []).map(s => {
-                    const p = s.properties || {};
-                    return `<option value="${s.property_id}" data-p300="${s.price_300sqm || 0}" data-p500="${s.price_500sqm || 0}" data-p600="${s.price_600sqm || 0}">${p.name || p.address || s.estate_code} (${s.estate_code})</option>`;
-                }).join('');
+                if (grouped.length === 0) {
+                    select.innerHTML = '<option value="">No estates tied yet. Tie an estate first.</option>';
+                } else {
+                    select.innerHTML = '<option value="">Select approved estate...</option>' + grouped.map(g => `
+                        <option value="${g.estate_name}">${g.estate_name} (${g.estate_code}) - ${g.variants.length} plot sizes</option>
+                    `).join('');
+                }
             }
 
-            calculateSubscriptionTotal();
+            handleSubEstateChange();
             document.getElementById('subscribeMemberModal').classList.remove('hidden');
         }
 
-        function calculateSubscriptionTotal() {
-            const select = document.getElementById('subEstateSelect');
-            if (!select || !select.selectedOptions || !select.selectedOptions[0]) return;
-            const opt = select.selectedOptions[0];
-            const size = document.getElementById('subPlotSize').value;
-            const qty = parseInt(document.getElementById('subQuantity').value || 1, 10);
+        function handleSubEstateChange() {
+            const estateSelect = document.getElementById('subEstateSelect');
+            const plotSelect = document.getElementById('subPlotSize');
+            if (!estateSelect || !plotSelect) return;
 
-            let unitPrice = 0;
-            if (size === '300') unitPrice = parseFloat(opt.getAttribute('data-p300') || 0);
-            else if (size === '500') unitPrice = parseFloat(opt.getAttribute('data-p500') || 0);
-            else if (size === '600') unitPrice = parseFloat(opt.getAttribute('data-p600') || 0);
+            const estateName = estateSelect.value;
+            const grouped = window.currentGroupedEstates || [];
+            const matchedEstate = grouped.find(g => g.estate_name === estateName);
+
+            if (!matchedEstate || !matchedEstate.variants || matchedEstate.variants.length === 0) {
+                plotSelect.innerHTML = '<option value="">Select estate first...</option>';
+                calculateSubscriptionTotal();
+                return;
+            }
+
+            plotSelect.innerHTML = matchedEstate.variants.map((v, idx) => `
+                <option value="${v.property_id}" data-sqm="${v.plot_size_sqm}" data-price="${v.wholesale_price}" ${idx === 0 ? 'selected' : ''}>
+                    ${v.plot_size_sqm} SQM - NGN ${Number(v.wholesale_price).toLocaleString()}
+                </option>
+            `).join('');
+
+            calculateSubscriptionTotal();
+        }
+
+        function calculateSubscriptionTotal() {
+            const plotSelect = document.getElementById('subPlotSize');
+            if (!plotSelect || !plotSelect.selectedOptions || !plotSelect.selectedOptions[0]) {
+                document.getElementById('subUnitPriceDisplay').textContent = 'NGN 0.00';
+                document.getElementById('subQuantityDisplay').textContent = '1 Unit';
+                document.getElementById('subTotalDisplay').textContent = 'NGN 0.00';
+                return;
+            }
+            const opt = plotSelect.selectedOptions[0];
+            const unitPrice = parseFloat(opt.getAttribute('data-price') || 0);
+            const qty = parseInt(document.getElementById('subQuantity').value || 1, 10);
 
             const total = unitPrice * qty;
             document.getElementById('subUnitPriceDisplay').textContent = `NGN ${unitPrice.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
@@ -2238,15 +2504,16 @@
         async function submitMemberAllotment(e) {
             e.preventDefault();
             const memberId = document.getElementById('subMemberId').value;
-            const propertyId = document.getElementById('subEstateSelect').value;
-            const plotSize = parseFloat(document.getElementById('subPlotSize').value);
-            const quantity = parseInt(document.getElementById('subQuantity').value || 1, 10);
-            const paymentPlan = document.getElementById('subPaymentPlan').value;
-
-            if (!propertyId) {
-                alert('Please select an approved estate scheme');
+            const plotSelect = document.getElementById('subPlotSize');
+            if (!plotSelect || !plotSelect.selectedOptions || !plotSelect.selectedOptions[0] || !plotSelect.value) {
+                alert('Please select a valid plot size.');
                 return;
             }
+            const opt = plotSelect.selectedOptions[0];
+            const propertyId = opt.value;
+            const plotSize = parseFloat(opt.getAttribute('data-sqm') || 500);
+            const quantity = parseInt(document.getElementById('subQuantity').value || 1, 10);
+            const paymentPlan = document.getElementById('subPaymentPlan').value;
 
             const btn = document.getElementById('btnSubmitSub');
             btn.disabled = true;
@@ -2258,6 +2525,25 @@
                         'Authorization': `Bearer ${getAuthToken()}`
                     },
                     body: JSON.stringify({
+                        member_id: memberId,
+                        property_id: propertyId,
+                        plot_size_sqm: plotSize,
+                        quantity: quantity,
+                        payment_plan: paymentPlan
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Subscription failed');
+                closeModal('subscribeMemberModal');
+                alert(data.message || 'Subscription created successfully and sub-invoice generated');
+                loadMembers();
+                loadOverviewStats();
+            } catch (err) {
+                alert(err.message);
+            } finally {
+                btn.disabled = false;
+            }
+        }
                         member_id: memberId,
                         property_id: propertyId,
                         plot_size_sqm: plotSize,
