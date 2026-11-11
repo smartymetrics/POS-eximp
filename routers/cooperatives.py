@@ -546,6 +546,46 @@ async def list_cooperatives(
         return {"cooperatives": []}
 
 
+@router.get("/available-estates")
+async def list_available_estates(request: Request):
+    """
+    Returns all active estates grouped by estate name with their available SQM variants
+    and standard retail prices so cooperative administrators can tie them.
+    Positioned BEFORE /{coop_id} to prevent path collision.
+    """
+    db = get_db()
+    res = await db_execute(lambda: db.table("properties")
+        .select("id, name, location, estate_name, plot_size_sqm, total_price, starting_price")
+        .eq("is_archived", False)
+        .order("name")
+        .execute())
+
+    grouped = {}
+    for r in res.data or []:
+        raw_name = (r.get("name") or r.get("estate_name") or "Unnamed Estate").strip()
+        if raw_name not in grouped:
+            words = [w for w in raw_name.split() if w.isalnum()]
+            code = "".join([w[0] for w in words[:3]]).upper() if words else "EST"
+            if len(code) < 3:
+                code = (raw_name.replace(" ", "")[:3]).upper()
+            grouped[raw_name] = {
+                "name": raw_name,
+                "location": (r.get("location") or "").strip(),
+                "estate_code": code,
+                "variants": []
+            }
+        grouped[raw_name]["variants"].append({
+            "property_id": r["id"],
+            "plot_size_sqm": float(r.get("plot_size_sqm") or 500),
+            "standard_price": float(r.get("total_price") or r.get("starting_price") or 0)
+        })
+
+    for g in grouped.values():
+        g["variants"].sort(key=lambda x: x["plot_size_sqm"])
+
+    return {"estates": list(grouped.values())}
+
+
 @router.get("/{coop_id}")
 async def get_cooperative_details(
     coop_id: str,
@@ -1233,44 +1273,6 @@ async def create_member_sub_invoice(
 
 
 # ── Estate Schemes & Negotiated Pricing ──────────────────────────────────────
-
-@router.get("/available-estates")
-async def list_available_estates(current_user=Depends(resolve_coop_viewer)):
-    """
-    Returns all active estates grouped by estate name with their available SQM variants
-    and standard retail prices so cooperative administrators can tie them.
-    """
-    db = get_db()
-    res = await db_execute(lambda: db.table("properties")
-        .select("id, name, location, estate_name, plot_size_sqm, total_price, starting_price")
-        .eq("is_archived", False)
-        .order("name")
-        .execute())
-
-    grouped = {}
-    for r in res.data or []:
-        raw_name = (r.get("name") or r.get("estate_name") or "Unnamed Estate").strip()
-        if raw_name not in grouped:
-            words = [w for w in raw_name.split() if w.isalnum()]
-            code = "".join([w[0] for w in words[:3]]).upper() if words else "EST"
-            if len(code) < 3:
-                code = (raw_name.replace(" ", "")[:3]).upper()
-            grouped[raw_name] = {
-                "name": raw_name,
-                "location": (r.get("location") or "").strip(),
-                "estate_code": code,
-                "variants": []
-            }
-        grouped[raw_name]["variants"].append({
-            "property_id": r["id"],
-            "plot_size_sqm": float(r.get("plot_size_sqm") or 500),
-            "standard_price": float(r.get("total_price") or r.get("starting_price") or 0)
-        })
-
-    for g in grouped.values():
-        g["variants"].sort(key=lambda x: x["plot_size_sqm"])
-
-    return {"estates": list(grouped.values())}
 
 @router.get("/{coop_id}/schemes")
 async def list_cooperative_schemes(coop_id: str, current_user=Depends(resolve_coop_viewer)):
