@@ -80,50 +80,153 @@
             color: var(--gold);
             font-weight: 700;
         }
+
+        html, body {
+            max-width: 100vw;
+            overflow-x: hidden;
+        }
+
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
     </style>
 </head>
 <body class="theme-dark min-h-screen flex flex-col">
 
+    <!-- Mobile Slide-Out Drawer Navigation Backdrop -->
+    <div id="mobileDrawerBackdrop" onclick="toggleMobileMenu(false)" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity opacity-0 lg:hidden"></div>
+
+    <!-- Mobile Slide-Out Drawer -->
+    <aside id="mobileDrawer" class="fixed top-0 left-0 bottom-0 w-72 max-w-[85vw] bg-surface border-r border-theme z-50 transform -translate-x-full transition-transform duration-300 ease-in-out flex flex-col justify-between p-5 lg:hidden shadow-2xl">
+        <div class="space-y-6">
+            <!-- Drawer Brand & Close Button -->
+            <div class="flex items-center justify-between pb-4 border-b border-theme">
+                <div>
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-[#C47D0A] block">Entities &amp; Schemes</span>
+                    <h2 class="text-sm font-bold text-theme-primary">Administration Portal</h2>
+                </div>
+                <button onclick="toggleMobileMenu(false)" class="text-theme-secondary hover:text-theme-primary p-1.5 rounded-lg focus:outline-none" aria-label="Close menu">
+                    <i class="fas fa-times text-base"></i>
+                </button>
+            </div>
+
+            <!-- Navigation Sections -->
+            <nav class="space-y-1 text-xs">
+                <span class="text-[10px] font-bold text-theme-secondary uppercase tracking-wider block px-2 mb-1.5">Portal Views</span>
+                <button onclick="switchTab('overview')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-theme-primary hover:bg-elevated transition text-left">
+                    <i class="fas fa-chart-pie text-[#C47D0A] w-4"></i>
+                    <span>Overview &amp; Plots</span>
+                </button>
+                <button onclick="switchTab('members')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-theme-primary hover:bg-elevated transition text-left">
+                    <i class="fas fa-users text-[#C47D0A] w-4"></i>
+                    <span id="mobileMenuMembersText">Participants Roster</span>
+                </button>
+                <button onclick="switchTab('kyc')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-theme-primary hover:bg-elevated transition text-left">
+                    <i class="fas fa-id-card-clip text-[#C47D0A] w-4"></i>
+                    <span>Corporate KYC</span>
+                </button>
+                <button onclick="switchTab('transfers')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-theme-primary hover:bg-elevated transition text-left">
+                    <i class="fas fa-repeat text-[#C47D0A] w-4"></i>
+                    <span>Property Transfers</span>
+                </button>
+                <button onclick="switchTab('history')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-theme-primary hover:bg-elevated transition text-left">
+                    <i class="fas fa-clock-rotate-left text-[#C47D0A] w-4"></i>
+                    <span>Admin Action Log</span>
+                </button>
+                <button onclick="switchTab('whatsapp')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-theme-primary hover:bg-elevated transition text-left">
+                    <i class="fab fa-whatsapp text-emerald-500 w-4"></i>
+                    <span>WhatsApp Gateway</span>
+                </button>
+
+                <div class="pt-4 mt-4 border-t border-theme">
+                    <span class="text-[10px] font-bold text-theme-secondary uppercase tracking-wider block px-2 mb-1.5">System Navigation</span>
+                    <a href="/dashboard" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-theme-primary hover:bg-elevated transition">
+                        <i class="fas fa-arrow-left text-[#C47D0A] w-4"></i>
+                        <span>Main ERP Dashboard</span>
+                    </a>
+                    <a href="/legal/dashboard" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-theme-primary hover:bg-elevated transition">
+                        <i class="fas fa-scale-balanced text-[#C47D0A] w-4"></i>
+                        <span>Legal &amp; Governance</span>
+                    </a>
+                    <button onclick="toggleMobileMenu(false); openOnboardModal();" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-amber-500 hover:bg-elevated transition text-left">
+                        <i class="fas fa-plus text-[#C47D0A] w-4"></i>
+                        <span>Onboard New Entity</span>
+                    </button>
+                </div>
+            </nav>
+        </div>
+
+        <!-- Drawer Footer: Theme & Logout -->
+        <div class="pt-4 border-t border-theme space-y-3">
+            <div>
+                <span class="text-[10px] font-bold text-theme-secondary uppercase tracking-wider block mb-1.5">Theme Palette</span>
+                <div class="grid grid-cols-3 gap-1 bg-elevated border border-theme rounded-lg p-1 text-xs">
+                    <button onclick="setTheme('dark')" id="mobileThemeBtnDark" class="py-1.5 text-center rounded text-theme-secondary flex items-center justify-center gap-1">
+                        <i class="fas fa-moon"></i> Dark
+                    </button>
+                    <button onclick="setTheme('light')" id="mobileThemeBtnLight" class="py-1.5 text-center rounded text-theme-secondary flex items-center justify-center gap-1">
+                        <i class="fas fa-sun"></i> Light
+                    </button>
+                    <button onclick="setTheme('warm')" id="mobileThemeBtnWarm" class="py-1.5 text-center rounded text-theme-secondary flex items-center justify-center gap-1">
+                        <i class="fas fa-feather"></i> Warm
+                    </button>
+                </div>
+            </div>
+
+            <button onclick="logoutCoopAdmin()" class="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-500/10 text-red-500 font-semibold text-xs hover:bg-red-500/20 transition">
+                <i class="fas fa-arrow-right-from-bracket"></i>
+                <span>Sign Out</span>
+            </button>
+        </div>
+    </aside>
+
     <!-- Top Navigation Header -->
-    <header class="bg-surface border-b border-theme sticky top-0 z-40 px-4 lg:px-8 py-3.5 flex items-center justify-between shadow-sm">
-        <div class="flex items-center gap-3">
-            <button onclick="toggleMobileMenu()" class="lg:hidden text-theme-secondary p-1.5 focus:outline-none">
+    <header class="bg-surface border-b border-theme sticky top-0 z-40 px-3 sm:px-4 lg:px-8 py-2.5 sm:py-3.5 flex items-center justify-between shadow-sm">
+        <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+            <!-- Hamburger menu button (mobile & tablet) -->
+            <button onclick="toggleMobileMenu(true)" class="lg:hidden text-theme-secondary hover:text-theme-primary p-1.5 focus:outline-none rounded-lg" aria-label="Open Navigation Menu">
                 <i class="fas fa-bars text-lg"></i>
             </button>
-            <div class="flex flex-col">
-                <span class="text-xs font-bold uppercase tracking-wider text-[#C47D0A]">Registered &amp; Unregistered Entities</span>
+            <div class="flex flex-col min-w-0">
+                <span class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[#C47D0A] truncate">Registered &amp; Unregistered Entities</span>
                 <div class="flex items-center gap-2 mt-0.5">
-                    <h1 id="coopNameHeader" class="text-base lg:text-lg font-bold text-theme-primary truncate max-w-[200px] sm:max-w-xs">
+                    <h1 id="coopNameHeader" class="text-sm sm:text-base lg:text-lg font-bold text-theme-primary truncate max-w-[130px] xs:max-w-[170px] sm:max-w-xs">
                         Loading Entity...
                     </h1>
-                    <select id="coopSelectDropdown" onchange="onCooperativeSelected(this.value)" class="text-xs font-semibold bg-elevated border border-theme rounded-lg px-2.5 py-1 text-theme-primary focus:outline-none focus:border-[#C47D0A] max-w-[200px] sm:max-w-xs">
+                    <!-- Desktop / Tablet Entity Dropdown -->
+                    <select id="coopSelectDropdown" onchange="onCooperativeSelected(this.value)" class="hidden sm:inline-block text-xs font-semibold bg-elevated border border-theme rounded-lg px-2.5 py-1 text-theme-primary focus:outline-none focus:border-[#C47D0A] max-w-[180px] md:max-w-xs">
                         <option value="">Select Entity / Scheme...</option>
                     </select>
                 </div>
             </div>
         </div>
 
-        <div class="flex items-center gap-3 lg:gap-4">
+        <div class="flex items-center gap-1.5 sm:gap-3 lg:gap-4 shrink-0">
             <!-- Back to Main ERP -->
-            <a href="/dashboard" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-theme-secondary hover:text-theme-primary bg-elevated border border-theme flex items-center gap-1.5 transition">
+            <a href="/dashboard" class="px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold text-theme-secondary hover:text-theme-primary bg-elevated border border-theme flex items-center gap-1.5 transition" title="Back to Main ERP">
                 <i class="fas fa-arrow-left"></i>
                 <span class="hidden sm:inline">Main ERP</span>
             </a>
 
             <!-- Onboard Entity Button -->
-            <button onclick="openOnboardModal()" class="btn-gold px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+            <button onclick="openOnboardModal()" class="btn-gold px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm" title="Onboard Entity">
                 <i class="fas fa-plus"></i>
                 <span class="hidden sm:inline">Onboard Entity</span>
             </button>
 
-            <!-- Admin Identity Badge -->
+            <!-- Admin Identity Badge (Desktop) -->
             <div class="hidden sm:flex flex-col text-right">
                 <span id="adminNameHeader" class="text-xs font-semibold text-theme-primary truncate max-w-[180px]">Admin Name</span>
                 <span id="adminRoleHeader" class="text-[11px] text-theme-secondary capitalize">President</span>
             </div>
 
-            <!-- Theme Mode Switcher (Dark, Light, Warm) -->
-            <div class="flex items-center bg-elevated border border-theme rounded-lg p-0.5 text-xs">
+            <!-- Theme Mode Switcher (Desktop) -->
+            <div class="hidden sm:flex items-center bg-elevated border border-theme rounded-lg p-0.5 text-xs">
                 <button onclick="setTheme('dark')" id="themeBtnDark" class="px-2 py-1 rounded text-theme-secondary hover:text-theme-primary" title="Dark Theme">
                     <i class="fas fa-moon"></i>
                 </button>
@@ -135,15 +238,25 @@
                 </button>
             </div>
 
-            <!-- Logout -->
-            <button onclick="logoutCoopAdmin()" class="px-3 py-1.5 text-xs font-semibold text-red-500 hover:bg-red-500/10 rounded-lg transition" title="Logout">
+            <!-- Logout (Desktop) -->
+            <button onclick="logoutCoopAdmin()" class="hidden sm:inline-flex px-3 py-1.5 text-xs font-semibold text-red-500 hover:bg-red-500/10 rounded-lg transition" title="Logout">
                 <i class="fas fa-arrow-right-from-bracket"></i>
             </button>
         </div>
     </header>
 
+    <!-- Dedicated Mobile Entity Selector Bar -->
+    <div class="sm:hidden bg-surface border-b border-theme px-3 py-2 flex items-center gap-2">
+        <label for="coopSelectDropdownMobile" class="text-[11px] font-semibold text-theme-secondary whitespace-nowrap flex items-center gap-1">
+            <i class="fas fa-building text-[#C47D0A]"></i> Entity:
+        </label>
+        <select id="coopSelectDropdownMobile" onchange="onCooperativeSelected(this.value)" class="w-full text-xs font-semibold bg-elevated border border-theme rounded-lg px-2.5 py-1.5 text-theme-primary focus:outline-none focus:border-[#C47D0A]">
+            <option value="">Select Entity / Scheme...</option>
+        </select>
+    </div>
+
     <!-- Sub Header: Tabs Navigation -->
-    <div class="bg-surface border-b border-theme px-4 lg:px-8 flex overflow-x-auto gap-6 text-sm text-theme-secondary scrollbar-none">
+    <div class="bg-surface border-b border-theme px-3 sm:px-4 lg:px-8 flex overflow-x-auto gap-4 sm:gap-6 text-xs sm:text-sm text-theme-secondary no-scrollbar scroll-smooth">
         <button onclick="switchTab('overview')" id="tab-overview" class="tab-btn active py-3 whitespace-nowrap">
             <i class="fas fa-chart-pie mr-1.5"></i> Overview &amp; Plots
         </button>
@@ -170,26 +283,26 @@
         <!-- TAB 1: OVERVIEW -->
         <section id="view-overview" class="space-y-6">
             <!-- Quick Stat Cards -->
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div class="bg-surface border border-theme rounded-xl p-4 lg:p-5">
-                    <span class="text-xs text-theme-secondary font-medium">Allocated Plots</span>
-                    <h3 id="statAllocatedPlots" class="text-xl lg:text-2xl font-bold text-theme-primary mt-1">0</h3>
-                    <span id="statAllocatedSubtext" class="text-[11px] text-theme-secondary mt-1 block">Active Participant Allotments</span>
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+                <div class="bg-surface border border-theme rounded-xl p-3 sm:p-4 lg:p-5">
+                    <span class="text-[11px] sm:text-xs text-theme-secondary font-medium">Allocated Plots</span>
+                    <h3 id="statAllocatedPlots" class="text-base sm:text-xl lg:text-2xl font-bold text-theme-primary mt-1 truncate">0</h3>
+                    <span id="statAllocatedSubtext" class="text-[10px] sm:text-[11px] text-theme-secondary mt-1 block truncate">Active Participant Allotments</span>
                 </div>
-                <div class="bg-surface border border-theme rounded-xl p-4 lg:p-5">
-                    <span class="text-xs text-theme-secondary font-medium">Total Invoiced</span>
-                    <h3 id="statTotalInvoiced" class="text-xl lg:text-2xl font-bold text-theme-primary mt-1">NGN 0.00</h3>
-                    <span class="text-[11px] text-theme-secondary mt-1 block">Sub-indexed Contracts</span>
+                <div class="bg-surface border border-theme rounded-xl p-3 sm:p-4 lg:p-5">
+                    <span class="text-[11px] sm:text-xs text-theme-secondary font-medium">Total Invoiced</span>
+                    <h3 id="statTotalInvoiced" class="text-base sm:text-xl lg:text-2xl font-bold text-theme-primary mt-1 truncate">NGN 0.00</h3>
+                    <span class="text-[10px] sm:text-[11px] text-theme-secondary mt-1 block truncate">Sub-indexed Contracts</span>
                 </div>
-                <div class="bg-surface border border-theme rounded-xl p-4 lg:p-5">
-                    <span class="text-xs text-theme-secondary font-medium">Total Remitted</span>
-                    <h3 id="statTotalRemitted" class="text-xl lg:text-2xl font-bold text-emerald-500 mt-1">NGN 0.00</h3>
-                    <span class="text-[11px] text-theme-secondary mt-1 block">Verified Receipts</span>
+                <div class="bg-surface border border-theme rounded-xl p-3 sm:p-4 lg:p-5">
+                    <span class="text-[11px] sm:text-xs text-theme-secondary font-medium">Total Remitted</span>
+                    <h3 id="statTotalRemitted" class="text-base sm:text-xl lg:text-2xl font-bold text-emerald-500 mt-1 truncate">NGN 0.00</h3>
+                    <span class="text-[10px] sm:text-[11px] text-theme-secondary mt-1 block truncate">Verified Receipts</span>
                 </div>
-                <div class="bg-surface border border-theme rounded-xl p-4 lg:p-5">
-                    <span class="text-xs text-theme-secondary font-medium">Outstanding Balance</span>
-                    <h3 id="statOutstandingBalance" class="text-xl lg:text-2xl font-bold text-amber-500 mt-1">NGN 0.00</h3>
-                    <span id="statOutstandingSubtext" class="text-[11px] text-theme-secondary mt-1 block">Across All Participants</span>
+                <div class="bg-surface border border-theme rounded-xl p-3 sm:p-4 lg:p-5">
+                    <span class="text-[11px] sm:text-xs text-theme-secondary font-medium">Outstanding Balance</span>
+                    <h3 id="statOutstandingBalance" class="text-base sm:text-xl lg:text-2xl font-bold text-amber-500 mt-1 truncate">NGN 0.00</h3>
+                    <span id="statOutstandingSubtext" class="text-[10px] sm:text-[11px] text-theme-secondary mt-1 block truncate">Across All Participants</span>
                 </div>
             </div>
 
@@ -244,8 +357,8 @@
 
             <!-- Members Table Card -->
             <div class="bg-surface border border-theme rounded-xl overflow-hidden shadow-sm">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left text-xs text-theme-primary">
+                <div class="w-full overflow-x-auto">
+                    <table class="min-w-[650px] w-full text-left text-xs text-theme-primary">
                         <thead class="bg-elevated border-b border-theme text-theme-secondary font-medium uppercase tracking-wider text-[11px]">
                             <tr>
                                 <th class="py-3 px-4">Sub-Index</th>
@@ -449,8 +562,8 @@
                         <p class="text-xs text-theme-secondary">Participant requests to transfer ownership (Active installment plans or Fully paid plots).</p>
                     </div>
                 </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left text-xs text-theme-primary">
+                <div class="w-full overflow-x-auto">
+                    <table class="min-w-[650px] w-full text-left text-xs text-theme-primary">
                         <thead class="bg-elevated border-b border-theme text-theme-secondary uppercase text-[11px]">
                             <tr>
                                 <th class="py-3 px-4">Transfer Type</th>
@@ -481,8 +594,8 @@
                         <p class="text-xs text-theme-secondary">Immutable chronological audit log identifying which of the 3 administrators executed each action.</p>
                     </div>
                 </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left text-xs text-theme-primary">
+                <div class="w-full overflow-x-auto">
+                    <table class="min-w-[650px] w-full text-left text-xs text-theme-primary">
                         <thead class="bg-elevated border-b border-theme text-theme-secondary uppercase text-[11px]">
                             <tr>
                                 <th class="py-3 px-4">Timestamp</th>
@@ -611,8 +724,8 @@
     </main>
 
     <!-- Modal: Add Single Participant / Member -->
-    <div id="addMemberModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div class="bg-surface border border-theme rounded-xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+    <div id="addMemberModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+        <div class="bg-surface border border-theme rounded-xl max-w-lg w-full p-4 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div class="flex items-center justify-between pb-3 border-b border-theme">
                 <h3 id="addMemberModalTitle" class="text-sm font-bold text-theme-primary">Add Participant to Scheme Roster</h3>
                 <button onclick="closeModal('addMemberModal')" class="text-theme-secondary hover:text-theme-primary"><i class="fas fa-times"></i></button>
@@ -622,7 +735,7 @@
                     <label id="lblMemberFullName" class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Full Name (First, Middle, Surname) *</label>
                     <input type="text" id="mFullName" required class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
                 </div>
-                <div class="grid grid-cols-2 gap-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                         <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Phone Number (WhatsApp) *</label>
                         <input type="tel" id="mPhone" required placeholder="080..." class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
@@ -632,7 +745,7 @@
                         <input type="email" id="mEmail" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
                     </div>
                 </div>
-                <div class="grid grid-cols-2 gap-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                         <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">National Identity Number (NIN)</label>
                         <input type="text" id="mNin" placeholder="11-digit NIN" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
@@ -648,7 +761,7 @@
                 </div>
                 <div class="border-t border-theme pt-3">
                     <span class="text-[11px] font-bold text-[#C47D0A] block mb-2">Next of Kin Details</span>
-                    <div class="grid grid-cols-2 gap-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <input type="text" id="mNokName" placeholder="Next of Kin Full Name" class="px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
                         <input type="tel" id="mNokPhone" placeholder="Next of Kin Phone" class="px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
                     </div>
@@ -721,8 +834,8 @@
     </div>
 
     <!-- Modal: Add Scheme Executive Admin -->
-    <div id="addAdminModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div class="bg-surface border border-theme rounded-xl max-w-md w-full p-6 space-y-4">
+    <div id="addAdminModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+        <div class="bg-surface border border-theme rounded-xl max-w-md w-full p-4 sm:p-6 space-y-4">
             <div class="flex items-center justify-between pb-3 border-b border-theme">
                 <h3 class="text-sm font-bold text-theme-primary">Add Scheme Executive Administrator</h3>
                 <button onclick="closeModal('addAdminModal')" class="text-theme-secondary hover:text-theme-primary"><i class="fas fa-times"></i></button>
@@ -735,7 +848,7 @@
                     <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Full Name</label>
                     <input type="text" id="adminFullName" required placeholder="Dr. John Doe" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
                 </div>
-                <div class="grid grid-cols-2 gap-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                         <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Official Email</label>
                         <input type="email" id="adminEmail" required placeholder="admin@entity.org" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
@@ -745,7 +858,7 @@
                         <input type="tel" id="adminPhone" required placeholder="08012345678" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
                     </div>
                 </div>
-                <div class="grid grid-cols-2 gap-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                         <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Designated Role</label>
                         <select id="adminRole" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
@@ -769,8 +882,8 @@
     </div>
 
     <!-- Modal: Onboard New Entity / Corporate Scheme -->
-    <div id="onboardModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div class="bg-surface border border-theme rounded-xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+    <div id="onboardModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+        <div class="bg-surface border border-theme rounded-xl max-w-lg w-full p-4 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div class="flex items-center justify-between pb-3 border-b border-theme">
                 <div>
                     <h3 class="text-sm font-bold text-theme-primary">Onboard New Entity / Corporate Scheme</h3>
@@ -832,7 +945,7 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                         <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">Official Email</label>
                         <input type="email" id="onbOfficialEmail" placeholder="info@organization.org" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
@@ -843,7 +956,7 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                         <label class="block font-semibold text-theme-secondary uppercase text-[10px] mb-1">State</label>
                         <input type="text" id="onbState" value="Lagos" class="w-full px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
@@ -861,11 +974,11 @@
 
                 <div class="border-t border-theme pt-3">
                     <span class="text-[11px] font-bold text-[#C47D0A] block mb-2">Designated Primary Scheme Administrator</span>
-                    <div class="grid grid-cols-2 gap-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <input type="text" id="onbAdminName" required placeholder="Admin Full Name" class="px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
                         <input type="tel" id="onbAdminPhone" required placeholder="Admin Phone" class="px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
                     </div>
-                    <div class="grid grid-cols-2 gap-3 mt-2">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
                         <input type="email" id="onbAdminEmail" required placeholder="admin@organization.org" class="px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
                         <input type="text" id="onbAdminPassword" value="EntityAdmin@2026" class="px-3 py-2 rounded-lg bg-elevated border border-theme text-theme-primary focus:outline-none">
                     </div>
@@ -924,6 +1037,10 @@
             // Tab button
             const tabLabel = document.getElementById('tabMembersLabel');
             if (tabLabel) tabLabel.textContent = plural;
+
+            // Mobile menu tab label
+            const mobileMenuMembersText = document.getElementById('mobileMenuMembersText');
+            if (mobileMenuMembersText) mobileMenuMembersText.textContent = `${plural} Roster`;
 
             // Search input placeholder
             const searchInput = document.getElementById('memberSearchInput');
@@ -1022,24 +1139,53 @@
             }
         }
 
+        // Mobile Navigation Drawer Toggle
+        function toggleMobileMenu(show) {
+            const drawer = document.getElementById('mobileDrawer');
+            const backdrop = document.getElementById('mobileDrawerBackdrop');
+            if (!drawer || !backdrop) return;
+
+            const isClosed = drawer.classList.contains('-translate-x-full');
+            const shouldOpen = (typeof show === 'boolean') ? show : isClosed;
+
+            if (shouldOpen) {
+                backdrop.classList.remove('hidden');
+                requestAnimationFrame(() => {
+                    backdrop.classList.remove('opacity-0');
+                    drawer.classList.remove('-translate-x-full');
+                });
+                document.body.classList.add('overflow-hidden');
+            } else {
+                drawer.classList.add('-translate-x-full');
+                backdrop.classList.add('opacity-0');
+                setTimeout(() => {
+                    backdrop.classList.add('hidden');
+                }, 250);
+                document.body.classList.remove('overflow-hidden');
+            }
+        }
+
         // Theme Switcher Logic
         function setTheme(theme) {
             document.body.classList.remove('theme-dark', 'theme-light', 'theme-warm');
             document.body.classList.add(`theme-${theme}`);
             localStorage.setItem('ec_coop_theme', theme);
 
-            // Update button highlights
+            // Update button highlights (desktop and mobile drawer)
             ['dark', 'light', 'warm'].forEach(t => {
-                const btn = document.getElementById(`themeBtn${t.charAt(0).toUpperCase() + t.slice(1)}`);
-                if (btn) {
+                const upper = t.charAt(0).toUpperCase() + t.slice(1);
+                const btn = document.getElementById(`themeBtn${upper}`);
+                const mBtn = document.getElementById(`mobileThemeBtn${upper}`);
+                [btn, mBtn].forEach(b => {
+                    if (!b) return;
                     if (t === theme) {
-                        btn.classList.add('bg-surface', 'shadow-sm', 'text-[#C47D0A]', 'font-bold');
-                        btn.classList.remove('text-theme-secondary');
+                        b.classList.add('bg-surface', 'shadow-sm', 'text-[#C47D0A]', 'font-bold');
+                        b.classList.remove('text-theme-secondary');
                     } else {
-                        btn.classList.remove('bg-surface', 'shadow-sm', 'text-[#C47D0A]', 'font-bold');
-                        btn.classList.add('text-theme-secondary');
+                        b.classList.remove('bg-surface', 'shadow-sm', 'text-[#C47D0A]', 'font-bold');
+                        b.classList.add('text-theme-secondary');
                     }
-                }
+                });
             });
         }
 
@@ -1049,6 +1195,7 @@
 
         // Tab Switcher Logic
         function switchTab(tabId) {
+            toggleMobileMenu(false);
             ['overview', 'members', 'kyc', 'transfers', 'history', 'whatsapp'].forEach(t => {
                 const view = document.getElementById(`view-${t}`);
                 const tab = document.getElementById(`tab-${t}`);
@@ -1242,15 +1389,21 @@
                     const listData = await resList.json();
                     const coops = listData.cooperatives || [];
                     const dropdown = document.getElementById('coopSelectDropdown');
-                    if (dropdown && coops.length > 0) {
-                        dropdown.innerHTML = '<option value="">-- Switch Entity / Scheme --</option>' + coops.map(c => 
-                            `<option value="${c.id}" ${c.id === currentCoopId ? 'selected' : ''}>${c.name} (${c.entity_type || 'Scheme'})</option>`
-                        ).join('');
-                        if (!currentCoopId && coops.length > 0) {
-                            currentCoopId = coops[0].id;
-                            localStorage.setItem('ec_coop_id', currentCoopId);
-                            dropdown.value = currentCoopId;
-                        }
+                    const dropdownMobile = document.getElementById('coopSelectDropdownMobile');
+                    const optionsHtml = '<option value="">Select Entity / Scheme...</option>' + coops.map(c => 
+                        `<option value="${c.id}" ${c.id === currentCoopId ? 'selected' : ''}>${c.name} (${c.entity_type || 'Scheme'})</option>`
+                    ).join('');
+
+                    if (dropdown && coops.length > 0) dropdown.innerHTML = optionsHtml;
+                    if (dropdownMobile && coops.length > 0) dropdownMobile.innerHTML = optionsHtml;
+
+                    if (!currentCoopId && coops.length > 0) {
+                        currentCoopId = coops[0].id;
+                        localStorage.setItem('ec_coop_id', currentCoopId);
+                    }
+                    if (currentCoopId) {
+                        if (dropdown) dropdown.value = currentCoopId;
+                        if (dropdownMobile) dropdownMobile.value = currentCoopId;
                     }
                 }
             } catch (e) {
