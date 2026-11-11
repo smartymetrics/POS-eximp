@@ -2544,25 +2544,6 @@
                 btn.disabled = false;
             }
         }
-                        member_id: memberId,
-                        property_id: propertyId,
-                        plot_size_sqm: plotSize,
-                        quantity: quantity,
-                        payment_plan: paymentPlan
-                    })
-                });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.detail || 'Subscription failed');
-                closeModal('subscribeMemberModal');
-                alert(data.message || 'Subscription created successfully and sub-invoice generated');
-                loadMembers();
-                loadOverviewStats();
-            } catch (err) {
-                alert(err.message);
-            } finally {
-                btn.disabled = false;
-            }
-        }
 
         // Plot Assignment with Anti-Fraud Check
         function openAssignPlotModal(memberId, memberName) {
