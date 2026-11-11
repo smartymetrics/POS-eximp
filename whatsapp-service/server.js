@@ -223,7 +223,9 @@ async function restoreAuthFromCloud() {
   if (supabaseUrl && supabaseKey) {
     try {
       const downloadUrl = `${supabaseUrl}/storage/v1/object/public/signatures/wa_sessions/session_bundle.json`;
-      const res = await fetch(downloadUrl);
+      const res = await fetch(downloadUrl, {
+        headers: { 'Authorization': `Bearer ${supabaseKey}` }
+      });
       if (res.ok) {
         const bundle = await res.json();
         if (bundle && bundle['creds.json']) {

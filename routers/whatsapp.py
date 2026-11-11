@@ -6,7 +6,10 @@ Supports multi-device pairing via QR code, Cloudinary session backup, and direct
 """
 
 import os
+import shutil
+import subprocess
 import logging
+import urllib.request
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from routers.auth import verify_token, has_any_role
@@ -16,6 +19,71 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 WHATSAPP_GATEWAY_URL = os.getenv("WHATSAPP_GATEWAY_URL", "http://127.0.0.1:8005")
+_gateway_process = None
+
+
+def start_whatsapp_gateway_process():
+    """
+    Auto-spawns the Baileys Node.js WhatsApp Gateway service on port 8005 if not already running.
+    Ensures seamless execution on both localhost and cloud environments like Render.
+    """
+    global _gateway_process
+    if _gateway_process is not None and _gateway_process.poll() is None:
+        return
+
+    # Check if gateway is already answering on WHATSAPP_GATEWAY_URL
+    try:
+        req = urllib.request.Request(f"{WHATSAPP_GATEWAY_URL}/health", headers={"User-Agent": "FastAPI"})
+        with urllib.request.urlopen(req, timeout=1.0) as resp:
+            if resp.status == 200:
+                return
+    except Exception:
+        pass
+
+    service_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "whatsapp-service")
+    server_js = os.path.join(service_dir, "server.js")
+    if not os.path.exists(server_js):
+        logger.warning(f"[WhatsApp Gateway] server.js not found at {server_js}")
+        return
+
+    node_bin = shutil.which("node")
+    if not node_bin:
+        for candidate in ["/usr/bin/node", "/usr/local/bin/node", "/opt/render/project/.render/node/bin/node"]:
+            if os.path.exists(candidate):
+                node_bin = candidate
+                break
+
+    if not node_bin:
+        logger.warning("[WhatsApp Gateway] Node.js binary not found on PATH. Start gateway manually on port 8005.")
+        return
+
+    try:
+        logger.info(f"[WhatsApp Gateway] Spawning WhatsApp Gateway sidecar ({node_bin} server.js)...")
+        _gateway_process = subprocess.Popen(
+            [node_bin, "server.js"],
+            cwd=service_dir,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        logger.info(f"[WhatsApp Gateway] Sidecar process started (PID {_gateway_process.pid})")
+    except Exception as e:
+        logger.warning(f"[WhatsApp Gateway] Could not spawn gateway sidecar: {e}")
+
+
+def stop_whatsapp_gateway_process():
+    """Gracefully shuts down the gateway sidecar process if managed by Python."""
+    global _gateway_process
+    if _gateway_process is not None and _gateway_process.poll() is None:
+        try:
+            logger.info(f"[WhatsApp Gateway] Stopping sidecar process (PID {_gateway_process.pid})...")
+            _gateway_process.terminate()
+            _gateway_process.wait(timeout=3)
+        except Exception:
+            try:
+                _gateway_process.kill()
+            except Exception:
+                pass
+        _gateway_process = None
 
 
 async def send_whatsapp_message(phone: str, message: str, media_url: str = None) -> dict:
@@ -50,13 +118,14 @@ async def get_whatsapp_status(request: Request, current_user=Depends(verify_toke
             return resp.json()
     except Exception as e:
         logger.warning(f"[WhatsApp Gateway] Could not reach gateway service: {e}")
+        start_whatsapp_gateway_process()
         return {
             "status": "disconnected",
             "qrCode": None,
             "user": None,
             "authExists": False,
             "serviceOnline": False,
-            "error": "WhatsApp Gateway service offline. Start gateway node service on port 8005.",
+            "error": "WhatsApp Gateway service starting up. Please refresh in a moment.",
         }
 
 

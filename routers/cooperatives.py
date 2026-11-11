@@ -34,6 +34,20 @@ JWT_ALGORITHM = "HS256"
 
 # ── Password & Token Helpers ──────────────────────────────────────────────────
 
+def is_valid_uuid(val: Any) -> bool:
+    """Validates whether val is a valid non-null UUID string."""
+    if not val or not isinstance(val, str):
+        return False
+    val_clean = val.strip().lower()
+    if val_clean in ("null", "undefined", "none", "", "0"):
+        return False
+    try:
+        uuid.UUID(val_clean)
+        return True
+    except (ValueError, AttributeError):
+        return False
+
+
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
@@ -497,6 +511,8 @@ async def get_cooperative_details(
     current_admin=Depends(resolve_coop_admin),
 ):
     """Get metadata for a single cooperative society."""
+    if not is_valid_uuid(coop_id):
+        raise HTTPException(status_code=404, detail="Cooperative not found")
     db = get_db()
     res = await db_execute(lambda: db.table("cooperatives").select("*").eq("id", coop_id).single().execute())
     if not res.data:
@@ -661,6 +677,8 @@ async def review_corporate_kyc(
 @router.get("/{coop_id}/admins")
 async def list_cooperative_admins(coop_id: str, current_admin=Depends(resolve_coop_admin)):
     """Lists the admins registered for this cooperative (Maximum 3 active)."""
+    if not is_valid_uuid(coop_id):
+        return {"admins": []}
     db = get_db()
     res = await db_execute(lambda: db.table("cooperative_admins")
         .select("id, cooperative_id, full_name, email, phone, role, is_active, last_login_at, created_at")
@@ -776,6 +794,8 @@ async def list_cooperative_members(
     current_admin=Depends(resolve_coop_admin),
 ):
     """Returns member list for the cooperative with sub-indexing."""
+    if not is_valid_uuid(coop_id):
+        return {"members": [], "total": 0, "page": 1, "limit": limit}
     db = get_db()
     query = db.table("cooperative_members").select("*", count="exact").eq("cooperative_id", coop_id)
 
@@ -1041,6 +1061,8 @@ async def list_cooperative_invoices(
     current_admin=Depends(resolve_coop_admin),
 ):
     """Lists master and sub invoices for a cooperative society."""
+    if not is_valid_uuid(coop_id):
+        return {"invoices": []}
     db = get_db()
     try:
         query = db.table("cooperative_invoices").select("*, cooperative_members(full_name, member_number), properties(title)").eq("cooperative_id", coop_id).order("created_at", desc=True)
@@ -1410,6 +1432,8 @@ async def get_cooperative_activity_log(
     current_admin=Depends(resolve_coop_admin),
 ):
     """Returns chronological audit log showing which of the 3 admins took each action."""
+    if not is_valid_uuid(coop_id):
+        return {"logs": []}
     db = get_db()
     res = await db_execute(lambda: db.table("cooperative_activity_log")
         .select("*")
@@ -1804,6 +1828,8 @@ async def download_member_statement_pdf(member_id: str, viewer=Depends(resolve_c
 @router.get("/{coop_id}/statement/html")
 async def view_society_statement_html(coop_id: str, viewer=Depends(resolve_coop_viewer)):
     """Renders the HTML Statement of Account for the entire cooperative society."""
+    if not is_valid_uuid(coop_id):
+        raise HTTPException(status_code=404, detail="Cooperative not found")
     db = get_db()
     c_res = await db_execute(lambda: db.table("cooperatives").select("*").eq("id", coop_id).limit(1).execute())
     if not c_res.data:
@@ -1880,6 +1906,8 @@ async def view_society_statement_html(coop_id: str, viewer=Depends(resolve_coop_
 @router.get("/{coop_id}/statement/pdf")
 async def download_society_statement_pdf(coop_id: str, viewer=Depends(resolve_coop_viewer)):
     """Generates and streams the PDF Statement of Account for the entire cooperative society."""
+    if not is_valid_uuid(coop_id):
+        raise HTTPException(status_code=404, detail="Cooperative not found")
     db = get_db()
     c_res = await db_execute(lambda: db.table("cooperatives").select("*").eq("id", coop_id).limit(1).execute())
     if not c_res.data:

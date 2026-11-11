@@ -54,14 +54,24 @@ from routers import feedback
 from routers.auth import require_roles, resolve_admin_token
 from database import init_db
 from scheduler import start_scheduler, stop_scheduler
+from routers.whatsapp import start_whatsapp_gateway_process, stop_whatsapp_gateway_process
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
     # Start the background scheduler
     await start_scheduler()
+    # Ensure the WhatsApp Gateway sidecar process is running
+    try:
+        start_whatsapp_gateway_process()
+    except Exception as e:
+        print(f"[WhatsApp Gateway] Could not auto-start gateway in lifespan: {e}")
     yield
-    # Stop the background scheduler
+    # Stop background workers on shutdown
+    try:
+        stop_whatsapp_gateway_process()
+    except Exception:
+        pass
     await stop_scheduler()
 
 # Raise multipart upload limit to 50 MB (default is 1 MB)

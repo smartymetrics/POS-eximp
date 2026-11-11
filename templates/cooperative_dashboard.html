@@ -1026,7 +1026,11 @@
             }
 
             const urlParams = new URLSearchParams(window.location.search);
-            currentCoopId = urlParams.get('coop') || localStorage.getItem('ec_coop_id');
+            const rawCoop = urlParams.get('coop') || localStorage.getItem('ec_coop_id');
+            currentCoopId = (rawCoop && rawCoop !== 'null' && rawCoop !== 'undefined' && rawCoop.trim() !== '') ? rawCoop.trim() : null;
+            if (!currentCoopId) {
+                localStorage.removeItem('ec_coop_id');
+            }
 
             // 1. Fetch available cooperatives for dropdown
             try {
@@ -1188,6 +1192,10 @@
         async function loadMembers() {
             const tbody = document.getElementById('membersTableBody');
             if (!tbody) return;
+            if (!currentCoopId || currentCoopId === 'null' || currentCoopId === 'undefined') {
+                tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-xs text-theme-secondary">No cooperative selected yet. Onboard or select a cooperative society to view members.</td></tr>';
+                return;
+            }
             try {
                 const res = await fetch(`/api/cooperatives/${currentCoopId}/members?limit=100`, {
                     headers: { 'Authorization': `Bearer ${getAuthToken()}` }
@@ -1314,24 +1322,76 @@
             }
         }
 
+        async function loadTransfers() {
+            const tbody = document.getElementById('transfersTableBody');
+            const empty = document.getElementById('transfersEmptyState');
+            if (!tbody) return;
+            if (!currentCoopId || currentCoopId === 'null' || currentCoopId === 'undefined') {
+                tbody.innerHTML = '';
+                if (empty) empty.classList.remove('hidden');
+                return;
+            }
+            try {
+                const res = await fetch('/api/cooperatives/transfers/pending', {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    const transfers = data.transfers || [];
+                    if (transfers.length === 0) {
+                        tbody.innerHTML = '';
+                        if (empty) empty.classList.remove('hidden');
+                    } else {
+                        if (empty) empty.classList.add('hidden');
+                        tbody.innerHTML = transfers.map(t => `
+                            <tr class="hover:bg-elevated/50 transition">
+                                <td class="py-3 px-4 capitalize font-medium">${(t.transfer_type || '').replace(/_/g, ' ')}</td>
+                                <td class="py-3 px-4">${t.original_member_name || 'Member'}</td>
+                                <td class="py-3 px-4 font-bold">${t.new_owner_name || 'N/A'}</td>
+                                <td class="py-3 px-4 font-mono">NGN ${Number(t.outstanding_balance || 0).toLocaleString()}</td>
+                                <td class="py-3 px-4"><span class="badge-theme text-[10px] font-bold px-2 py-0.5 rounded capitalize">${t.status}</span></td>
+                                <td class="py-3 px-4 text-right">
+                                    <span class="text-xs text-theme-secondary font-mono">${(t.status || '').toUpperCase()}</span>
+                                </td>
+                            </tr>
+                        `).join('');
+                    }
+                }
+            } catch (err) {
+                console.warn('Failed to load transfers:', err);
+            }
+        }
+
         async function loadAuditHistory() {
             const tbody = document.getElementById('auditTableBody');
             if (!tbody) return;
-            const res = await fetch(`/api/cooperatives/${currentCoopId}/activity-log?limit=50`, {
-                headers: { 'Authorization': `Bearer ${getAuthToken()}` }
-            });
-            const data = await res.json();
-            const logs = data.logs || [];
-
-            tbody.innerHTML = logs.map(l => `
-                <tr class="hover:bg-elevated/50 transition">
-                    <td class="py-3 px-4 font-mono text-[11px] text-theme-secondary">${new Date(l.created_at).toLocaleString()}</td>
-                    <td class="py-3 px-4 font-bold text-theme-primary">${l.admin_name}</td>
-                    <td class="py-3 px-4"><span class="badge-theme text-[10px] font-bold px-2 py-0.5 rounded capitalize">${l.action.replace(/_/g, ' ')}</span></td>
-                    <td class="py-3 px-4 text-theme-secondary capitalize">${l.target_entity || 'N/A'}</td>
-                    <td class="py-3 px-4 font-mono text-[11px] text-theme-secondary truncate max-w-xs">${JSON.stringify(l.details || {})}</td>
-                </tr>
-            `).join('');
+            if (!currentCoopId || currentCoopId === 'null' || currentCoopId === 'undefined') {
+                tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-xs text-theme-secondary">No cooperative selected yet. Select or onboard a cooperative society to view activity logs.</td></tr>';
+                return;
+            }
+            try {
+                const res = await fetch(`/api/cooperatives/${currentCoopId}/activity-log?limit=50`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                const data = await res.json();
+                const logs = data.logs || [];
+                if (logs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-xs text-theme-secondary">No activity logs recorded yet for this cooperative.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = logs.map(l => `
+                    <tr class="hover:bg-elevated/50 transition">
+                        <td class="py-3 px-4 font-mono text-[11px] text-theme-secondary">${new Date(l.created_at).toLocaleString()}</td>
+                        <td class="py-3 px-4 font-bold text-theme-primary">${l.admin_name}</td>
+                        <td class="py-3 px-4"><span class="badge-theme text-[10px] font-bold px-2 py-0.5 rounded capitalize">${(l.action || '').replace(/_/g, ' ')}</span></td>
+                        <td class="py-3 px-4 text-theme-secondary capitalize">${l.target_entity || 'N/A'}</td>
+                        <td class="py-3 px-4 font-mono text-[11px] text-theme-secondary truncate max-w-xs">${JSON.stringify(l.details || {})}</td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.warn('Failed to load audit history:', err);
+                tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-xs text-red-400">Failed to load activity logs.</td></tr>';
+            }
         }
 
         function openAddMemberModal() { document.getElementById('addMemberModal').classList.remove('hidden'); }
