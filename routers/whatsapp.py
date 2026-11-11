@@ -6,6 +6,7 @@ Supports multi-device pairing via QR code, Cloudinary session backup, and direct
 """
 
 import os
+import socket
 import shutil
 import subprocess
 import logging
@@ -23,6 +24,16 @@ WHATSAPP_GATEWAY_URL = os.getenv("WHATSAPP_GATEWAY_URL", "http://127.0.0.1:8005"
 _gateway_process = None
 
 
+def is_port_in_use(port: int = 8005) -> bool:
+    """Checks if a TCP port is already open and bound on localhost."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.5)
+            return s.connect_ex(("127.0.0.1", port)) == 0
+    except Exception:
+        return False
+
+
 def start_whatsapp_gateway_process():
     """
     Auto-spawns the Baileys Node.js WhatsApp Gateway service on port 8005 if not already running.
@@ -32,7 +43,11 @@ def start_whatsapp_gateway_process():
     if _gateway_process is not None and _gateway_process.poll() is None:
         return
 
-    # Check if gateway is already answering on WHATSAPP_GATEWAY_URL
+    # 1. Check if port 8005 is already bound by an existing instance (e.g. Render background start)
+    if is_port_in_use(8005):
+        return
+
+    # 2. Check if gateway is already answering on WHATSAPP_GATEWAY_URL
     try:
         req = urllib.request.Request(f"{WHATSAPP_GATEWAY_URL}/health", headers={"User-Agent": "FastAPI"})
         with urllib.request.urlopen(req, timeout=1.0) as resp:

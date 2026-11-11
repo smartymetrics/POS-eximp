@@ -14,6 +14,10 @@ import { v2 as cloudinary } from 'cloudinary';
 
 // Global Process Resilience
 process.on('uncaughtException', (err) => {
+  if (err && err.code === 'EADDRINUSE') {
+    console.warn(`[WhatsApp Gateway] Port ${PORT} is already bound by an existing instance. Exiting duplicate process.`);
+    process.exit(0);
+  }
   console.warn('[WhatsApp Gateway] Handled uncaughtException:', err.message);
 });
 process.on('unhandledRejection', (reason) => {
@@ -345,8 +349,19 @@ async function connectSocket() {
       if (connection === 'close') {
         const statusCode = lastDisconnect?.error?.output?.statusCode;
         const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+        const isReplaced = statusCode === DisconnectReason.connectionReplaced; // 440
 
-        console.log(`[WhatsApp Gateway] Connection closed (code: ${statusCode}, loggedOut: ${isLoggedOut})`);
+        console.log(`[WhatsApp Gateway] Connection closed (code: ${statusCode}, loggedOut: ${isLoggedOut}, replaced: ${Boolean(isReplaced)})`);
+
+        if (isReplaced) {
+          // Code 440 means another instance or device linked with this session has connected.
+          // NEVER auto-reconnect in a loop here. Halting auto-reconnect to protect the WhatsApp account.
+          sessionState.status = 'disconnected';
+          sessionState.isInitializing = false;
+          sessionState.reconnectAttempts = 0;
+          console.warn('[WhatsApp Gateway] Connection was replaced by another active session (code 440). Halting auto-reconnect to protect WhatsApp account from rate limiting and anti-bot bans. Click Connect on the dashboard if you want to switch back to this instance.');
+          return;
+        }
 
         if (!isLoggedOut) {
           const delay = Math.min(3000 * Math.pow(1.3, sessionState.reconnectAttempts), 25000);
@@ -546,7 +561,7 @@ app.post('/api/whatsapp/send', async (req, res) => {
   res.json(result);
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`[WhatsApp Gateway] Running on http://127.0.0.1:${PORT}`);
   // Auto-connect existing credentials immediately on boot
   if (hasLocalAuth()) {
@@ -559,5 +574,14 @@ app.listen(PORT, '0.0.0.0', () => {
         connectSocket().catch(e => console.warn('[WhatsApp Gateway] Boot auto-connect error:', e.message));
       }
     });
+  }
+});
+
+server.on('error', (err) => {
+  if (err && err.code === 'EADDRINUSE') {
+    console.warn(`[WhatsApp Gateway] Port ${PORT} already bound by an existing instance. Exiting duplicate process.`);
+    process.exit(0);
+  } else {
+    console.error('[WhatsApp Gateway] Server error:', err);
   }
 });
