@@ -379,13 +379,33 @@ async def universal_coop_login(request: Request):
     raise HTTPException(status_code=401, detail="Invalid credentials or account inactive")
 
 
-# ── Cooperative Onboarding & Corporate KYC ───────────────────────────────────
+# ── Cooperative / Corporate Entity Onboarding & KYC ───────────────────────────
+
+def parse_entity_metadata(record: dict) -> dict:
+    """
+    Parses adaptive entity classification and participant designations.
+    Zero-migration compatibility: stored in registration_type as 'EntityType::ParticipantLabel'.
+    """
+    if not record or not isinstance(record, dict):
+        return record
+    reg_type = (record.get("registration_type") or "").strip()
+    if "::" in reg_type:
+        parts = reg_type.split("::", 1)
+        record["entity_type"] = parts[0].strip() or "Corporate Entity"
+        record["participant_label"] = parts[1].strip() or "Member"
+    else:
+        record["entity_type"] = reg_type or "Corporate Scheme"
+        record["participant_label"] = "Member"
+    return record
+
 
 @router.post("/onboard")
 async def onboard_cooperative(request: Request, bg_tasks: BackgroundTasks):
     """
-    Public or Admin Onboarding endpoint for new cooperative societies.
-    Enforces the early-bird rule: First 10 cooperatives are free, 11+ charged 50,000 NGN.
+    Public or Admin Onboarding endpoint for Registered & Unregistered Entities.
+    Supports commercial banks, corporate employers, investment syndicates, trade unions,
+    cooperative societies, and unregistered bodies with adaptive participant designations.
+    Enforces the early-bird rule: First 10 entities are free, 11+ charged 50,000 NGN.
     """
     db = get_db()
     data = await request.json()
@@ -397,21 +417,30 @@ async def onboard_cooperative(request: Request, bg_tasks: BackgroundTasks):
     state = data.get("state", "Lagos")
     lga = data.get("lga", "")
 
+    # Entity classification & adaptive participant designation
+    entity_type = (data.get("entity_type") or "Corporate Entity").strip()
+    participant_label = (data.get("participant_label") or "Member").strip()
+    registration_status = (data.get("registration_status") or "unregistered").strip().lower()
+    if registration_status not in ("unregistered", "registered", "pending_kyc"):
+        registration_status = "unregistered"
+
+    registration_type = f"{entity_type}::{participant_label}"[:100]
+
     # Primary Admin Details
     admin_name = data.get("admin_name", "").strip()
     admin_email = data.get("admin_email", "").strip().lower()
     admin_phone = data.get("admin_phone", "").strip()
-    admin_password = data.get("admin_password", "Coop@2026")
+    admin_password = data.get("admin_password", "Entity@2026")
     admin_role = data.get("admin_role", "president")
 
     if not name or not admin_name or not admin_email or not admin_phone:
-        raise HTTPException(status_code=400, detail="Cooperative name and primary admin details are required")
+        raise HTTPException(status_code=400, detail="Entity name and primary admin details are required")
 
     # Generate unique code (e.g. GIG-CMS)
     clean_code = "".join([w[0] for w in name.split() if w]).upper()[:6]
     coop_code = f"{clean_code}-{str(datetime.now().microsecond)[:3]}"
 
-    # Count existing cooperatives to evaluate 10-cooperative free tier rule
+    # Count existing entities to evaluate 10-entity free tier rule
     count_res = await db_execute(lambda: db.table("cooperatives").select("id", count="exact").execute())
     total_coops = count_res.count or 0
 
@@ -424,7 +453,8 @@ async def onboard_cooperative(request: Request, bg_tasks: BackgroundTasks):
     coop_payload = {
         "name": name,
         "code": coop_code,
-        "registration_status": "unregistered",
+        "registration_status": registration_status,
+        "registration_type": registration_type,
         "onboarding_fee_paid": onboarding_fee_paid,
         "onboarding_fee_amount": float(onboarding_fee_amount),
         "registered_address": registered_address,
@@ -438,9 +468,9 @@ async def onboard_cooperative(request: Request, bg_tasks: BackgroundTasks):
 
     res_coop = await db_execute(lambda: db.table("cooperatives").insert(coop_payload).execute())
     if not res_coop.data:
-        raise HTTPException(status_code=500, detail="Failed to create cooperative entity")
+        raise HTTPException(status_code=500, detail="Failed to create corporate entity")
 
-    coop_record = res_coop.data[0]
+    coop_record = parse_entity_metadata(res_coop.data[0])
     coop_id = coop_record["id"]
 
     # Create Initial Admin (Admin 1 of 3)
@@ -463,15 +493,22 @@ async def onboard_cooperative(request: Request, bg_tasks: BackgroundTasks):
         cooperative_id=coop_id,
         admin_id=admin_record.get("id"),
         admin_name=admin_name,
-        action="cooperative_onboarded",
+        action="entity_onboarded",
         target_entity="cooperative",
         target_id=coop_id,
-        details={"fee_amount": float(onboarding_fee_amount), "free_tier": onboarding_fee_paid},
+        details={
+            "entity_type": entity_type,
+            "participant_label": participant_label,
+            "fee_amount": float(onboarding_fee_amount),
+            "free_tier": onboarding_fee_paid,
+        },
         request=request,
     )
 
     return {
         "message": f"Successfully onboarded {name}",
+        "code": coop_code,
+        "id": coop_id,
         "cooperative": coop_record,
         "admin": {
             "id": admin_record.get("id"),
@@ -492,16 +529,19 @@ async def list_cooperatives(
     status_filter: Optional[str] = None,
     current_admin=Depends(resolve_coop_admin),
 ):
-    """Lists all cooperatives registered in the ERP (for Super Admins & Operations)."""
+    """Lists all registered and unregistered entities in the ERP (for Super Admins & Operations)."""
     db = get_db()
     try:
         query = db.table("cooperatives").select("*, cooperative_admins(id, full_name, role, email, phone, is_active)").order("created_at", desc=True)
         if status_filter:
             query = query.eq("status", status_filter)
         res = await db_execute(lambda: query.execute())
-        return {"cooperatives": res.data or []}
+        entities = res.data or []
+        for c in entities:
+            parse_entity_metadata(c)
+        return {"cooperatives": entities}
     except Exception as e:
-        logger.error(f"Failed to list cooperatives: {e}")
+        logger.error(f"Failed to list entities: {e}")
         return {"cooperatives": []}
 
 
@@ -510,14 +550,14 @@ async def get_cooperative_details(
     coop_id: str,
     current_admin=Depends(resolve_coop_admin),
 ):
-    """Get metadata for a single cooperative society."""
+    """Get metadata for a single corporate entity or scheme."""
     if not is_valid_uuid(coop_id):
-        raise HTTPException(status_code=404, detail="Cooperative not found")
+        raise HTTPException(status_code=404, detail="Entity not found")
     db = get_db()
     res = await db_execute(lambda: db.table("cooperatives").select("*").eq("id", coop_id).single().execute())
     if not res.data:
-        raise HTTPException(status_code=404, detail="Cooperative not found")
-    return res.data
+        raise HTTPException(status_code=404, detail="Entity not found")
+    return parse_entity_metadata(res.data)
 
 
 @router.post("/upload-document")
@@ -593,21 +633,37 @@ async def submit_corporate_kyc(
     current_admin=Depends(resolve_coop_admin),
 ):
     """Submits corporate KYC documentation to transition from Unregistered to Registered."""
+    if not is_valid_uuid(coop_id):
+        raise HTTPException(status_code=404, detail="Entity not found")
+
     db = get_db()
     data = await request.json()
 
     registration_number = data.get("registration_number", "").strip()
-    registration_type = data.get("registration_type", "Ministry of Cooperatives")
-    certificate_url = data.get("certificate_url", "")
-    bye_laws_url = data.get("bye_laws_url", "")
-    resolution_url = data.get("resolution_url", "")
+    incoming_type = (data.get("registration_type") or data.get("registration_body") or "Corporate Affairs Commission").strip()
+    certificate_url = data.get("certificate_url", "").strip()
+    bye_laws_url = data.get("bye_laws_url", "").strip()
+    resolution_url = data.get("resolution_url", "").strip()
 
+    # Upload 1 (Primary Registration Document) is compulsory; Uploads 2 & 3 are optional
     if not registration_number or not certificate_url:
-        raise HTTPException(status_code=400, detail="Registration number and certificate are required")
+        raise HTTPException(status_code=400, detail="Official registration number and primary registration certificate are required")
+
+    # Fetch existing entity to preserve adaptive participant label
+    curr_res = await db_execute(lambda: db.table("cooperatives").select("registration_type").eq("id", coop_id).single().execute())
+    curr_reg = (curr_res.data or {}).get("registration_type", "") if curr_res and curr_res.data else ""
+    participant_label = "Member"
+    if "::" in curr_reg:
+        participant_label = curr_reg.split("::", 1)[1].strip()
+
+    if "::" in incoming_type:
+        new_reg_type = incoming_type[:100]
+    else:
+        new_reg_type = f"{incoming_type}::{participant_label}"[:100]
 
     update_payload = {
         "registration_number": registration_number,
-        "registration_type": registration_type,
+        "registration_type": new_reg_type,
         "certificate_url": certificate_url,
         "bye_laws_url": bye_laws_url,
         "resolution_url": resolution_url,
@@ -625,11 +681,11 @@ async def submit_corporate_kyc(
         action="submitted_corporate_kyc",
         target_entity="cooperative_kyc",
         target_id=coop_id,
-        details={"reg_number": registration_number, "reg_type": registration_type},
+        details={"reg_number": registration_number, "reg_type": new_reg_type},
         request=request,
     )
 
-    return {"message": "Corporate KYC submitted for compliance review", "status": "pending_kyc"}
+    return {"message": "Corporate Entity KYC submitted for compliance review", "status": "pending_kyc"}
 
 
 @router.post("/{coop_id}/kyc/review")
