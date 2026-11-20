@@ -100,7 +100,7 @@ async def create_invoice(
             plot_size = plot_size or p["plot_size_sqm"]
 
     # 4.5 Discount Code processing
-    discount_code = (data.discount_code or "").strip().upper()
+    discount_code = (getattr(data, "discount_code", None) or "").strip().upper()
     discount_amount = 0.0
     original_amount = float(data.amount)
     code_rec_id = None
@@ -166,8 +166,8 @@ async def create_invoice(
         "notes": data.notes,
         "sales_rep_name": data.sales_rep_name,
         "sales_rep_id": data.sales_rep_id,
-        "purchase_purpose": data.purchase_purpose,
-        "purchase_for": data.purchase_for,
+        "purchase_purpose": getattr(data, "purchase_purpose", None),
+        "purchase_for": getattr(data, "purchase_for", None),
         "created_by": current_admin["sub"],
         "land_cost": land_cost,
         "allocation_fee": allocation_fee,
