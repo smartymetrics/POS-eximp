@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List, Optional
 from datetime import datetime, date, timedelta
 from database import get_db, db_execute
-from routers.auth import verify_token
+from routers.auth import verify_token, has_any_role
 from models import (
     KPISummary, KPIDelta, RevenueTrend, EstateStat, 
     PaymentStatusStats, ReferralSourceStat, RepLeaderboardEntry, ActivityLogEntry
@@ -24,7 +24,7 @@ async def get_kpis(
     admin: dict = Depends(verify_token)
 ):
     db = get_db()
-    is_admin = admin.get("role") in ["admin", "operations"]
+    is_admin = has_any_role(admin, "admin", "operations")
     
     # 1. Total Invoiced (Gross)
     invoiced_query = db.table("invoices").select("amount").filter("invoice_date", "gte", start.isoformat()).filter("invoice_date", "lte", end.isoformat()).neq("status", "voided")
@@ -124,7 +124,7 @@ async def get_revenue_trend(
     granularity: str = "daily",
     admin: dict = Depends(verify_token)
 ):
-    if admin.get("role") not in ["admin", "operations"]:
+    if not has_any_role(admin, "admin", "operations"):
         raise HTTPException(status_code=403, detail="Financial data restricted to authorized roles")
         
     db = get_db()
@@ -160,7 +160,7 @@ async def get_estates(
     end: date = Query(...),
     admin: dict = Depends(verify_token)
 ):
-    if admin.get("role") not in ["admin", "operations"]:
+    if not has_any_role(admin, "admin", "operations"):
         raise HTTPException(status_code=403, detail="Restricted")
         
     db = get_db()
@@ -256,7 +256,7 @@ async def get_rep_leaderboard(
     limit: int = 10,
     admin: dict = Depends(verify_token)
 ):
-    if admin.get("role") not in ["admin", "operations"]:
+    if not has_any_role(admin, "admin", "operations"):
         raise HTTPException(status_code=403, detail="Restricted")
         
     db = get_db()

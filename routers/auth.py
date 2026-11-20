@@ -51,10 +51,27 @@ def verify_token_optional(authorization: str = Header(None)):
         return None
 
 
-def has_any_role(admin_payload: dict, *roles: str) -> bool:
-    """Check if the admin has any of the given roles (supports comma-separated multi-role)."""
-    user_roles = {r.strip() for r in (admin_payload.get("role") or "").split(",") if r.strip()}
-    return bool(user_roles & set(roles))
+def has_any_role(admin_payload: dict, *roles) -> bool:
+    """Check if the admin has any of the given roles (supports comma-separated multi-role and hierarchy)."""
+    if not admin_payload:
+        return False
+    raw_role = admin_payload.get("role") or ""
+    user_roles = {r.strip().lower() for r in raw_role.split(",") if r.strip()}
+
+    # Super admins alias and inherit admin permissions
+    if "super_admin" in user_roles or "superadmin" in user_roles:
+        user_roles.add("super_admin")
+        user_roles.add("superadmin")
+        user_roles.add("admin")
+
+    target_roles = set()
+    for r in roles:
+        if isinstance(r, (list, tuple, set)):
+            target_roles.update(str(x).strip().lower() for x in r if x)
+        elif r:
+            target_roles.add(str(r).strip().lower())
+
+    return bool(user_roles & target_roles)
 
 
 # Alias for dependency consistency
@@ -277,8 +294,7 @@ def require_roles(allowed_roles: list[str]):
     Returns a dependency that checks if the current user has any of the required roles.
     """
     async def role_checker(current_admin=Depends(verify_token)):
-        user_roles = [r.strip() for r in current_admin.get("role", "").split(",")]
-        if not any(role in user_roles for role in allowed_roles):
+        if not has_any_role(current_admin, *allowed_roles):
             raise HTTPException(
                 status_code=403, 
                 detail=f"Access denied. Required roles: {', '.join(allowed_roles)}"
@@ -373,8 +389,7 @@ async def archive_admin(admin_id: str, current_admin=Depends(verify_token)):
 # UPDATE ROLES (admin/super_admin only)
 @router.patch("/admins/{admin_id}/roles")
 async def update_admin_roles(admin_id: str, data: dict, current_admin=Depends(verify_token)):
-    current_roles = (current_admin.get("role") or "").split(",")
-    if not any(r.strip() in ["admin", "super_admin"] for r in current_roles):
+    if not has_any_role(current_admin, "admin", "super_admin"):
         raise HTTPException(status_code=403, detail="Admins only")
     if current_admin.get("sub") == admin_id:
         raise HTTPException(status_code=400, detail="Use 'My Profile' to change your own roles")

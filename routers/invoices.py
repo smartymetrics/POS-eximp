@@ -30,7 +30,7 @@ async def list_invoices(
     admin_id = current_admin["sub"]
     
     # Check if user is restricted
-    is_privileged = any(r in role.lower() for r in ["admin", "operations"])
+    is_privileged = has_any_role(current_admin, "admin", "operations")
     
     query = db.table("invoices").select("*, clients(full_name, email, assigned_rep_id)")
     

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi.encoders import jsonable_encoder
 from database import get_db, db_execute
-from routers.auth import verify_token
+from routers.auth import verify_token, has_any_role
 from routers.analytics import log_activity
 from models import ClientCreate, ClientUpdate
 from marketing_logic import sync_client_to_marketing
@@ -20,7 +20,7 @@ async def list_clients(
     admin_id = current_admin["sub"]
     
     # Privileged check
-    is_privileged = any(r in role.lower() for r in ["admin", "operations"])
+    is_privileged = has_any_role(current_admin, "admin", "operations")
     
     query = db.table("clients").select("*")
     
@@ -90,7 +90,7 @@ async def update_client(client_id: str, data: ClientUpdate, current_admin=Depend
     # Admin-only fields
     admin_only_fields = ["email", "nin", "id_number", "passport_photo_url", "id_document_url"]
     
-    if role != "admin":
+    if not has_any_role(current_admin, "admin"):
         for field in admin_only_fields:
             if field in update_data:
                 raise HTTPException(status_code=403, detail=f"Permission denied to edit {field}")

@@ -3,7 +3,7 @@ from fastapi.encoders import jsonable_encoder
 from typing import List, Optional
 from database import supabase
 from models import SalesRepCreate, SalesRepUpdate, ResolveUnmatchedRequest
-from routers.auth import get_current_admin
+from routers.auth import get_current_admin, has_any_role
 from routers.analytics import log_activity
 
 router = APIRouter()
@@ -80,7 +80,7 @@ async def update_sales_rep(
     admin: dict = Depends(get_current_admin)
 ):
     """Update sales representative details."""
-    if admin["role"] != "admin":
+    if not has_any_role(admin, "admin"):
         raise HTTPException(status_code=403, detail="Only admins can manage reps")
         
     # Filter out None values and encode for Supabase
@@ -110,7 +110,7 @@ async def resolve_unmatched_rep(
     admin: dict = Depends(get_current_admin)
 ):
     """Map an unmatched name to a registered rep and update historical invoices."""
-    if admin["role"] != "admin":
+    if not has_any_role(admin, "admin"):
         raise HTTPException(status_code=403, detail="Only admins can resolve names")
         
     # 1. Get the unmatched record
